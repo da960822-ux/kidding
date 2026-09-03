@@ -26,6 +26,12 @@
 
 `ONION_TRANSPORT`도 차량·동력 장비를 운전하거나 이동시키면 `HIGH`여서 게시할 수 없다. 새 8개 영상은 Storage 후보 파일일 뿐이며, `visual_assets`에서 `AI_GENERATED_PREGENERATED` + 사람 `APPROVED` + `LOW`가 모두 확인된 뒤에만 근로자에게 노출한다.
 
+## 2026-09-03 반영 완료
+
+- 8개 후보는 농장주(OWNER)가 사람 검수해 모두 `APPROVED`·`LOW`로 등록됐다.
+- public Supabase Storage `visual-assets/p0/2026-09-03/` URL과 [`assets/asset_manifest.csv`](../assets/asset_manifest.csv)가 1:1로 대응한다.
+- 생성 provider, prompt version, 생성 시각은 확인할 수 없어 `null`로 남겼다. `AI_GENERATED_PREGENERATED` provenance와 사람 검수·안전 gate는 유지한다.
+
 ## 반영 규칙
 
 이 변경은 API·AI·DB 계약 변경이다. 프론트와 백엔드는 같은 브랜치의 최신 `docs/openapi.yaml`, `docs/schemas/structure-v1.schema.json`, DB migration을 함께 반영해야 한다. 구 코드와 새 코드를 조용히 매핑하는 호환 계층은 만들지 않는다.

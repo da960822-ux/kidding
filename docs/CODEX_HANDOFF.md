@@ -53,12 +53,13 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 - 프론트 TodayWorkTeam에서 사람별 게시 WorkSession 선택·배정, QR 참여 뒤 member-cookie 기반 내 작업 대기/최신 지시 화면 연결 완료
 - 프론트 draft 확정 화면에서 `CO_PRESENT`/`REMOTE`와 `vi|ne`를 먼저 선택한다. `REMOTE`는 initial publish 응답의 링크를 표시하고, 재발급은 이전 링크를 폐기한다.
 - 랜딩 문구도 양파·딸기·음성·`vi|ne`·수량 변경·TodayWorkTeam P0 범위로 정리했다. 글 입력·사진·다른 작물·작업 완료 추적·추가 언어 약속은 제거했다.
-- Supabase에는 guide phrase 100개와 translation 100개가 있으나 visual asset은 0 row라 영상은 현재 text+TTS fallback을 사용한다.
+- Supabase guide phrase·translation은 각각 100개이며, verified/provenance 누락 없이 vi·ne 가이드 조회를 확인했다. P0와 무관한 `씨앗`, `씨앗뿌리기`만 한 언어 번역이 없다.
 - `202609030007_expand_onion_strawberry_ontology.sql`의 양파·딸기 8코드, `task_family` DB constraint, publish RPC를 적용했다. retired code를 가진 기존 test draft/session/version/link/assignment는 reset했다.
+- `202609030008_allow_unknown_visual_provenance_details.sql`을 적용했다. 8개 `visual_assets`는 `AI_GENERATED_PREGENERATED`·OWNER `APPROVED`·`LOW`이며 public `visual-assets` URL을 사용한다. 확인할 수 없는 generator provider/prompt version/generated_at은 `null`이다.
+- 실제 OpenAI draft→REMOTE publish→worker link E2E에서 `ONION_HARVEST` public video URL이 worker state에 포함됨을 확인했다.
 
 ## 아직 해야 할 일
 
-- guide phrase/translation의 사람 검수 상태를 확인하고, 8개 LOW 영상 manifest를 provenance·사람 `APPROVED`와 함께 넣기 (P0-02/P0-05 data-collection gate)
 - Postman에서 `docs/openapi.yaml`을 import하고 현재 API base URL 환경 구성
 - 음성→draft→confirm→CO_PRESENT/REMOTE→수량 변경 전체 E2E를 공개 URL에서 실행
 
@@ -67,4 +68,5 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 - 실제 비밀값은 `backend/.env`에만 둔다. 저장소·프론트·Postman 예시에 넣지 않는다.
 - `202609030004_migrate_to_anonymous_language_links.sql`은 기존 worker registry를 최신 익명 링크 모델로 바꾸는 migration이다. 기존 worker 데이터가 있으면 실행 전에 백업한다.
 - `202609030007_expand_onion_strawberry_ontology.sql`은 immutable version의 retired code를 자동 변환하지 않는다. legacy data가 있는 다른 환경에서는 reset 또는 별도 보존 계획 후 적용한다.
+- `202609030008_allow_unknown_visual_provenance_details.sql`은 historical AI asset의 확인 불가능한 세부 생성 정보만 `null`로 허용한다. `provenance`, 사람 `review_status`, `safety_level` publish gate는 그대로 필수다.
 - `DEMO_FALLBACK=0`이고 실제 AI provider가 연결되지 않은 상태에서는 audio API가 `503 PROVIDER_UNAVAILABLE`을 반환한다. `DEMO_FALLBACK=1`은 checked-in 합성 fixture 전용이다.

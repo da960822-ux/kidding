@@ -5,7 +5,7 @@
 | 코드 | 우선순위 | 항목 | DoD | 선행조건 | 주담당 |
 |---|---|---|---|---|---|
 | P0-01 | P0 | 양파·딸기 ontology 8코드 | family 일치 allowlist·JSON Schema·BE semantic validation 일치 | 없음 | AI |
-| P0-02 | P0 | AI 사전생성 LOW 영상 8개 | 8개 후보의 provenance·사람 검수 `APPROVED` manifest, FE static asset | P0-01 | AI |
+| P0-02 | P0 | AI 사전생성 LOW 영상 8개 | 8개 후보의 provenance·사람 검수 `APPROVED` manifest, public worker delivery URL | P0-01 | AI |
 | P0-03 | P0 | PIN session/CORS/CSRF | Secure cookie, exact Origin, rate limit | 없음 | BE |
 | P0-04 | P0 | audio→WorkDraft sync | 10MiB/60초, schema/risk reject | P0-01,P0-03 | BE |
 | P0-05 | P0 | structure/translation | unknown 보존, source, vi/ne | P0-01 | AI |

@@ -15,7 +15,7 @@ PostgreSQL (Supabase 가능)
   ├─ guide phrases/translations
   ├─ visual asset manifest
   └─ TTS audio cache (published vi/ne text hash)
-FE public/videos (Vercel static CDN)
+Supabase Storage public `visual-assets` bucket (worker video CDN)
 ```
 
 ## 주요 데이터 흐름

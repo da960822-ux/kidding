@@ -38,7 +38,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `visual_assets`
 
-`id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`를 가진다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`만 게시한다.
+`id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`를 가진다. `provenance`는 필수이고, 과거 생성물에서 확인할 수 없는 `generator_provider`·`prompt_version`·`generated_at`은 추측하지 않고 `null`로 남긴다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`만 게시한다.
 
 ## `tts_assets`
 

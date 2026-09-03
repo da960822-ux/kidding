@@ -1,0 +1,12 @@
+{
+  "task_family": "STRAWBERRY",
+  "scope": "P0 hackathon: strawberry only",
+  "task_codes": [
+    {"code": "STRAWBERRY_HARVEST", "title_ko": "딸기 수확"},
+    {"code": "STRAWBERRY_SORTING", "title_ko": "딸기 분류"},
+    {"code": "STRAWBERRY_INSPECTION", "title_ko": "딸기 검수"},
+    {"code": "STRAWBERRY_PACKING", "title_ko": "딸기 포장"}
+  ],
+  "languages": ["vi", "ne"],
+  "unknown_policy": "UNSPECIFIED or null; AI does not guess"
+}

@@ -1,16 +1,20 @@
 openapi: 3.1.0
 info:
   title: Batmeori API
-  version: 1.0.0
+  version: 1.2.0
   description: >-
-    Provider-neutral P0 REST contract. P0 supports onion, vi/ne, and quantity
-    changes. AI interpretation and WorkVersion lifecycle are separate enums.
+    Provider-neutral P0 REST contract. P0 supports onion, vi/ne, quantity
+    changes, CO_PRESENT owner briefing, REMOTE anonymous language links, and
+    a 24-hour anonymous today-team QR roster for person-specific assignments.
+    Every owner mutation requires an exact allowed Origin and the
+    X-CSRF-Token header; worker links require neither.
 servers:
   - url: https://api.example.invalid
-    description: Deployment value is supplied by environment; this URL is not a source fact.
+    description: Deployment value is supplied by environment.
 tags:
   - name: Owner
   - name: Worker
+  - name: Team
   - name: System
 paths:
   /api/v1/owner/session:
@@ -18,34 +22,29 @@ paths:
       tags: [Owner]
       summary: Issue short demo PIN session cookie
       security: []
+      parameters: [{ $ref: '#/components/parameters/CsrfToken' }]
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/PinLoginRequest' }
-            example: { pin: '1234' }
       responses:
         '201':
           description: Session issued.
           headers:
             Set-Cookie:
               schema: { type: string }
-              description: HttpOnly; Secure; SameSite=None cookie. Owner mutations use exact Origin validation as P0 CSRF defense; no separate CSRF header.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/OwnerSession' }
+              description: HttpOnly; Secure; SameSite=None cookie. Later owner mutations also require X-CSRF-Token.
+          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerSession' } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
   /api/v1/work-sessions/drafts/from-audio:
     post:
       tags: [Owner]
       summary: Synchronously transcribe, structure, translate, and match video
-      description: >-
-        Requires owner cookie. Raw audio is temporary during STT and deleted
-        immediately on success or failure. FE shows loading and timeout at 60s.
-        Returns a WorkDraft; no version is created.
+      description: Raw audio is temporary and deleted after processing. No version is created.
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
       requestBody:
         required: true
         content:
@@ -54,96 +53,55 @@ paths:
               type: object
               required: [audio]
               properties:
-                audio:
-                  type: string
-                  format: binary
-                  description: audio/webm or audio/mp4; max 10 MiB and 60 seconds.
+                audio: { type: string, format: binary, description: audio/webm, audio/mp4, or audio/wav; max 10 MiB and 60 seconds. }
                 language_hint: { type: string, enum: [ko], default: ko }
       responses:
-        '200':
-          description: Draft generated.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkDraft' }
-              example:
-                draft_id: d_01
-                draft_revision: 0
-                summary_ko: 농장주가 가리킨 곳의 양파 20망을 수확해 창고로 옮깁니다.
-                interpretation: AMBIGUOUS
-                state:
-                  task_family: ONION
-                  location: { raw_text: 저짝, kind: DEICTIC, canonical_name: null }
-                  location_display: 농장주가 가리킨 장소 · 현장 확인 필요
-                  quantity: { value: 20, unit: 망 }
-                  deadline: null
-                  safety: []
-                  notes: null
-                  steps:
-                    - { sequence: 1, task_code: ONION_HARVEST, title_ko: 양파 수확, description_ko: 양파를 수확한다, video: null, audio_url: null, delivery_mode: TEXT_TTS, unsupported_reason: null, translations: [] }
-                ambiguities:
-                  - { field: location, message: "'저짝'은 현장에서 위치 확인이 필요합니다.", blocking: false, kind: LOCATION }
-                risk_assessment: { level: LOW, reasons: [], schema_version: '1', contract_version: safety-policy-v1 }
-                transcript: 농장주 확인용 transcript
-                schema_version: '1'
-                contract_version: structure-v1
+        '200': { description: Draft generated., content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
-        '500': { $ref: '#/components/responses/ServerError' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
   /api/v1/work-sessions/drafts/{draftId}/supplement:
     post:
       tags: [Owner]
       summary: Merge one owner audio supplement into a draft
-      description: Raw audio is deleted immediately after STT. Text supplements are not accepted.
       security: [{ ownerSession: [] }]
       parameters:
         - $ref: '#/components/parameters/DraftId'
         - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
           multipart/form-data:
-            schema: { $ref: '#/components/schemas/SupplementAudioRequest' }
-            example: { audio: supplement.webm, expected_draft_revision: 0, language_hint: ko }
+            schema:
+              type: object
+              required: [audio, expected_draft_revision]
+              properties:
+                audio: { type: string, format: binary, description: audio/webm, audio/mp4, or audio/wav; max 10 MiB and 60 seconds. }
+                expected_draft_revision: { type: integer, minimum: 0 }
+                language_hint: { type: string, enum: [ko], default: ko }
       responses:
-        '200':
-          description: Updated draft.
-          content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } }
+        '200': { description: Updated draft., content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
   /api/v1/work-sessions/drafts/{draftId}/confirm:
     post:
       tags: [Owner]
-      summary: Confirm initial draft and atomically publish immutable v1
+      summary: Confirm initial draft and publish immutable v1
       description: >-
-        expected_version is always required and must be 0 for first publish.
-        Non-blocking ambiguity or LOW-risk non-safety unsupported work may use
-        PUBLISH_AS_IS with a reason. SUPPLEMENT must first merge owner audio.
-        Safety ambiguity, HIGH or UNKNOWN risk, invalid
-        schema, or no executable step returns OVERRIDE_NOT_ALLOWED.
+        delivery_mode is CO_PRESENT or REMOTE. language_code is always required.
+        REMOTE returns one anonymous 24-hour link; CO_PRESENT returns no link.
       security: [{ ownerSession: [] }]
       parameters:
         - $ref: '#/components/parameters/DraftId'
         - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/DraftConfirmRequest' }
-            examples:
-              clear:
-                value: { expected_version: 0, decision: CONFIRM }
-              as_is:
-                value:
-                  expected_version: 0
-                  decision: PUBLISH_AS_IS
-                  ambiguity_override: true
-                  override_reason: IN_PERSON_BRIEFING
+        content: { application/json: { schema: { $ref: '#/components/schemas/DraftConfirmRequest' } } }
       responses:
-        '201':
-          description: v1 published. Link creation is a separate delivery action.
-          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSession' } } }
+        '201': { description: v1 published., content: { application/json: { schema: { $ref: '#/components/schemas/InitialPublishResponse' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
@@ -154,9 +112,7 @@ paths:
       summary: List owner work sessions
       security: [{ ownerSession: [] }]
       responses:
-        '200':
-          description: Sessions.
-          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSessionList' } } }
+        '200': { description: Sessions., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSessionList' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
   /api/v1/work-sessions/{sessionId}:
     get:
@@ -165,19 +121,15 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
-        '200':
-          description: Owner view, including transcript audit field.
-          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSession' } } }
+        '200': { description: Owner view., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSession' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/work-sessions/{sessionId}/quantity-changes/from-audio:
     post:
       tags: [Owner]
-      summary: Synchronously parse a quantity-change utterance without storing it
-      description: Requires owner cookie. Same audio limit and prompt-injection boundary as draft audio. A READY result is a transient preview and is not stored.
+      summary: Parse quantity-change audio without storing it
       security: [{ ownerSession: [] }]
-      parameters:
-        - $ref: '#/components/parameters/SessionId'
+      parameters: [{ $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/CsrfToken' }]
       requestBody:
         required: true
         content:
@@ -186,19 +138,11 @@ paths:
               type: object
               required: [audio, expected_version]
               properties:
-                audio: { type: string, format: binary, description: audio/webm or audio/mp4; max 10 MiB and 60 seconds. }
+                audio: { type: string, format: binary, description: audio/webm, audio/mp4, or audio/wav; max 10 MiB and 60 seconds. }
                 expected_version: { type: integer, minimum: 1 }
+                language_hint: { type: string, enum: [ko], default: ko }
       responses:
-        '200':
-          description: Parsed but not stored.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/QuantityChangeParseResult' }
-              examples:
-                ready:
-                  value: { interpretation: READY, quantity: { value: 15, unit: 망 }, expected_version: 1, ambiguities: [], schema_version: '1', contract_version: quantity-change-v1 }
-                ambiguous:
-                  value: { interpretation: AMBIGUOUS, quantity: null, expected_version: 1, ambiguities: [{ field: quantity, message: 수량을 다시 말해주세요., blocking: true, kind: QUANTITY }], schema_version: '1', contract_version: quantity-change-v1 }
+        '200': { description: Parsed but not stored., content: { application/json: { schema: { $ref: '#/components/schemas/QuantityChangeParseResult' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
@@ -206,22 +150,17 @@ paths:
   /api/v1/work-sessions/{sessionId}/quantity-changes/confirm:
     post:
       tags: [Owner]
-      summary: Directly confirm a parsed quantity and publish the next immutable version
-      description: quantity, expected_version, and Idempotency-Key are required. No proposal record is created. Version mismatch returns VERSION_CONFLICT.
+      summary: Confirm quantity and publish the next immutable version
       security: [{ ownerSession: [] }]
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/QuantityChangeConfirmRequest' }
-            example: { quantity: { value: 15, unit: 망 }, expected_version: 1 }
+        content: { application/json: { schema: { $ref: '#/components/schemas/QuantityChangeConfirmRequest' } } }
       responses:
-        '201':
-          description: New version published; old version superseded.
-          content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSession' } } }
+        '201': { description: New version published., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSession' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
@@ -229,66 +168,92 @@ paths:
   /api/v1/work-sessions/{sessionId}/worker-links:
     post:
       tags: [Owner]
-      summary: Create or reissue one anonymous 24-hour link for a language
+      summary: Create or reissue one anonymous 24-hour language link
       security: [{ ownerSession: [] }]
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/WorkerLinkIssueRequest' }
-            example: { language_code: vi }
+        content: { application/json: { schema: { $ref: '#/components/schemas/WorkerLinkIssueRequest' } } }
       responses:
-        '201':
-          description: A new raw URL is returned once; a prior active link for this language is revoked.
-          content: { application/json: { schema: { $ref: '#/components/schemas/WorkerLinkIssueResponse' } } }
+        '201': { description: Raw URL returned once., content: { application/json: { schema: { $ref: '#/components/schemas/WorkerLinkIssueResponse' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
   /api/v1/worker-links/{token}/assignment:
     get:
       tags: [Worker]
-      summary: Resolve latest published assignment through 24h token
-      description: >-
-        No owner cookie. Every valid request resolves latest PUBLISHED version,
-        never a pinned version. Worker response excludes transcript, raw audio,
-        token hash, and owner-only risk assessment. Step translations are the
-        canonical segment provenance; ambiguity and safety badges are visible.
+      summary: Resolve latest published assignment through an anonymous language link
       security: []
       parameters: [{ $ref: '#/components/parameters/WorkerToken' }]
       responses:
-        '200':
-          description: Latest assignment.
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkerAssignment' }
-              example:
-                language_code: vi
-                session_id: ws_1
-                version: 2
-                lifecycle: PUBLISHED
-                state:
-                  task_family: ONION
-                  location: { raw_text: 저짝, kind: DEICTIC, canonical_name: null }
-                  quantity: { value: 15, unit: 망 }
-                  location_display: 농장주가 가리킨 장소 · 현장 확인 필요
-                  deadline: null
-                  safety: []
-                  notes: null
-                  steps: [{ sequence: 1, task_code: ONION_HARVEST, title_ko: 양파 수확, description_ko: 양파를 수확한다, video: null, audio_url: null, delivery_mode: TEXT_TTS, unsupported_reason: null, translations: [] }]
-                badges: [확인이 필요한 지시]
+        '200': { description: Latest assignment., content: { application/json: { schema: { $ref: '#/components/schemas/WorkerAssignment' } } } }
         '404': { $ref: '#/components/responses/AccessDenied' }
-        '410':
-          description: Expired token; issue a new link.
-          content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: LINK_EXPIRED, message: 접근할 수 없습니다. 링크를 다시 발급받으세요. } } }
+        '410': { description: Expired token; issue a new link., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '500': { $ref: '#/components/responses/ServerError' }
+  /api/v1/work-teams/today:
+    post:
+      tags: [Owner, Team]
+      summary: Create or rotate today's anonymous QR invite
+      description: Creates the Asia/Seoul work-date team when absent. Each POST returns a new raw QR URL and invalidates the prior QR; the raw token is never stored.
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      responses:
+        '200': { description: Existing team with a newly issued QR., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
+        '201': { description: New team with QR., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    get:
+      tags: [Owner, Team]
+      summary: Read today's temporary roster
+      security: [{ ownerSession: [] }]
+      responses:
+        '200': { description: Today's roster. join_url is null until the owner issues a fresh QR., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/work-team-invites/{token}/join:
+    post:
+      tags: [Worker, Team]
+      summary: Join today's team without an account
+      description: Accepts only a temporary display name and vi/ne. It sets an HttpOnly member cookie scoped to the temporary team.
+      security: []
+      parameters: [{ $ref: '#/components/parameters/TeamInviteToken' }, { $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/JoinTeamRequest' } } }
+      responses:
+        '201': { description: Temporary member joined., headers: { Set-Cookie: { schema: { type: string } } }, content: { application/json: { schema: { $ref: '#/components/schemas/TeamMember' } } } }
+        '404': { $ref: '#/components/responses/AccessDenied' }
+        '410': { description: Invite expired., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+  /api/v1/work-teams/today/members/{memberId}/assignments:
+    post:
+      tags: [Owner, Team]
+      summary: Assign a published WorkSession to a temporary team member
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/TeamMemberId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TeamAssignmentRequest' } } }
+      responses:
+        '201': { description: Assignment active., content: { application/json: { schema: { $ref: '#/components/schemas/TeamAssignmentMeta' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+  /api/v1/work-team-members/me/assignments:
+    get:
+      tags: [Worker, Team]
+      summary: Read this browser's assigned latest work states
+      security: [{ teamMemberSession: [] }]
+      responses:
+        '200': { description: Latest states; an empty array means waiting for owner assignment., content: { application/json: { schema: { $ref: '#/components/schemas/TeamAssignmentsResponse' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
   /api/v1/brief:
     get:
       tags: [Owner]
-      summary: Render latest group briefing
+      summary: Render latest CO_PRESENT group briefing
       security: [{ ownerSession: [] }]
       parameters:
         - in: query
@@ -300,24 +265,21 @@ paths:
           required: true
           schema: { type: string, enum: [vi, ne] }
       responses:
-        '200':
-          description: Latest briefing data.
-          content: { application/json: { schema: { $ref: '#/components/schemas/Briefing' } } }
-        '404': { $ref: '#/components/responses/NotFound' }
+        '200': { description: Latest briefing., content: { application/json: { schema: { $ref: '#/components/schemas/Briefing' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '500': { $ref: '#/components/responses/ServerError' }
+        '404': { $ref: '#/components/responses/NotFound' }
   /health:
     get:
       tags: [System]
       security: []
       responses:
-        '200': { description: Process is alive., content: { application/json: { schema: { $ref: '#/components/schemas/Health' }, example: { status: ok } } } }
+        '200': { description: Process is alive., content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
   /ready:
     get:
       tags: [System]
       security: []
       responses:
-        '200': { description: Dependencies ready., content: { application/json: { schema: { $ref: '#/components/schemas/Health' }, example: { status: ready } } } }
+        '200': { description: Dependencies ready., content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } } }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
 components:
   securitySchemes:
@@ -325,20 +287,27 @@ components:
       type: apiKey
       in: cookie
       name: batmeori_owner_session
+    teamMemberSession:
+      type: apiKey
+      in: cookie
+      name: batmeori_team_member
   parameters:
     DraftId: { in: path, name: draftId, required: true, schema: { type: string } }
     SessionId: { in: path, name: sessionId, required: true, schema: { type: string } }
     WorkerToken: { in: path, name: token, required: true, schema: { type: string, minLength: 32 } }
+    TeamInviteToken: { in: path, name: token, required: true, schema: { type: string, minLength: 32 } }
+    TeamMemberId: { in: path, name: memberId, required: true, schema: { type: string, format: uuid } }
     IdempotencyKey: { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 8 } }
+    CsrfToken: { in: header, name: X-CSRF-Token, required: true, schema: { type: string, const: batmeori-demo }, description: Shared-demo CSRF token. Origin must also match FRONTEND_ORIGINS. }
   responses:
-    Unauthorized: { description: Owner authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: UNAUTHORIZED, message: 인증이 필요합니다. } } } }
-    NotFound: { description: Resource not found., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: NOT_FOUND, message: 찾을 수 없습니다. } } } }
-    AccessDenied: { description: Generalized invalid-link response., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: ACCESS_DENIED, message: 접근할 수 없습니다. } } } }
-    VersionConflict: { description: Expected version mismatch., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: VERSION_CONFLICT, message: 최신 작업 버전을 다시 확인하세요. } } } }
-    Unprocessable: { description: Schema or safety gate rejected request., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, examples: { invalid: { value: { code: SCHEMA_INVALID, message: 입력 형식이 올바르지 않습니다. } }, blocked: { value: { code: OVERRIDE_NOT_ALLOWED, message: 안전상 이 모호함은 그대로 전달할 수 없습니다. } } } } } }
-    ServerError: { description: Unexpected server error., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: INTERNAL_ERROR, message: 일시적인 오류입니다. } } } }
-    ProviderUnavailable: { description: AI/provider or dependency unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: PROVIDER_UNAVAILABLE, message: 잠시 후 다시 시도하세요. } } } }
-    TooManyRequests: { description: Rate limited., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: RATE_LIMITED, message: 잠시 후 다시 시도하세요. } } } }
+    Unauthorized: { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    NotFound: { description: Resource not found., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    AccessDenied: { description: Generalized invalid-link response., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    VersionConflict: { description: Expected version mismatch., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unprocessable: { description: Schema or safety gate rejected request., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    ServerError: { description: Unexpected server error., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    ProviderUnavailable: { description: AI/provider or dependency unavailable., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    TooManyRequests: { description: Rate limited., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
   schemas:
     Error:
       type: object
@@ -346,7 +315,7 @@ components:
       properties:
         code: { type: string, enum: [UNAUTHORIZED, NOT_FOUND, ACCESS_DENIED, LINK_EXPIRED, VERSION_CONFLICT, OVERRIDE_NOT_ALLOWED, SCHEMA_INVALID, PROVIDER_UNAVAILABLE, RATE_LIMITED, INTERNAL_ERROR] }
         message: { type: string }
-        request_id: { type: string, description: Redacted correlation ID safe to show to the caller. }
+        request_id: { type: string }
         details: { type: object, additionalProperties: true }
     PinLoginRequest:
       type: object
@@ -356,12 +325,57 @@ components:
       type: object
       required: [authenticated, expires_at]
       properties: { authenticated: { type: boolean, const: true }, expires_at: { type: string, format: date-time } }
+    TeamMember:
+      type: object
+      additionalProperties: false
+      required: [member_id, display_name, language_code, joined_at, assignment_session_ids]
+      properties:
+        member_id: { type: string, format: uuid }
+        display_name: { type: string, minLength: 1, maxLength: 30 }
+        language_code: { type: string, enum: [vi, ne] }
+        joined_at: { type: string, format: date-time }
+        assignment_session_ids: { type: array, uniqueItems: true, items: { type: string, format: uuid } }
+    TodayWorkTeam:
+      type: object
+      additionalProperties: false
+      required: [team_id, work_date, status, join_url, expires_at, members]
+      properties:
+        team_id: { type: string, format: uuid }
+        work_date: { type: string, format: date, description: Asia/Seoul work date. }
+        status: { type: string, const: ACTIVE }
+        join_url: { type: [string, 'null'], format: uri, description: Returned only by POST when a fresh QR is issued. }
+        expires_at: { type: string, format: date-time }
+        members: { type: array, items: { $ref: '#/components/schemas/TeamMember' } }
+    JoinTeamRequest:
+      type: object
+      additionalProperties: false
+      required: [display_name, language_code]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 30, description: Trimmed display name or nickname; never an account ID. }
+        language_code: { type: string, enum: [vi, ne] }
+    TeamAssignmentRequest:
+      type: object
+      additionalProperties: false
+      required: [work_session_id]
+      properties: { work_session_id: { type: string, format: uuid } }
+    TeamAssignmentMeta:
+      type: object
+      additionalProperties: false
+      required: [member_id, work_session_id, assigned_at]
+      properties:
+        member_id: { type: string, format: uuid }
+        work_session_id: { type: string, format: uuid }
+        assigned_at: { type: string, format: date-time }
+    TeamAssignmentsResponse:
+      type: object
+      additionalProperties: false
+      required: [assignments]
+      properties:
+        assignments: { type: array, items: { $ref: '#/components/schemas/WorkerAssignment' } }
     Quantity:
       type: object
       required: [value, unit]
-      properties:
-        value: { type: integer, minimum: 1 }
-        unit: { type: string, minLength: 1 }
+      properties: { value: { type: integer, minimum: 1 }, unit: { type: string, minLength: 1 } }
     DeicticLocation:
       type: object
       required: [raw_text, kind, canonical_name]
@@ -377,16 +391,20 @@ components:
         message: { type: string }
         blocking: { type: boolean }
         kind: { type: string, enum: [SAFETY, TASK, LOCATION, QUANTITY, TIME, OTHER] }
+    RiskAssessment:
+      type: object
+      required: [level, reasons, schema_version, contract_version]
+      properties:
+        level: { type: string, enum: [LOW, HIGH, UNKNOWN] }
+        reasons: { type: array, uniqueItems: true, items: { type: string, enum: [VEHICLE_OPERATION, ROTATING_BLADE, PESTICIDE_OR_CHEMICAL, WORK_AT_HEIGHT, POWERED_MACHINERY, INSUFFICIENT_CONTEXT, OTHER_HIGH_RISK] } }
+        schema_version: { type: string, const: '1' }
+        contract_version: { type: string, const: safety-policy-v1 }
     Step:
       type: object
       required: [sequence, task_code, title_ko, description_ko, video, audio_url, delivery_mode, unsupported_reason, translations]
       properties:
         sequence: { type: integer, minimum: 1 }
-        task_code:
-          anyOf:
-            - { type: string, enum: [ONION_HARVEST, ONION_COLLECT, BAGGING, LOADING, WAREHOUSE_TRANSPORT, STACKING] }
-            - { type: 'null' }
-          description: null is only for an owner-overridden non-safety unsupported step.
+        task_code: { anyOf: [{ type: string, enum: [ONION_HARVEST, ONION_TRIMMING, ONION_SORTING, ONION_TRANSPORT, STRAWBERRY_HARVEST, STRAWBERRY_SORTING, STRAWBERRY_INSPECTION, STRAWBERRY_PACKING] }, { type: 'null' }] }
         title_ko: { type: string }
         description_ko: { type: string }
         video: { anyOf: [{ $ref: '#/components/schemas/VideoAsset' }, { type: 'null' }] }
@@ -394,21 +412,13 @@ components:
         delivery_mode: { type: string, enum: [VIDEO, TEXT_TTS, TEXT] }
         unsupported_reason: { type: [string, 'null'] }
         translations: { type: array, items: { $ref: '#/components/schemas/SegmentTranslation' } }
-      allOf:
-        - if: { properties: { task_code: { type: 'null' } }, required: [task_code] }
-          then:
-            properties:
-              unsupported_reason: { type: string, minLength: 1 }
-              delivery_mode: { type: string, enum: [TEXT_TTS, TEXT] }
-              video: { type: 'null' }
-          else: { properties: { unsupported_reason: { type: 'null' } } }
     VideoAsset:
       type: object
       required: [asset_id, task_code, video_url, provenance, review_status, safety_level, captions_text]
       properties:
         asset_id: { type: string }
         task_code: { type: string }
-        video_url: { type: string, format: uri-reference, description: P0 uses a FE public/videos static path. }
+        video_url: { type: string, format: uri-reference }
         provenance: { type: string, const: AI_GENERATED_PREGENERATED }
         review_status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
         safety_level: { type: string, enum: [LOW, HIGH] }
@@ -427,90 +437,64 @@ components:
         source_page: { type: [integer, 'null'] }
         source_url: { type: [string, 'null'] }
         license: { type: [string, 'null'] }
-      oneOf:
-        - properties: { source: { const: OFFICIAL_GUIDE }, guide_lookup: { const: HIT }, phrase_key: { type: string, minLength: 1 }, verified: { const: true }, source_page: { type: integer, minimum: 1 }, source_url: { type: string, format: uri }, license: { type: string, minLength: 1 } }
-        - properties: { source: { const: AI_TRANSLATION }, guide_lookup: { const: MISS }, phrase_key: { type: 'null' }, verified: { const: false }, source_page: { type: 'null' }, source_url: { type: 'null' }, license: { type: 'null' } }
-        - properties: { source: { const: DETERMINISTIC }, guide_lookup: { const: NOT_APPLICABLE }, phrase_key: { type: 'null' }, verified: { const: false }, source_page: { type: 'null' }, source_url: { type: 'null' }, license: { type: 'null' } }
-      allOf:
-        - if: { properties: { segment: { const: SAFETY } }, required: [segment] }
-          then: { properties: { source: { const: OFFICIAL_GUIDE }, guide_lookup: { const: HIT }, verified: { const: true } } }
-    DraftState:
+    WorkState:
       type: object
-      required: [task_family, location, location_display, quantity, deadline, safety, notes, steps]
+      required: [task_family, location, location_display, quantity, deadline, safety, notes, steps, risk_assessment]
       properties:
-        task_family: { type: string, enum: [ONION] }
+        task_family: { type: string, enum: [ONION, STRAWBERRY] }
         location: { $ref: '#/components/schemas/DeicticLocation' }
-        location_display: { type: string, description: Worker-visible text; DEICTIC keeps raw location and asks for on-site confirmation. }
+        location_display: { type: string }
         quantity: { anyOf: [{ $ref: '#/components/schemas/Quantity' }, { type: string, const: UNSPECIFIED }, { type: 'null' }] }
         deadline: { type: [string, 'null'] }
         safety: { type: array, items: { type: string } }
         notes: { type: [string, 'null'] }
         steps: { type: array, minItems: 0, items: { $ref: '#/components/schemas/Step' } }
-    PublishedWorkState:
+        risk_assessment: { $ref: '#/components/schemas/RiskAssessment' }
+    WorkerState:
       type: object
       required: [task_family, location, location_display, quantity, deadline, safety, notes, steps]
       properties:
-        task_family: { type: string, enum: [ONION] }
+        task_family: { type: string, enum: [ONION, STRAWBERRY] }
         location: { $ref: '#/components/schemas/DeicticLocation' }
-        location_display: { type: string, description: Worker-visible text; DEICTIC keeps raw location and asks for on-site confirmation. }
+        location_display: { type: string }
         quantity: { anyOf: [{ $ref: '#/components/schemas/Quantity' }, { type: string, const: UNSPECIFIED }, { type: 'null' }] }
         deadline: { type: [string, 'null'] }
         safety: { type: array, items: { type: string } }
         notes: { type: [string, 'null'] }
-        steps: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Step' } }
+        steps: { type: array, minItems: 0, items: { $ref: '#/components/schemas/Step' } }
     WorkDraft:
       type: object
-      required: [draft_id, draft_revision, summary_ko, interpretation, state, ambiguities, risk_assessment, transcript, schema_version, contract_version]
+      required: [draft_id, draft_revision, summary_ko, interpretation, state, ambiguities, transcript, schema_version, contract_version]
       properties:
         draft_id: { type: string }
         draft_revision: { type: integer, minimum: 0 }
-        summary_ko: { type: string, minLength: 1, description: Owner-only Korean confirmation summary. }
+        summary_ko: { type: string, minLength: 1 }
         interpretation: { type: string, enum: [READY, AMBIGUOUS, UNSUPPORTED] }
-        state: { $ref: '#/components/schemas/DraftState' }
+        state: { $ref: '#/components/schemas/WorkState' }
         ambiguities: { type: array, items: { $ref: '#/components/schemas/Ambiguity' } }
-        risk_assessment: { $ref: '#/components/schemas/RiskAssessment' }
-        transcript: { type: string, description: Owner-only audit field; never returned to workers. }
+        transcript: { type: string }
         schema_version: { type: string, const: '1' }
         contract_version: { type: string, const: structure-v1 }
     DraftConfirmRequest:
       oneOf:
         - type: object
           additionalProperties: false
-          required: [expected_version, decision]
+          required: [expected_version, decision, delivery_mode, language_code]
           properties:
             expected_version: { type: integer, const: 0 }
             decision: { type: string, const: CONFIRM }
+            delivery_mode: { type: string, enum: [CO_PRESENT, REMOTE] }
+            language_code: { type: string, enum: [vi, ne] }
         - type: object
           additionalProperties: false
-          required: [expected_version, decision, ambiguity_override, override_reason]
+          required: [expected_version, decision, delivery_mode, language_code, ambiguity_override, override_reason]
           properties:
             expected_version: { type: integer, const: 0 }
             decision: { type: string, const: PUBLISH_AS_IS }
+            delivery_mode: { type: string, enum: [CO_PRESENT, REMOTE] }
+            language_code: { type: string, enum: [vi, ne] }
             ambiguity_override: { type: boolean, const: true }
             override_reason: { type: string, enum: [EXPERIENCED_WORKER, IN_PERSON_BRIEFING, OWNER_ACCEPTED_OTHER] }
-    SupplementAudioRequest:
-      type: object
-      additionalProperties: false
-      required: [audio, expected_draft_revision]
-      properties:
-        audio: { type: string, format: binary, description: audio/webm or audio/mp4; max 10 MiB and 60 seconds. }
-        expected_draft_revision: { type: integer, minimum: 0 }
-        language_hint: { type: string, enum: [ko] }
-    RiskAssessment:
-      type: object
-      additionalProperties: false
-      required: [level, reasons, schema_version, contract_version]
-      properties:
-        level: { type: string, enum: [LOW, HIGH, UNKNOWN] }
-        reasons:
-          type: array
-          uniqueItems: true
-          items: { type: string, enum: [VEHICLE_OPERATION, ROTATING_BLADE, PESTICIDE_OR_CHEMICAL, WORK_AT_HEIGHT, POWERED_MACHINERY, INSUFFICIENT_CONTEXT, OTHER_HIGH_RISK] }
-        schema_version: { type: string, const: '1' }
-        contract_version: { type: string, const: safety-policy-v1 }
-      oneOf:
-        - properties: { level: { const: LOW }, reasons: { maxItems: 0 } }
-        - properties: { level: { enum: [HIGH, UNKNOWN] }, reasons: { minItems: 1 } }
     QuantityChangeParseResult:
       type: object
       required: [interpretation, quantity, expected_version, ambiguities, schema_version, contract_version]
@@ -524,21 +508,18 @@ components:
     QuantityChangeConfirmRequest:
       type: object
       required: [quantity, expected_version]
-      properties:
-        quantity: { $ref: '#/components/schemas/Quantity' }
-        expected_version: { type: integer, minimum: 1 }
+      properties: { quantity: { $ref: '#/components/schemas/Quantity' }, expected_version: { type: integer, minimum: 1 } }
     WorkVersion:
       type: object
-      required: [version, lifecycle, state, risk_assessment]
+      required: [version, lifecycle, state]
       properties:
         version: { type: integer, minimum: 1 }
         lifecycle: { type: string, enum: [PUBLISHED, SUPERSEDED] }
-        state: { $ref: '#/components/schemas/PublishedWorkState' }
-        risk_assessment: { $ref: '#/components/schemas/RiskAssessment' }
+        state: { $ref: '#/components/schemas/WorkState' }
         ambiguity_override: { type: boolean }
         override_reason: { type: [string, 'null'], enum: [EXPERIENCED_WORKER, IN_PERSON_BRIEFING, OWNER_ACCEPTED_OTHER, null] }
         overridden_at: { type: [string, 'null'], format: date-time }
-        transcript: { type: string, description: Owner-only audit field. }
+        transcript: { type: [string, 'null'] }
     OwnerWorkSession:
       type: object
       required: [session_id, current_version, lifecycle, version]
@@ -547,25 +528,38 @@ components:
         current_version: { type: integer, minimum: 1 }
         lifecycle: { type: string, const: PUBLISHED }
         version: { $ref: '#/components/schemas/WorkVersion' }
+        worker_link_meta: { type: array, items: { $ref: '#/components/schemas/WorkerLinkMeta' } }
+    WorkerLinkMeta:
+      type: object
+      required: [language_code, expires_at, revoked_at]
+      properties:
+        language_code: { type: string, enum: [vi, ne] }
+        expires_at: { type: string, format: date-time }
+        revoked_at: { type: [string, 'null'], format: date-time }
     IssuedWorkerLink:
       type: object
       required: [language_code, url, expires_at]
       properties:
         language_code: { type: string, enum: [vi, ne] }
-        url: { type: string, format: uri, description: Returned only when issued; never persisted or returned by regular reads. }
+        url: { type: string, format: uri }
         expires_at: { type: string, format: date-time }
-    WorkerLinkIssueResponse:
+    InitialPublishResponse:
       type: object
-      required: [session_id, issued_worker_link]
+      required: [work_session, issued_worker_links]
       properties:
-        session_id: { type: string }
-        issued_worker_link: { $ref: '#/components/schemas/IssuedWorkerLink' }
+        work_session: { $ref: '#/components/schemas/OwnerWorkSession' }
+        issued_worker_links: { type: array, items: { $ref: '#/components/schemas/IssuedWorkerLink' } }
     WorkerLinkIssueRequest:
       type: object
       additionalProperties: false
       required: [language_code]
+      properties: { language_code: { type: string, enum: [vi, ne] } }
+    WorkerLinkIssueResponse:
+      type: object
+      required: [session_id, issued_worker_links]
       properties:
-        language_code: { type: string, enum: [vi, ne] }
+        session_id: { type: string }
+        issued_worker_links: { type: array, minItems: 1, maxItems: 1, items: { $ref: '#/components/schemas/IssuedWorkerLink' } }
     OwnerWorkSessionList:
       type: object
       required: [items]
@@ -578,10 +572,9 @@ components:
         session_id: { type: string }
         version: { type: integer, minimum: 1 }
         lifecycle: { type: string, const: PUBLISHED }
-        state:
-          allOf: [{ $ref: '#/components/schemas/PublishedWorkState' }]
-          description: Latest published state; each step contains only translations for this link's language_code.
+        state: { $ref: '#/components/schemas/WorkerState' }
         badges: { type: array, items: { type: string } }
+        source_detail: { type: array, items: { $ref: '#/components/schemas/SegmentTranslation' } }
     Briefing:
       type: object
       required: [session_id, version, language_code, steps]
@@ -589,15 +582,9 @@ components:
         session_id: { type: string }
         version: { type: integer, minimum: 1 }
         language_code: { type: string, enum: [vi, ne] }
-        steps:
-          type: array
-          minItems: 1
-          description: Latest published steps filtered to the requested language_code.
-          items: { $ref: '#/components/schemas/Step' }
+        steps: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Step' } }
         demo_badge: { type: [string, 'null'], enum: [DEMO FALLBACK, null] }
     Health:
       type: object
       required: [status]
-      properties:
-        status: { type: string, enum: [ok, ready] }
-        request_id: { type: string }
+      properties: { status: { type: string, enum: [ok, ready] }, request_id: { type: string } }

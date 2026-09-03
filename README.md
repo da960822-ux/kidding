@@ -1,10 +1,10 @@
 # 밭머리 (Batmeori)
 
-농장주의 전라도 사투리 작업지시를 양파 작업 스토리보드로 바꿔 외국인 근로자에게 전달하는 해커톤 P0 제품.
+농장주의 전라도 사투리 작업지시를 양파·딸기 작업 스토리보드로 바꿔 외국인 근로자에게 전달하는 해커톤 P0 제품.
 
 ## P0 범위
 
-양파만 지원한다. 전달 언어는 베트남어(`vi`)·네팔어(`ne`), 변경은 수량 변경만 지원한다. confirm 뒤 농장주는 `CO_PRESENT` 같이 보기 또는 `REMOTE` 링크로 보내기를 고르고 언어를 선택한다. 전자는 owner PIN cookie로 여는 owner 폰 video+TTS briefing, 후자는 언어를 고른 익명 24시간 latest-`PUBLISHED` 링크다. 전화번호·SMS·개인 로그인은 제외한다. `AI는 추측하지 않는다. 결정은 농장주가 한다.` unknown은 `UNSPECIFIED`/`null`로 유지한다. [Safety Policy](docs/SAFETY_POLICY.md)에 따라 LOW 비안전 미지원 작업만 reason을 남겨 전달할 수 있으며, safety ambiguity·HIGH·UNKNOWN 위험·schema invalid·실행 단계 없음은 override 불가다. 영상은 AI 사전 생성 후 사람 검수한 자산만 사용하며 `safety_level: HIGH` 자산은 게시하지 않는다. 일반 작업표현은 정부 가이드 HIT를 우선하고 MISS 시 `AI_TRANSLATION` 출처를 표시한다. 안전표현은 검수 출처가 없으면 자동 게시하지 않는다.
+양파·딸기만 지원한다. 전달 언어는 베트남어(`vi`)·네팔어(`ne`), 변경은 수량 변경만 지원한다. confirm 뒤 농장주는 `CO_PRESENT` 같이 보기 또는 `REMOTE` 링크로 보내기를 고르고 언어를 선택한다. 전자는 owner PIN cookie로 여는 owner 폰 video+TTS briefing, 후자는 언어를 고른 익명 24시간 latest-`PUBLISHED` 링크다. 사람별 다른 작업에는 오늘 작업팀 QR을 열고, 참가자가 별명·언어만 제출하면 각 최신 WorkSession을 배정한다. 이는 24시간 임시 roster이며 전화번호·국적·SMS·개인 로그인·영구 근로자 명부는 제외한다. `AI는 추측하지 않는다. 결정은 농장주가 한다.` unknown은 `UNSPECIFIED`/`null`로 유지한다. [Safety Policy](docs/SAFETY_POLICY.md)에 따라 LOW 비안전 미지원 작업만 reason을 남겨 전달할 수 있으며, safety ambiguity·HIGH·UNKNOWN 위험·schema invalid·실행 단계 없음은 override 불가다. 영상은 AI 사전 생성 후 사람 검수한 자산만 사용하며 `safety_level: HIGH` 자산은 게시하지 않는다. 일반 작업표현은 정부 가이드 HIT를 우선하고 MISS 시 `AI_TRANSLATION` 출처를 표시한다. 안전표현은 검수 출처가 없으면 자동 게시하지 않는다. [팀 변경 공지](docs/TEAM_UPDATE_ONION_STRAWBERRY_P0.md)에 8개 코드와 동시 반영 규칙을 정리했다.
 
 ## 실행 전제
 

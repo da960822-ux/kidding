@@ -8,7 +8,7 @@
 
 - 가설: STT 후 사투리 정규화·구조화를 거치면 STT 직후 번역보다 단계와 수량 보존이 높다.
 - 비교: `STT→translation` baseline vs `STT→normalize→structure→guide lookup→translation` pipeline.
-- 데이터: `docs/EVALS.md`의 비식별 transcript JSONL 30건. 실제 데이터는 수집 후 dataset version을 기록한다.
+- 데이터: `docs/EVALS.md`의 비식별 양파·딸기 transcript JSONL 30건. 실제 데이터는 수집 후 dataset version을 기록한다.
 - 측정: parse success, field exact match, `task_code` accuracy, quantity accuracy, ambiguity preservation, latency P50/P95.
 - 합격 게이트: quantity accuracy 100%, 모호 입력 임의 확정 0건. 나머지 수치는 실행 결과로 채우고 수집 전 수치를 만들지 않는다.
 - 주담당: AI. 인계: `docs/EVALS.md` 결과표와 실패 입력 ID.

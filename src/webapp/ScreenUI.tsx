@@ -41,8 +41,8 @@ export function StatusBadge({ children, tone = 'green' }: PropsWithChildren<{ to
 export function FactRow({ label, value, last = false }: { label: string; value: ReactNode; last?: boolean }) {
   return (
     <div className={`grid gap-2 py-3 sm:grid-cols-[110px_1fr] sm:gap-5 ${last ? '' : 'border-b border-deep/10'}`}>
-      <span className="font-bold text-muted">{label}</span>
-      <strong className="font-extrabold leading-7 text-ink">{value}</strong>
+      <span className="font-bold leading-8 text-muted">{label}</span>
+      <strong className="font-extrabold leading-8 text-ink">{value}</strong>
     </div>
   );
 }

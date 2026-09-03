@@ -31,7 +31,7 @@ function App() {
   if (appMode) return <WebApp initialLocale={locale} />;
 
   return (
-    <div id="top" className="min-h-screen bg-cream text-ink">
+    <div id="top" className={`min-h-screen bg-cream text-ink ${locale === 'ko' ? 'break-keep' : ''}`}>
       <a href="#main-content" className="sr-only z-[100] rounded-lg bg-deep px-4 py-3 text-white focus:not-sr-only focus:fixed focus:left-4 focus:top-4">
         본문 바로가기
       </a>

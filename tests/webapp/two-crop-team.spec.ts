@@ -258,17 +258,19 @@ test('confirmed work links to today-team assignment and is selected by default',
   await page.goto('/owner/new');
   await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
   await page.getByRole('button', { name: '확정하기' }).click();
-  await page.getByRole('button', { name: '오늘 작업팀에 배정' }).click();
+  await page.getByRole('button', { name: '팀 QR로 배정' }).click();
+  await page.getByRole('button', { name: '오늘 작업팀 열기' }).click();
   await expect(page.getByLabel('Nguyễn 작업 선택')).toHaveValue('work-demo-01');
 });
 
 test('remote briefing renders schema v2 DTO', async ({ page }) => {
   await page.goto('/w/demo-vi-token');
   await expect(page.getByText('Công việc mới nhất')).toBeVisible();
+  await page.getByText('Xem các bước và nghe hướng dẫn', { exact: true }).click();
   await expect(page.getByRole('listitem')).toHaveCount(4);
   await expect(page.getByText('Mang ủng chống trượt.')).toHaveCount(0);
   await expect(page.getByText('NỘI DUNG DEMO').first()).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Xem từng bước' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Bắt đầu bước 1' })).toBeVisible();
   await expect(page.getByText(/TTS:|AI_TRANSLATION|[a-f0-9]{32}/)).toBeHidden();
 });
 
@@ -276,6 +278,7 @@ test('Nepali briefing is fully localized, complete, and fits a narrow phone', as
   await page.setViewportSize({ width: 360, height: 800 });
   await page.goto('/w/demo-ne-token');
   await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('ne');
+  await page.getByText('चरणहरू हेर्नुहोस् र निर्देशन सुन्नुहोस्', { exact: true }).click();
   await expect(page.getByRole('listitem')).toHaveCount(4);
   await expect(page.getByText('नचिप्लिने बुट लगाउनुहोस्।')).toHaveCount(0);
   await expect(page.getByText('डेमो सामग्री').first()).toBeVisible();
@@ -285,7 +288,7 @@ test('Nepali briefing is fully localized, complete, and fits a narrow phone', as
   expect(mainText).not.toMatch(/Ruộng|Thu hoạch|Mang|Trước|Ghi chú/);
   expect(mainText).not.toMatch(/TTS:|AI_TRANSLATION|[a-f0-9]{32}/);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.getByRole('button', { name: 'चरणहरू हेर्नुहोस्' }).click();
+  await page.getByRole('button', { name: 'चरण १ सुरु गर्नुहोस्' }).click();
   const next = page.getByRole('button', { name: 'अर्को' });
   await next.click(); await next.click(); await next.click();
   await expect(page.getByRole('button', { name: 'काम सूचीमा फर्कनुहोस्' })).toBeVisible();

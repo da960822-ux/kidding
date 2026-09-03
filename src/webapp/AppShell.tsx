@@ -79,8 +79,8 @@ export function AppShell({ children, role, active, workerLocale, go, ownerSessio
         </div>
       </header>
 
-      <div className={`mx-auto grid max-w-[1500px] ${hideNavigation ? '' : 'lg:grid-cols-[240px_minmax(0,1fr)]'}`}>
-        {!hideNavigation && <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} border-b border-deep/10 bg-[#EEF3EC] p-4 lg:block lg:min-h-[calc(100vh-72px)] lg:border-b-0 lg:border-r lg:p-5`}>
+      <div className={`mx-auto grid max-w-[1500px] ${!hideNavigation && role === 'owner' ? 'lg:grid-cols-[240px_minmax(0,1fr)]' : ''}`}>
+        {!hideNavigation && role === 'owner' && <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} border-b border-deep/10 bg-[#EEF3EC] p-4 lg:block lg:min-h-[calc(100vh-72px)] lg:border-b-0 lg:border-r lg:p-5`}>
           {role === 'owner' && ownerSession && <div className="mb-5 rounded-2xl bg-white p-4"><span className="block text-sm font-bold text-muted">현재 팀</span><strong className="mt-1 block text-base text-deep">{ownerSession.team?.status === 'PENDING' ? '첫 작업을 확정해주세요' : '작업팀 관리'}</strong><span className="mt-1 block text-sm font-bold text-muted">{ownerSession.team?.status === 'PENDING' ? '작업 작성 중' : '24시간 작업팀'}</span></div>}
           <p className="mb-3 hidden px-3 text-sm font-extrabold text-muted lg:block">{role === 'owner' ? '팀 관리' : workerLabels.menu}</p>
           <nav className="hidden gap-1.5 lg:grid" aria-label={role === 'owner' ? '웹앱 메뉴' : workerLabels.menu}>

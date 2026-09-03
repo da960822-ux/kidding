@@ -42,6 +42,17 @@ test('direct team link keeps saved Nepali language on initial render despite Kor
   await expect(page.getByRole('heading', { name: 'तपाईंको नाम लेख्नुहोस्' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'ne');
   await expect(page.getByRole('button', { name: 'नेपाली', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'ລາວ', exact: true })).toBeDisabled();
+});
+
+test('owner language bar shows Lao without enabling an unsupported link', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('batmeori-demo-owner-session', JSON.stringify({ authenticated: true, expires_at: new Date(Date.now() + 3600000).toISOString(), farm: { code: 'farm-demo', display_name: '밭머리 데모 농장' } })));
+  await page.goto('/owner/new');
+  await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
+  await page.getByRole('button', { name: '확정하기' }).click();
+  await page.getByRole('button', { name: '언어별 링크 보내기' }).click();
+  await expect(page.getByRole('button', { name: 'ລາວ', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '베트남어 링크 만들기' })).toBeVisible();
 });
 
 for (const locale of ['vi', 'ne'] as const) {
@@ -72,7 +83,7 @@ for (const locale of ['vi', 'ne'] as const) {
 test('reduced motion preserves color feedback and forced colors preserve controls and focus', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce', forcedColors: 'active' });
   await page.goto('/w/demo-vi-token');
-  const view = page.getByRole('button', { name: 'Xem từng bước' });
+  const view = page.getByRole('button', { name: 'Bắt đầu bước 1' });
   await expect(view).toBeVisible();
   await view.focus();
   const styles = await view.evaluate((element) => {
@@ -102,9 +113,22 @@ test('worker can listen to the complete briefing from the summary', async ({ pag
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { cancel() {}, speak(speech: { onend: (() => void) | null }) { speech.onend?.(); } } });
   });
   await page.goto('/w/demo-vi-token');
+  await page.getByText('Xem các bước và nghe hướng dẫn', { exact: true }).click();
   await page.getByRole('button', { name: 'Nghe toàn bộ hướng dẫn' }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __spokenBriefing?: string }).__spokenBriefing)).toContain('Thu hoạch hành');
   await expect.poll(() => page.evaluate(() => (window as unknown as { __spokenBriefing?: string }).__spokenBriefing)).toContain('Vận chuyển hành');
+});
+
+test('worker summary prioritizes work context and starting the first step', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/w/demo-vi-token');
+  await expect(page.getByRole('button', { name: 'Bắt đầu bước 1' })).toBeVisible();
+  await expect(page.getByText('Ruộng hành số 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('20 bao', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Nghe toàn bộ hướng dẫn' })).toBeHidden();
+  await page.getByText('Xem các bước và nghe hướng dẫn', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Nghe toàn bộ hướng dẫn' })).toBeVisible();
+  await expect(page.getByRole('listitem')).toHaveCount(4);
 });
 
 test('owner reload recovers only draft facts, not raw audio', async ({ page }) => {
@@ -122,6 +146,7 @@ test('owner keeps issued link language visible before creating another language 
   await page.goto('/owner/new');
   await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
   await page.getByRole('button', { name: '확정하기' }).click();
+  await page.getByRole('button', { name: '언어별 링크 보내기' }).click();
   await page.getByRole('button', { name: '베트남어 링크 만들기' }).click();
   await expect(page.getByText('발급된 링크 언어: 베트남어')).toBeVisible();
   await page.getByRole('button', { name: 'नेपाली', exact: true }).click();

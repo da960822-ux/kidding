@@ -3,41 +3,41 @@ import type { LandingContent, Locale } from './types';
 export const landingContent: Record<Locale, LandingContent> = {
   ko: {
     localeName: '한국어',
-    tagline: '농사의 시작, 소통이 답이다',
+    tagline: '농사의 시작은 소통입니다',
     nav: { about: '서비스 소개', features: '주요 기능', how: '사용 방법', faq: '자주 묻는 질문' },
     start: '시작하기',
     hero: {
       line1: '말 한마디면,',
       line2: '일이 통합니다',
-      description: '전라도 사투리로 말하는 작업지시,\nAI가 이해하고 외국어로 정확하게 전달해요.\n농장과 근로자를 잇는 가장 쉬운 방법, 밭머리',
+      description: '전라도 사투리로 말한 작업 지시를 AI가 이해해 베트남어와 네팔어로 정확히 전달합니다. 농장주와 근로자를 잇는 쉬운 방법, 밭머리.',
       freeStart: '무료로 시작하기',
       viewGuide: '사용법 보기',
-      benefits: ['사투리도 정확하게 이해해요', '베트남어·네팔어로 번역해요', '최신 작업 화면으로 바로 전달해요'],
+      benefits: ['전라도 사투리도 이해해요', '베트남어·네팔어로 안내해요', '최신 작업을 바로 전달해요'],
     },
     phone: {
-      question: '오늘 어떤 양파 작업을\n시킬까요?', speak: '음성으로 지시하기', write: '오늘 작업팀 QR 열기', recent: '최근 작업지시',
-      more: '더보기', task: '1번 밭 양파 20망 수확', delivered: '베트남어 안내 준비됨', time: '오전 9:30',
+      question: '오늘은 어떤 작업을 하실까요?', speak: '말로 하기', write: '작업 확인하기', recent: '최근 작업 지시',
+      more: '더보기', task: '1번 밭 양파 20망 수확', delivered: '안내 준비 완료', time: '오전 9:30',
     },
     features: {
-      eyebrow: '밭머리가 특별한 이유', titleBefore: '농장 현장을 더', titleGreen: '편하게,', titleBlue: '정확하게',
+      eyebrow: '밭머리가 특별한 이유', titleBefore: '농장 일을 더', titleGreen: '쉽게,', titleBlue: '정확하게',
       cards: [
-        { title: '사투리 그대로 말해도 OK', description: '전라도 사투리를 포함한 자연스러운 말도 AI가 정확하게 이해해요.' },
-        { title: '두 언어로 정확히 전달', description: '베트남어와 네팔어 작업 안내를 준비해 전달해요.' },
-        { title: '영상 또는 음성으로 안내', description: '검수된 영상이 없으면 텍스트와 음성으로 안내해요.' },
-        { title: '최신 수량을 바로 반영', description: '농장주가 확인한 수량 변경만 최신 작업에 반영해요.' },
+        { title: '전라도 사투리로 말해도 괜찮아요', description: 'AI가 작업 지시로 정리하고, 애매한 내용은 농장주가 확인합니다.' },
+        { title: '두 언어로 작업 안내', description: '베트남어와 네팔어로 작업 안내를 준비해 전달합니다.' },
+        { title: '영상 또는 음성으로 안내', description: '검수된 영상이 없으면 글과 음성으로 안내합니다.' },
+        { title: '확인한 수량만 반영', description: '농장주가 확인한 수량 변경만 최신 작업에 반영합니다.' },
       ],
     },
-    cta: { title: '이제, 농장의 소통이 쉬워집니다', description: '복잡한 입력은 이제 그만!\n말 한마디로 작업을 지시하고, 정확하게 전달하세요.', button: '지금 시작하기' },
+    cta: { title: '농장 소통이 쉬워집니다', description: '복잡하게 입력하지 않아도 됩니다. 말로 작업을 지시하고, 필요한 언어로 전달하세요.', button: '지금 시작하기' },
     how: {
       title: '사용 방법',
       steps: [
-        { title: '음성으로 작업 지시', description: '양파 작업, 수량, 장소를 말해주세요.' },
-        { title: 'AI 정리 후 농장주 확인', description: 'AI가 모르는 내용은 추측하지 않고 남겨둬요.' },
-        { title: '언어와 전달 방법 선택', description: '현장 같이 보기, 링크, 오늘 작업팀 QR을 고르세요.' },
-        { title: '최신 작업 화면 전달', description: '근로자는 자기 언어의 최신 작업을 확인해요.' },
+        { title: '말로 작업 지시', description: '양파나 딸기 작업, 수량, 장소를 말해주세요.' },
+        { title: 'AI가 정리하고 농장주가 확인', description: 'AI가 모르는 내용은 추측하지 않고, 농장주가 정합니다.' },
+        { title: '언어와 전달 방법 선택', description: '현장에서 함께 보거나, 링크 또는 오늘 작업팀 QR로 전달하세요.' },
+        { title: '최신 작업 안내 전달', description: '근로자는 자기 언어로 최신 작업을 확인합니다.' },
       ],
     },
-    footer: { copyright: '© 2026 밭머리. All rights reserved.', terms: '이용 약관', privacy: '개인정보처리방침', contact: '문의하기' },
+    footer: { copyright: '© 2026 밭머리. 모든 권리 보유.', terms: '이용 약관', privacy: '개인정보처리방침', contact: '문의하기' },
   },
   vi: {
     localeName: 'Tiếng Việt',
@@ -46,7 +46,7 @@ export const landingContent: Record<Locale, LandingContent> = {
     start: 'Bắt đầu',
     hero: {
       line1: 'Chỉ cần nói,', line2: 'công việc sẽ thông suốt',
-      description: 'Hãy giao việc bằng tiếng địa phương Jeolla.\nAI sẽ hiểu và truyền đạt chính xác bằng ngôn ngữ của người lao động.\nCách dễ nhất để kết nối nông trại và người lao động — Batmeori.',
+      description: 'Hãy giao việc bằng tiếng địa phương Jeolla. AI sẽ hiểu và truyền đạt chính xác bằng ngôn ngữ của người lao động. Cách dễ nhất để kết nối nông trại và người lao động — Batmeori.',
       freeStart: 'Bắt đầu miễn phí', viewGuide: 'Xem cách dùng',
       benefits: ['Hiểu cả tiếng địa phương', 'Dịch sang tiếng Việt và Nepal', 'Gửi ngay hướng dẫn mới nhất'],
     },
@@ -63,7 +63,7 @@ export const landingContent: Record<Locale, LandingContent> = {
         { title: 'Cập nhật số lượng mới nhất', description: 'Chỉ thay đổi số lượng đã được chủ nông trại xác nhận.' },
       ],
     },
-    cta: { title: 'Giờ đây, giao tiếp ở nông trại thật dễ dàng', description: 'Không cần nhập liệu phức tạp.\nChỉ cần nói để giao việc và truyền đạt chính xác.', button: 'Bắt đầu ngay' },
+    cta: { title: 'Giờ đây, giao tiếp ở nông trại thật dễ dàng', description: 'Không cần nhập liệu phức tạp. Chỉ cần nói để giao việc và truyền đạt chính xác.', button: 'Bắt đầu ngay' },
     how: {
       title: 'Cách sử dụng',
       steps: [
@@ -82,7 +82,7 @@ export const landingContent: Record<Locale, LandingContent> = {
     start: 'सुरु गर्नुहोस्',
     hero: {
       line1: 'एक वाक्य बोले पुग्छ,', line2: 'काम सजिलै बुझिन्छ',
-      description: 'जोल्ला क्षेत्रको स्थानीय बोलीमै काम भन्नुहोस्।\nAI ले बुझेर कामदारको भाषामा सही रूपमा पुर्‍याउँछ।\nफार्म र कामदार जोड्ने सबैभन्दा सजिलो उपाय — बाटमेओरी।',
+      description: 'जोल्ला क्षेत्रको स्थानीय बोलीमै काम भन्नुहोस्। AI ले बुझेर कामदारको भाषामा सही रूपमा पुर्‍याउँछ। फार्म र कामदार जोड्ने सबैभन्दा सजिलो उपाय — बाटमेओरी।',
       freeStart: 'निःशुल्क सुरु गर्नुहोस्', viewGuide: 'प्रयोग विधि हेर्नुहोस्',
       benefits: ['स्थानीय बोली पनि बुझ्छ', 'भियतनामी र नेपालीमा अनुवाद', 'नवीनतम निर्देशन तुरुन्त पठाउँछ'],
     },
@@ -99,7 +99,7 @@ export const landingContent: Record<Locale, LandingContent> = {
         { title: 'नवीनतम परिमाण अपडेट', description: 'खेत मालिकले पुष्टि गरेको परिमाण मात्र अपडेट हुन्छ।' },
       ],
     },
-    cta: { title: 'अब फार्मको सञ्चार सजिलो हुन्छ', description: 'जटिल इनपुट चाहिँदैन।\nबोलेर काम दिनुहोस् र सही रूपमा पुर्‍याउनुहोस्।', button: 'अहिले सुरु गर्नुहोस्' },
+    cta: { title: 'अब फार्मको सञ्चार सजिलो हुन्छ', description: 'जटिल इनपुट चाहिँदैन। बोलेर काम दिनुहोस् र सही रूपमा पुर्‍याउनुहोस्।', button: 'अहिले सुरु गर्नुहोस्' },
     how: {
       title: 'प्रयोग विधि',
       steps: [

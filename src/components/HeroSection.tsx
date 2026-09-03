@@ -17,9 +17,9 @@ export function HeroSection({ content, appHref, locale }: { content: LandingCont
             <Sprout className="h-4 w-4" aria-hidden="true" />
             {content.tagline}
           </div>
-          <h1 className="text-5xl font-black leading-[1.12] tracking-[-0.045em] text-ink sm:text-6xl lg:text-7xl">
+          <h1 className={`font-black leading-[1.12] tracking-[-0.04em] text-ink ${locale === 'ko' ? 'text-[clamp(2.25rem,11vw,3rem)] sm:text-6xl lg:text-7xl' : 'text-5xl sm:text-6xl lg:text-7xl'}`}>
             <span className="block">{content.hero.line1}</span>
-            <span className={`mt-2 block text-deep ${locale === 'ko' ? 'whitespace-nowrap text-[clamp(1.75rem,4.35vw,3.5rem)] sm:text-[clamp(2.75rem,4.35vw,3.5rem)]' : ''}`}>{content.hero.line2}</span>
+            <span className="mt-2 block text-deep">{content.hero.line2}</span>
           </h1>
           <p className="mt-7 whitespace-pre-line text-lg font-medium leading-8 text-[#39493B] sm:text-xl sm:leading-9">
             {content.hero.description}
@@ -49,7 +49,7 @@ export function HeroSection({ content, appHref, locale }: { content: LandingCont
         </div>
 
         <div className="min-w-0 pb-2 lg:pt-8">
-          <PhoneMockup content={content} />
+          <PhoneMockup />
         </div>
       </Container>
     </section>

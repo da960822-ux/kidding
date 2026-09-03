@@ -96,7 +96,8 @@ test('pending team has no QR and active team survives midnight with the same exp
   await page.getByRole('button', { name: '작업 말하기', exact: true }).click();
   await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
   await page.getByRole('button', { name: '확정하기' }).click();
-  await page.getByRole('button', { name: '오늘 작업팀에 배정' }).click();
+  await page.getByRole('button', { name: '팀 QR로 배정' }).click();
+  await page.getByRole('button', { name: '오늘 작업팀 열기' }).click();
   const before = await page.evaluate(() => JSON.parse(localStorage.getItem('batmeori-demo-today-team')!));
   expect(new Date(before.expires_at).getTime() - Date.parse('2026-09-04T14:55:00Z')).toBeGreaterThanOrEqual(24 * 3600000);
   await page.clock.fastForward('00:10:00');

@@ -169,7 +169,21 @@ function TeamAccess({ ownerSession, startNewTeam }: Pick<OwnerScreenProps, 'owne
 
 export function OwnerHomeScreen({ go, session, setSession }: OwnerScreenProps) {
   const [sessions, setSessions] = useState<OwnerWorkSession[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [retry, setRetry] = useState(0);
-  useEffect(() => { let active = true; const load = async () => { setLoading(true); setError(''); try { const { items } = await api.listSessions(); if (active) { setSessions(items); setSession(items[0] ?? null); } } catch (reason) { if (active) setError(errorText(reason)); } finally { if (active) setLoading(false); } }; void load(); return () => { active = false; }; }, [retry]);
+  useEffect(() => {
+    let active = true; let inFlight = false;
+    const load = async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try { const { items } = await api.listSessions(); if (active) { setSessions(items); setSession(items[0] ?? null); setError(''); } }
+      catch (reason) { if (active) setError(errorText(reason)); }
+      finally { inFlight = false; if (active) setLoading(false); }
+    };
+    void load();
+    const refresh = () => { if (document.visibilityState === 'visible') void load(); };
+    const timer = window.setInterval(refresh, 5000);
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [retry]);
   return <><PageHeading title="오늘 어떤 작업을 시킬까요?" description="평소 말투 그대로 말씀하세요. AI가 추측하지 않고 정리합니다." />
     <button type="button" onClick={() => go('owner-record')} className="mb-7 flex min-h-[220px] w-full flex-col items-center justify-center rounded-2xl bg-[#E9F1E5] p-7 text-center transition hover:bg-sage focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25"><span className="flex h-24 w-24 items-center justify-center rounded-full bg-deep text-white"><Mic className="h-11 w-11" /></span><strong className="mt-5 text-2xl font-black text-deep">새 작업 지시하기</strong><span className="mt-2 font-bold text-muted">버튼을 누르고 말해주세요</span></button>
     <ActionButton className="mb-7 w-full" variant="secondary" onClick={() => go('owner-team')}><QrCode className="h-6 w-6" />오늘 작업팀 QR 만들기</ActionButton>
@@ -181,7 +195,22 @@ export function OwnerTodayTeamScreen({ go, session, ownerSession, startNewTeam }
   const [team, setTeam] = useState<TodayWorkTeam | null>(null); const [sessions, setSessions] = useState<OwnerWorkSession[]>([]); const [selected, setSelected] = useState<Record<string, string>>({}); const [assigning, setAssigning] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [copyStatus, setCopyStatus] = useState(''); const [confirmRotate, setConfirmRotate] = useState(false); const teamGeneration = useRef(0); const rotating = useRef(false);
   const showTeam = (next: TodayWorkTeam) => setTeam(next);
   useEffect(() => { let active = true; Promise.allSettled([api.getTodayTeam(), api.listSessions()]).then(([teamResult, sessionsResult]) => { if (!active) return; if (teamResult.status === 'fulfilled') showTeam(teamResult.value); else if (!(teamResult.reason instanceof ApiError) || teamResult.reason.code !== 'NOT_FOUND' && teamResult.reason.status !== 409) setError(errorText(teamResult.reason)); if (sessionsResult.status === 'fulfilled') setSessions(sessionsResult.value.items); else setError(errorText(sessionsResult.reason)); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
-  useEffect(() => { if (!team) return; const refresh = () => { if (document.visibilityState !== 'visible' || rotating.current) return; const generation = teamGeneration.current; api.getTodayTeam().then((next) => { if (generation === teamGeneration.current) showTeam(next); }).catch((reason) => { if (generation === teamGeneration.current) setError(errorText(reason)); }); }; const timer = window.setInterval(refresh, 4000); return () => window.clearInterval(timer); }, [team?.team_id]);
+  useEffect(() => {
+    if (!team) return;
+    let active = true; let inFlight = false;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible' || rotating.current || inFlight) return;
+      inFlight = true; const generation = teamGeneration.current;
+      try {
+        const [next, { items }] = await Promise.all([api.getTodayTeam(), api.listSessions()]);
+        if (active && generation === teamGeneration.current) { showTeam(next); setSessions(items); setError(''); }
+      } catch (reason) { if (active && generation === teamGeneration.current) setError(errorText(reason)); }
+      finally { inFlight = false; }
+    };
+    const timer = window.setInterval(refresh, 4000);
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [team?.team_id]);
   const create = async () => { setLoading(true); setError(''); try { await showTeam(await api.createTodayTeam()); } catch (reason) { setError(errorText(reason)); } finally { setLoading(false); } };
   const rotate = async () => { teamGeneration.current += 1; rotating.current = true; setLoading(true); setError(''); setCopyStatus(''); try { showTeam(await api.rotateTodayTeamInvite()); setCopyStatus('새 QR을 발급했습니다. 이전 QR은 사용할 수 없습니다.'); } catch (reason) { setError(errorText(reason)); } finally { rotating.current = false; setLoading(false); } };
   const assign = async (memberId: string, workSessionId: string) => { if (!workSessionId) return; setAssigning(memberId); setError(''); try { await api.assignTodayTeamMember(memberId, workSessionId); showTeam(await api.getTodayTeam()); } catch (reason) { setError(errorText(reason)); } finally { setAssigning(null); } };
@@ -290,7 +319,21 @@ export function OwnerBriefScreen({ go, sessionId, workerLocale }: OwnerScreenPro
   return <>{updated && <div role="status" aria-live="assertive" className="mb-5 rounded-2xl bg-[#173F24] p-5 text-lg font-black text-white">{isVi ? 'Có hướng dẫn mới. Hãy xem lại từ bước đầu tiên.' : 'नयाँ निर्देशन आएको छ। पहिलो चरणदेखि फेरि हेर्नुहोस्।'}</div>}{error && <div role="alert" className="mb-5 rounded-2xl bg-[#FFF0BF] p-5 text-base font-extrabold text-[#654B16]">{isVi ? 'Không thể kiểm tra hướng dẫn mới nhất.' : 'नयाँ निर्देशन जाँच्न सकिएन।'}<ActionButton className="ml-3" variant="secondary" onClick={() => setRetry((value) => value + 1)}>{isVi ? 'Thử lại' : 'फेरि प्रयास'}</ActionButton></div>}<PageHeading title={isVi ? 'Hướng dẫn công việc' : 'काम निर्देशन'} description={`${index + 1}/${brief.steps.length}`} action={<ActionButton variant="secondary" onClick={() => go('owner-storyboard')}><ArrowLeft className="h-5 w-5" />{isVi ? 'Quay lại' : 'फर्कनुहोस्'}</ActionButton>} />{brief.badges.map((badge) => <StatusBadge key={badge} tone="yellow">{badge === 'DEMO_FALLBACK' ? (isVi ? 'NỘI DUNG DEMO' : 'डेमो सामग्री') : (isVi ? 'Cần xác nhận' : 'पुष्टि आवश्यक')}</StatusBadge>)}<div className="mt-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><section>{video ? <video ref={videoElement} key={video.video_url} controls playsInline className="aspect-video w-full rounded-2xl bg-deep object-cover"><source src={video.video_url} /><track kind="captions" src={`data:text/vtt;charset=utf-8,${encodeURIComponent(`WEBVTT\n\n00:00.000 --> 23:59.000\n${video.captions_text}`)}`} srcLang={workerLocale} label={workerLocale} default /></video> : <Callout safe><p className="text-lg">{isVi ? 'Không có video đã kiểm duyệt. Hãy đọc hoặc nghe hướng dẫn.' : 'जाँच गरिएको भिडियो छैन। निर्देशन पढ्नुहोस् वा सुन्नुहोस्।'}</p></Callout>}<div className="mt-4 grid grid-cols-[auto_1fr_auto] gap-2"><ActionButton variant="secondary" disabled={index === 0} onClick={() => move(-1)}>{isVi ? 'Trước' : 'अघिल्लो'}</ActionButton><ActionButton onClick={play}><Volume2 className="h-5 w-5" />{isVi ? 'Nghe' : 'सुन्नुहोस्'}</ActionButton><ActionButton variant="secondary" disabled={index === brief.steps.length - 1} onClick={() => move(1)}>{isVi ? 'Tiếp' : 'अर्को'}</ActionButton></div></section><Panel><PanelHeader title={step.title} /><p className="text-xl font-bold leading-9">{step.description}</p><FactRow label={isVi ? 'Địa điểm' : 'स्थान'} value={brief.context.location_display} /><FactRow label={isVi ? 'Số lượng' : 'परिमाण'} value={quantity} /><FactRow label={isVi ? 'An toàn' : 'सुरक्षा'} value={brief.context.safety.join(' · ') || '—'} last /><ActionButton className="mt-6 w-full" variant="quiet" onClick={() => void enterFullscreen()}><Expand className="h-5 w-5" />{isVi ? 'Toàn màn hình' : 'पूरा स्क्रিন'}</ActionButton>{fullscreenError && <p role="alert" className="mt-3 font-bold text-[#8A302B]">{fullscreenError}</p>}</Panel></div></>;
 }
 
-export function OwnerCurrentScreen({ go, session }: OwnerScreenProps) {
+export function OwnerCurrentScreen({ go, session, setSession }: OwnerScreenProps) {
+  useEffect(() => {
+    if (!session) return;
+    let active = true; let inFlight = false;
+    const refresh = async () => {
+      if (document.visibilityState !== 'visible' || inFlight) return;
+      inFlight = true;
+      try { const next = await api.getSession(session.session_id); if (active && next.current_version > session.current_version) setSession(next); }
+      catch { /* Retain the last confirmed version during a temporary read failure. */ }
+      finally { inFlight = false; }
+    };
+    void refresh(); const timer = window.setInterval(refresh, 5000);
+    window.addEventListener('focus', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { active = false; window.clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [session?.session_id, session?.current_version, setSession]);
   if (!session) return <EmptySession go={go} />;
   const legacy = session.contract_version === 'structure-v1';
   return <><PageHeading title="진행 중 작업" description={legacy ? '예전 방식으로 저장된 읽기 전용 작업' : '근로자에게 전달 중인 최신 작업'} action={legacy ? undefined : <ActionButton onClick={() => go('owner-change')}><Mic className="h-5 w-5" />수량 변경</ActionButton>} />{legacy && <Callout><span className="flex gap-2"><AlertTriangle className="h-5 w-5 shrink-0" />예전 방식으로 저장된 작업은 수량을 변경할 수 없습니다.</span></Callout>}<div className="mt-5 grid gap-5 lg:grid-cols-[1fr_0.8fr]"><Panel><PanelHeader title="작업 단계" aside={<StatusBadge>전달 중</StatusBadge>} /><StorySteps steps={session.version.state.steps} /></Panel><Panel className="self-start"><PanelHeader title="현재 작업 정보" /><FactRow label="장소" value={session.version.state.location_display} /><FactRow label="수량" value={quantityText(session.version.state.quantity)} /><FactRow label="완료시간" value={session.version.state.deadline ?? '미확정'} /><FactRow label="안전" value={session.version.state.safety.join(' · ') || '입력된 안전 안내 없음'} last /><ActionButton className="mt-6 w-full" onClick={() => go('owner-storyboard')}>전달 화면 열기</ActionButton></Panel></div></>;

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batmeori.invalid/schemas/translation-v1.schema.json",
+  "title": "Batmeori translation-v1 segment output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["segment", "language_code", "text", "source", "guide_lookup", "phrase_key", "verified", "source_page", "source_url", "license", "schema_version", "contract_version"],
+  "properties": {
+    "segment": {"enum": ["ACTION", "QUANTITY", "ORDER", "SAFETY", "LOCATION", "OTHER"]},
+    "language_code": {"enum": ["vi", "ne"]},
+    "text": {"type": "string", "minLength": 1},
+    "source": {"enum": ["OFFICIAL_GUIDE", "AI_TRANSLATION", "DETERMINISTIC"]},
+    "guide_lookup": {"enum": ["HIT", "MISS", "NOT_APPLICABLE"]},
+    "phrase_key": {"type": ["string", "null"]},
+    "verified": {"type": "boolean"},
+    "source_page": {"type": ["integer", "null"], "minimum": 1},
+    "source_url": {"type": ["string", "null"], "format": "uri"},
+    "license": {"type": ["string", "null"]},
+    "schema_version": {"const": "1"},
+    "contract_version": {"const": "translation-v1"}
+  },
+  "oneOf": [
+    {"properties": {"source": {"const": "OFFICIAL_GUIDE"}, "guide_lookup": {"const": "HIT"}, "phrase_key": {"type": "string", "minLength": 1}, "verified": {"const": true}, "source_page": {"type": "integer", "minimum": 1}, "source_url": {"type": "string", "format": "uri"}, "license": {"type": "string", "minLength": 1}}},
+    {"properties": {"source": {"const": "AI_TRANSLATION"}, "guide_lookup": {"const": "MISS"}, "phrase_key": {"type": "null"}, "verified": {"const": false}, "source_page": {"type": "null"}, "source_url": {"type": "null"}, "license": {"type": "null"}}},
+    {"properties": {"source": {"const": "DETERMINISTIC"}, "guide_lookup": {"const": "NOT_APPLICABLE"}, "phrase_key": {"type": "null"}, "verified": {"const": false}, "source_page": {"type": "null"}, "source_url": {"type": "null"}, "license": {"type": "null"}}}
+  ],
+  "allOf": [
+    {
+      "if": {"properties": {"segment": {"const": "SAFETY"}}, "required": ["segment"]},
+      "then": {"properties": {"source": {"const": "OFFICIAL_GUIDE"}, "guide_lookup": {"const": "HIT"}, "verified": {"const": true}}}
+    }
+  ]
+}

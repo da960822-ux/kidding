@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batmeori.invalid/schemas/structure-v1.schema.json",
+  "title": "Batmeori structure-v1 output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["interpretation", "summary_ko", "location", "task_family", "quantity", "deadline", "safety", "notes", "steps", "ambiguities", "schema_version", "contract_version"],
+  "properties": {
+    "interpretation": {"enum": ["READY", "AMBIGUOUS", "UNSUPPORTED"]},
+    "summary_ko": {"type": "string", "minLength": 1},
+    "location": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_text", "kind", "canonical_name"],
+      "properties": {
+        "raw_text": {"type": ["string", "null"]},
+        "kind": {"enum": ["DEICTIC", "NAMED", "UNSPECIFIED"]},
+        "canonical_name": {"type": ["string", "null"]}
+      }
+    },
+    "task_family": {"const": "ONION"},
+    "quantity": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["value", "unit"], "properties": {"value": {"type": "integer", "minimum": 1}, "unit": {"type": "string", "minLength": 1}}},
+        {"const": "UNSPECIFIED"},
+        {"type": "null"}
+      ]
+    },
+    "deadline": {"type": ["string", "null"]},
+    "safety": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "notes": {"type": ["string", "null"]},
+    "steps": {
+      "type": "array",
+      "minItems": 0,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["sequence", "task_code", "title_ko", "description_ko", "unsupported_reason"],
+        "properties": {
+          "sequence": {"type": "integer", "minimum": 1},
+          "task_code": {"enum": ["ONION_HARVEST", "ONION_COLLECT", "BAGGING", "LOADING", "WAREHOUSE_TRANSPORT", "STACKING", null]},
+          "title_ko": {"type": "string", "minLength": 1},
+          "description_ko": {"type": "string", "minLength": 1},
+          "unsupported_reason": {"type": ["string", "null"]}
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"task_code": {"type": "null"}}, "required": ["task_code"]},
+            "then": {"properties": {"unsupported_reason": {"type": "string", "minLength": 1}}},
+            "else": {"properties": {"unsupported_reason": {"type": "null"}}}
+          }
+        ]
+      }
+    },
+    "ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "message", "blocking", "kind"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1},
+          "blocking": {"type": "boolean"},
+          "kind": {"enum": ["SAFETY", "TASK", "LOCATION", "QUANTITY", "TIME", "OTHER"]}
+        }
+      }
+    },
+    "schema_version": {"const": "1"},
+    "contract_version": {"const": "structure-v1"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"interpretation": {"const": "AMBIGUOUS"}}, "required": ["interpretation"]},
+      "then": {"properties": {"ambiguities": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"interpretation": {"const": "READY"}}, "required": ["interpretation"]},
+      "then": {"properties": {"steps": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"steps": {"maxItems": 0}}, "required": ["steps"]},
+      "then": {
+        "properties": {
+          "interpretation": {"not": {"const": "READY"}},
+          "ambiguities": {
+            "contains": {
+              "type": "object",
+              "required": ["blocking", "kind"],
+              "properties": {"blocking": {"const": true}, "kind": {"const": "TASK"}}
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ]
+}

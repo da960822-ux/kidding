@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batmeori.invalid/schemas/quantity-change-v1.schema.json",
+  "title": "Batmeori quantity-change-v1 output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["interpretation", "quantity", "expected_version", "ambiguities", "schema_version", "contract_version"],
+  "properties": {
+    "interpretation": {"enum": ["READY", "AMBIGUOUS"]},
+    "quantity": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["value", "unit"], "properties": {"value": {"type": "integer", "minimum": 1}, "unit": {"type": "string", "minLength": 1}}},
+        {"type": "null"}
+      ]
+    },
+    "expected_version": {"type": "integer", "minimum": 1},
+    "ambiguities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["field", "message", "blocking", "kind"],
+        "properties": {
+          "field": {"type": "string", "minLength": 1},
+          "message": {"type": "string", "minLength": 1},
+          "blocking": {"type": "boolean"},
+          "kind": {"const": "QUANTITY"}
+        }
+      }
+    },
+    "schema_version": {"const": "1"},
+    "contract_version": {"const": "quantity-change-v1"}
+  },
+  "oneOf": [
+    {"properties": {"interpretation": {"const": "READY"}, "quantity": {"type": "object"}, "ambiguities": {"maxItems": 0}}},
+    {"properties": {"interpretation": {"const": "AMBIGUOUS"}, "quantity": {"type": "null"}, "ambiguities": {"minItems": 1, "items": {"properties": {"blocking": {"const": true}}}}}}
+  ]
+}

@@ -2,4 +2,6 @@ node_modules/
 dist/
 test-results/
 tmp/
-ai.zip
+*.zip
+.env
+supabase/.temp/

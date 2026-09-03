@@ -34,9 +34,9 @@ begin
   if not found then raise exception 'farm_not_found'; end if;
   select id into target_owner_id from public.demo_owners where farm_id = target_farm_id and is_active for update;
   if found then
-    update public.demo_owners set pin_hash = crypt(p_pin, gen_salt('bf', 12)) where id = target_owner_id;
+    update public.demo_owners set pin_hash = extensions.crypt(p_pin, extensions.gen_salt('bf', 12)) where id = target_owner_id;
   else
-    insert into public.demo_owners(farm_id, pin_hash) values (target_farm_id, crypt(p_pin, gen_salt('bf', 12))) returning id into target_owner_id;
+    insert into public.demo_owners(farm_id, pin_hash) values (target_farm_id, extensions.crypt(p_pin, extensions.gen_salt('bf', 12))) returning id into target_owner_id;
   end if;
   return query select target_owner_id, target_farm_id;
 end;
@@ -50,7 +50,7 @@ set search_path = public, pg_temp
 as $$
   select id, farm_id
   from public.demo_owners
-  where is_active and p_pin is not null and crypt(p_pin, pin_hash) = pin_hash
+  where is_active and p_pin is not null and extensions.crypt(p_pin, pin_hash) = pin_hash
   order by created_at
   limit 1;
 $$;

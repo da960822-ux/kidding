@@ -35,6 +35,8 @@ TASK_CODES_BY_FAMILY = {
     "STRAWBERRY": {"STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING"},
 }
 TASK_CODES = set().union(*TASK_CODES_BY_FAMILY.values())
+INITIAL_CROP_PATTERN = re.compile(r"양파|딸기")
+INITIAL_TASK_PATTERN = re.compile(r"수확|캐|뽑|손질|다듬|선별|분류|고르|골라|운반|옮|나르|따|검사|확인|포장|담")
 LEGACY_TASK_CODES_BY_FAMILY = {
     "ONION": {"ONION_COLLECT", "BAGGING", "LOADING", "WAREHOUSE_TRANSPORT", "STACKING"},
     "STRAWBERRY": set(),
@@ -1138,8 +1140,12 @@ def audio_duration_seconds(content: bytes, content_type: str) -> float:
         raise ApiError(422, "SCHEMA_INVALID", "audio 길이를 검증할 수 없습니다.")
 
 
+def normalized_audio_content_type(content_type: str | None) -> str:
+    return (content_type or "").partition(";")[0].strip().lower()
+
+
 async def read_audio_upload(upload: UploadFile, language_hint: str = "ko") -> bytes:
-    upload_type = upload.content_type or ""
+    upload_type = normalized_audio_content_type(upload.content_type)
     allowed_types = {"audio/webm", "audio/mp4", "audio/wav", "audio/x-wav", "audio/wave"}
     if upload_type not in allowed_types:
         raise ApiError(422, "SCHEMA_INVALID", "audio 파일만 허용됩니다.")
@@ -1164,14 +1170,22 @@ async def node_transcript(audio: bytes, filename: str, content_type: str, langua
         {
             "audio_base64": base64.b64encode(audio).decode(),
             "filename": filename,
-            "content_type": content_type,
+            "content_type": normalized_audio_content_type(content_type),
             "language_hint": language_hint,
         },
     )
     transcript = result.get("transcript")
     if not isinstance(transcript, str) or not transcript.strip():
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "AI 제공자가 준비되지 않았습니다.")
-    return transcript.strip()
+    transcript = transcript.strip()
+    if len(re.findall(r"[가-힣]", transcript)) < 2:
+        raise ApiError(422, "AUDIO_UNCLEAR", "한국어 음성을 확인하지 못했습니다. 마이크 입력을 확인하고 다시 녹음해주세요.")
+    return transcript
+
+
+def require_initial_instruction(transcript: str) -> None:
+    if not INITIAL_CROP_PATTERN.search(transcript) or not INITIAL_TASK_PATTERN.search(transcript):
+        raise ApiError(422, "AUDIO_UNCLEAR", "작물명과 수행할 작업을 확인하지 못했습니다. 녹음을 들어본 뒤 다시 말씀해주세요.")
 
 
 def current_assets(client: Client) -> list[dict[str, Any]]:
@@ -1505,7 +1519,7 @@ async def health() -> dict[str, str]:
 
 @app.get("/ready")
 async def ready() -> dict[str, str]:
-    if not settings.supabase_configured or not settings.auth_configured or not settings.public_web_configured or not provider_ready():
+    if not settings.supabase_configured or not settings.auth_configured or not settings.public_web_configured or not settings.public_api_configured or not provider_ready():
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "Supabase 또는 AI 제공자가 준비되지 않았습니다.")
     try:
         db_client().table("work_sessions").select("id").limit(1).execute()
@@ -1562,6 +1576,7 @@ async def draft_from_audio(
         transcript = await node_transcript(
             audio_bytes, audio.filename or "audio", audio.content_type or "audio/webm", language_hint
         )
+        require_initial_instruction(transcript)
         state, ambiguities, interpretation = await parse_structure_output(
             await bridge_call("BUILD_OWNER_DRAFT_V2", {"transcript": transcript}), transcript
         )

@@ -14,7 +14,7 @@ export function CTASection({ content, appHref }: { content: LandingContent; appH
               alt=""
               width="427"
               height="235"
-              className="h-auto max-h-40 w-full max-w-[330px] object-contain mix-blend-multiply drop-shadow-[0_10px_14px_rgba(81,104,48,0.10)]"
+              className="h-auto max-h-40 w-full max-w-[330px] object-contain drop-shadow-[0_10px_14px_rgba(81,104,48,0.10)]"
               loading="lazy"
             />
           </div>

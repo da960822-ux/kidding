@@ -69,3 +69,17 @@ test('TRANSCRIBE_AUDIO rejects invalid audio content type before provider dispat
   const result = await handleJsonlLine(JSON.stringify({ operation: 'TRANSCRIBE_AUDIO', payload: { audio_base64: 'AQID', content_type: 'text/plain' } }), { transcribeAudio: async () => assert.fail('must not dispatch') });
   assert.deepEqual(result, { ok: false, error: { code: 'INVALID_AUDIO_FORMAT' } });
 });
+
+test('provider failures retain only the operation, safe category, and HTTP status', async () => {
+  const result = await handleJsonlLine(JSON.stringify(request), {
+    parseQuantityChange: async () => { throw new Error('OPENAI_REQUEST_FAILED_429'); }
+  });
+  assert.deepEqual(result, { ok: false, error: { code: 'PARSE_QUANTITY_CHANGE_OPENAI_REQUEST_FAILED_429' } });
+});
+
+test('structure validation failures retain the safe validation category', async () => {
+  const result = await handleJsonlLine(JSON.stringify(request), {
+    parseQuantityChange: async () => { throw new TypeError('INVALID_STRUCTURE_V2_INVALID_STEP'); }
+  });
+  assert.deepEqual(result, { ok: false, error: { code: 'PARSE_QUANTITY_CHANGE_INVALID_STRUCTURE_V2_INVALID_STEP' } });
+});

@@ -15,7 +15,7 @@ class ContractMigrationReviewTests(unittest.TestCase):
         self.assertIn("contract_version: { type: string, const: structure-v2 }", openapi)
 
     def test_quantity_rpc_is_v2_only_and_farm_scoped(self):
-        sql = (ROOT / "supabase" / "migrations" / "202609030008_refresh_quantity_translations.sql").read_text(encoding="utf-8")
+        sql = (ROOT / "supabase" / "migrations" / "202609030012_refresh_quantity_translations.sql").read_text(encoding="utf-8")
 
         for invariant in (
             "p_farm_id uuid", "legacy_read_only",
@@ -34,6 +34,7 @@ class ContractMigrationReviewTests(unittest.TestCase):
 
     def test_atomic_v2_publish_rpc_writes_both_packages_before_switching_latest(self):
         sql = (ROOT / "supabase" / "migrations" / "202609030009_two_crop_owner_scope.sql").read_text(encoding="utf-8")
+        repair = (ROOT / "supabase" / "migrations" / "202609030013_fix_publish_package_version_reference.sql").read_text(encoding="utf-8")
 
         for invariant in (
             "create function public.publish_work_version_with_packages",
@@ -46,6 +47,9 @@ class ContractMigrationReviewTests(unittest.TestCase):
             "set status = 'SUPERSEDED'", "set status = 'PUBLISHED'",
         ):
             self.assertIn(invariant, sql)
+
+        self.assertIn("update public.work_versions as previous_version", repair)
+        self.assertIn("previous_version.version = p_expected_version", repair)
 
     def test_confirm_contract_publishes_shared_package_before_delivery_selection(self):
         openapi = (ROOT / "docs" / "openapi.yaml").read_text(encoding="utf-8")
@@ -95,6 +99,13 @@ class ContractMigrationReviewTests(unittest.TestCase):
         sql = (ROOT / "supabase" / "migrations" / "202609030009_two_crop_owner_scope.sql").read_text(encoding="utf-8")
 
         self.assertIn("revoke all on function public.publish_quantity_change(uuid, uuid, integer, jsonb, jsonb)", sql)
+
+    def test_legacy_visual_assets_can_receive_manifest_metadata_once(self):
+        sql = (ROOT / "supabase" / "migrations" / "202609030014_backfill_legacy_visual_asset_metadata.sql").read_text(encoding="utf-8")
+
+        self.assertIn("stored.checksum_md5 is not null", sql)
+        self.assertIn("on conflict (id) do update set", sql)
+        self.assertIn("where visual_assets.checksum_md5 is null", sql)
 
 
 if __name__ == "__main__":

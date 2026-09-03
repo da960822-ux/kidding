@@ -34,6 +34,14 @@ test('QR join sends selected language', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('batmeori-demo-today-team')!).members[0].language_code)).toBe('ne');
 });
 
+test('owner QR stays visible when secure polling omits the raw join URL', async ({ page }) => {
+  await page.goto('/owner/team');
+  await page.getByRole('button', { name: '오늘 작업팀 열기' }).click();
+  await expect(page.getByRole('img', { name: '오늘 작업팀 참여 QR 코드' })).toBeVisible();
+  await page.waitForTimeout(4500);
+  await expect(page.getByRole('img', { name: '오늘 작업팀 참여 QR 코드' })).toBeVisible();
+});
+
 test('remote briefing renders schema v2 DTO', async ({ page }) => {
   await page.goto('/w/demo-vi-token');
   await expect(page.getByText('Công việc mới nhất')).toBeVisible();

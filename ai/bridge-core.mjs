@@ -15,6 +15,13 @@ function decodedSize(base64) {
 
 function safeError(code) { return { ok: false, error: { code } }; }
 
+function operationError(operation, error) {
+  const cause = typeof error?.message === 'string' && /^(OPENAI_(?:CONFIGURATION_REQUIRED|REQUEST_FAILED(?:_[1-5][0-9]{2})?)|INVALID_(?:PROVIDER_RESPONSE|STRUCTURE_V2(?:_[A-Z0-9_]+)?))$/.test(error.message)
+    ? error.message
+    : 'FAILED';
+  return safeError(`${operation}_${cause}`);
+}
+
 export async function handleJsonlLine(line, services) {
   let request;
   try { request = JSON.parse(line); } catch { return safeError('INVALID_JSONL'); }
@@ -31,5 +38,5 @@ export async function handleJsonlLine(line, services) {
     const result = await handlers[request.operation](request.payload);
     if (request.operation === 'TRANSCRIBE_AUDIO') return typeof result?.transcript === 'string' && result.transcript.trim() ? { ok: true, result: { transcript: result.transcript } } : safeError('INVALID_STT_RESULT');
     return containsIdentity(result) ? safeError('IDENTITY_FIELD_FORBIDDEN') : { ok: true, result };
-  } catch { return safeError('AI_OPERATION_FAILED'); }
+  } catch (error) { return operationError(request.operation, error); }
 }

@@ -7,12 +7,23 @@ from app.p0_runtime import BridgeError
 
 
 class NodeOnlyAiTests(unittest.TestCase):
+    def test_ready_rejects_a_missing_openai_key(self):
+        with patch.dict("os.environ", {"OPENAI_API_KEY": ""}, clear=False):
+            self.assertFalse(provider_ready())
+
     def test_fastapi_ai_boundary_forwards_only_to_node_bridge(self):
         with patch("app.ai.NodeBridge.call", new=AsyncMock(return_value={"transcript": "양파 20망"})) as call:
             result = asyncio.run(bridge_call("TRANSCRIBE_AUDIO", {"audio_base64": "YQ==", "content_type": "audio/wav"}))
 
         self.assertEqual(result, {"transcript": "양파 20망"})
         self.assertEqual(call.call_args.args[0], "TRANSCRIBE_AUDIO")
+
+    def test_fastapi_ai_boundary_retries_one_transient_failure(self):
+        with patch("app.ai.NodeBridge.call", new=AsyncMock(side_effect=[BridgeError(), {"transcript": "양파 20망"}])) as call:
+            result = asyncio.run(bridge_call("TRANSCRIBE_AUDIO", {"audio_base64": "YQ==", "content_type": "audio/wav"}))
+
+        self.assertEqual(result, {"transcript": "양파 20망"})
+        self.assertEqual(call.await_count, 2)
 
     def test_fastapi_ai_boundary_redacts_bridge_failures(self):
         with patch("app.ai.NodeBridge.call", new=AsyncMock(side_effect=BridgeError())):

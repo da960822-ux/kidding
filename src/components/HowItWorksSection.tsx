@@ -28,7 +28,7 @@ export function HowItWorksSection({ content }: { content: LandingContent }) {
                     <Icon className="h-12 w-12" strokeWidth={2} aria-hidden="true" />
                   </span>
                   <h3 className="mt-6 text-lg font-black text-ink">{step.title}</h3>
-                  <p className="mt-3 max-w-[220px] text-base font-medium leading-7 text-[#465247]">{step.description}</p>
+                  <p className="mt-3 max-w-[220px] whitespace-pre-line text-base font-medium leading-7 text-[#465247]">{step.description}</p>
                 </article>
                 {index < content.how.steps.length - 1 && (
                   <div className="flex items-center justify-center text-deep/35" aria-hidden="true">

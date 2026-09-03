@@ -19,9 +19,13 @@ from app.main import (
     confirm_quantity_change,
     current_assets,
     issue_link,
+    node_transcript,
     parse_structure_output,
     parse_version,
     private_tts_bytes,
+    read_audio_upload,
+    require_initial_instruction,
+    ready,
     settings,
     structure_v2_state_json,
     validate_contract_schema,
@@ -48,6 +52,55 @@ def structure(task_code="ONION_HARVEST"):
 
 
 class BackendP0Tests(unittest.TestCase):
+    def test_ready_rejects_a_missing_public_api_url(self):
+        with (
+            patch.object(settings, "supabase_url", "https://example.supabase.co"),
+            patch.object(settings, "supabase_secret_key", "secret"),
+            patch.object(settings, "owner_session_secret", "secret"),
+            patch.object(settings, "public_web_base_url", "https://app.example.com"),
+            patch.object(settings, "public_api_base_url", ""),
+            patch.object(settings, "demo_fallback", False),
+        ):
+            with self.assertRaises(ApiError) as raised:
+                asyncio.run(ready())
+
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_browser_webm_codec_parameter_is_accepted_and_normalized(self):
+        class BrowserRecording:
+            content_type = "audio/webm;codecs=opus"
+
+            async def read(self, _limit):
+                return b"recording"
+
+        bridge = AsyncMock(return_value={"transcript": "녹음 내용"})
+        with (
+            patch("app.main.audio_duration_seconds", return_value=1),
+            patch("app.main.bridge_call", new=bridge),
+        ):
+            content = asyncio.run(read_audio_upload(BrowserRecording()))
+            transcript = asyncio.run(node_transcript(content, "recording.webm", BrowserRecording.content_type, "ko"))
+
+        self.assertEqual(transcript, "녹음 내용")
+        self.assertEqual(bridge.await_args.args[1]["content_type"], "audio/webm")
+
+    def test_foreign_hallucination_is_rejected_before_structuring(self):
+        with patch("app.main.bridge_call", new=AsyncMock(return_value={"transcript": "Haciendo ejercicio."})):
+            with self.assertRaises(ApiError) as raised:
+                asyncio.run(node_transcript(b"audio", "recording.webm", "audio/webm", "ko"))
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertEqual(raised.exception.code, "AUDIO_UNCLEAR")
+        self.assertIn("다시 녹음", raised.exception.message)
+
+    def test_initial_instruction_requires_crop_and_supported_action_evidence(self):
+        require_initial_instruction("1번 밭에서 양파 스무 망을 수확해")
+
+        for transcript in ("들리는 한국어만 그대로 전사하고", "도시농업이란", "핑크색", "양파"):
+            with self.subTest(transcript=transcript), self.assertRaises(ApiError) as raised:
+                require_initial_instruction(transcript)
+            self.assertEqual(raised.exception.code, "AUDIO_UNCLEAR")
+
     def test_package_build_sends_exact_structure_and_keeps_tts_bytes_private(self):
         text_hash = "a" * 64
         briefing = {

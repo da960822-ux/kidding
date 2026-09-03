@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: batmeori-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /ready
+    autoDeployTrigger: commit
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: OWNER_SESSION_SECRET
+        generateValue: true
+      - key: OWNER_SESSION_TTL_SECONDS
+        value: "7200"
+      - key: FRONTEND_ORIGINS
+        sync: false
+      - key: PUBLIC_WEB_BASE_URL
+        sync: false
+      - key: PUBLIC_API_BASE_URL
+        fromService:
+          type: web
+          name: batmeori-api
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: DEMO_OWNER_PIN
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6-terra
+      - key: OPENAI_TTS_VOICE
+        value: alloy
+      - key: AI_BRIDGE_TIMEOUT_SECONDS
+        value: "60"

@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+import subprocess
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -86,30 +87,28 @@ class NodeBridge:
             raise BridgeError("BRIDGE_INPUT_INVALID")
         request = json.dumps({"operation": operation, "payload": payload}, separators=(",", ":"), ensure_ascii=False).encode() + b"\n"
         try:
-            process = await asyncio.create_subprocess_exec(
-                self.node_binary,
-                self.bridge_path,
-                stdin=asyncio.subprocess.PIPE,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
+            process = await asyncio.to_thread(
+                subprocess.run,
+                [self.node_binary, self.bridge_path],
+                input=request,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=self.timeout_seconds,
+                check=False,
             )
-            if process.stdin is None:
-                raise BridgeError()
-            process.stdin.write(request)
-            await process.stdin.drain()
-            process.stdin.close()
-            stdout, _ = await asyncio.wait_for(process.communicate(), timeout=self.timeout_seconds)
-        except (OSError, TimeoutError, asyncio.TimeoutError) as exc:
+        except (OSError, subprocess.TimeoutExpired) as exc:
             raise BridgeError() from exc
         if process.returncode != 0:
             raise BridgeError()
         try:
-            records = [json.loads(line) for line in stdout.splitlines() if line.strip()]
+            records = [json.loads(line) for line in process.stdout.splitlines() if line.strip()]
         except json.JSONDecodeError as exc:
             raise BridgeError("BRIDGE_OUTPUT_INVALID") from exc
         if len(records) != 1 or not isinstance(records[0], dict):
             raise BridgeError("BRIDGE_OUTPUT_INVALID")
         record = records[0]
         if record.get("ok") is not True or not isinstance(record.get("result"), dict):
-            raise BridgeError("BRIDGE_OPERATION_FAILED")
+            error = record.get("error")
+            code = error.get("code") if isinstance(error, dict) else None
+            raise BridgeError(code if isinstance(code, str) and code else "BRIDGE_OPERATION_FAILED")
         return record["result"]

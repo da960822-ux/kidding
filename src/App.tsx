@@ -37,7 +37,7 @@ function App() {
       </a>
       <Header content={content} locale={locale} onLocaleChange={changeLocale} appHref={appHref} />
       <main id="main-content">
-        <HeroSection content={content} appHref={appHref} />
+        <HeroSection content={content} appHref={appHref} locale={locale} />
         <FeaturesSection content={content} />
         <CTASection content={content} appHref={appHref} />
         <HowItWorksSection content={content} />

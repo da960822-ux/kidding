@@ -9,7 +9,7 @@ farm-scoped demo-owner PIN cookie가 owner mutation을 보호하며 client는 ow
 ```text
 React/Vite/Tailwind (Vercel)
   │ HTTPS REST, owner session cookie / anonymous worker token
-FastAPI (Railway)
+FastAPI (Render)
   ├─ WorkDraft → WorkSession + immutable version service
   ├─ CO_PRESENT briefing + REMOTE link + today-team service
   ├─ DB asset/verified-guide read + safety/publish gate

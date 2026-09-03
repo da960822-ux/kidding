@@ -1,0 +1,9 @@
+.git
+.env
+**/.env
+**/__pycache__
+**/.venv
+node_modules
+dist
+test-results
+supabase/.temp

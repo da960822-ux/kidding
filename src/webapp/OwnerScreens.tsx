@@ -4,7 +4,7 @@ import {
   QrCode, Sparkles, Sprout, Truck, UsersRound, Volume2, Warehouse,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, ApiError, isMockApi } from './api';
 import type { Briefing, IssuedWorkerLink, LegacyWorkerBriefing, OverrideReason, OwnerWorkSession, QuantityChangePreview, TodayWorkTeam, WorkDraft, WorkStep } from './contracts';
 import type { AppScreen, ScreenProps, WorkerLocale } from './model';
@@ -45,27 +45,50 @@ function quantityText(value: OwnerWorkSession['version']['state']['quantity']) {
 function VoiceRecorder({ helper, submitLabel = '음성 제출', onSubmit }: { helper: string; submitLabel?: string; onSubmit: (audio: Blob) => Promise<void> }) {
   const [state, setState] = useState<'idle' | 'recording' | 'done' | 'loading'>('idle');
   const [audio, setAudio] = useState<Blob | null>(null);
+  const [level, setLevel] = useState(0);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
   const chunks = useRef<Blob[]>([]);
   const timer = useRef<number | null>(null);
+  const meterFrame = useRef<number | null>(null);
+  const audioContext = useRef<AudioContext | null>(null);
+  const previewUrl = useMemo(() => audio ? URL.createObjectURL(audio) : '', [audio]);
+  const stopMeter = () => {
+    if (meterFrame.current) cancelAnimationFrame(meterFrame.current);
+    meterFrame.current = null;
+    if (audioContext.current) void audioContext.current.close();
+    audioContext.current = null;
+    setLevel(0);
+  };
   const stop = () => recorder.current?.state === 'recording' && recorder.current.stop();
   const start = async () => {
-    setError(''); setAudio(null); setSeconds(0);
+    setError(''); setAudio(null); setSeconds(0); setLevel(0);
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
       setError('이 브라우저에서는 녹음할 수 없습니다. 최신 Chrome 또는 Safari로 열어주세요.'); return;
     }
     try {
       stream.current = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const context = new AudioContext();
+      const analyser = context.createAnalyser();
+      const samples = new Uint8Array(analyser.fftSize);
+      context.createMediaStreamSource(stream.current).connect(analyser);
+      audioContext.current = context;
+      const measure = () => {
+        analyser.getByteTimeDomainData(samples);
+        const peak = samples.reduce((value, sample) => Math.max(value, Math.abs(sample - 128)), 0);
+        setLevel(Math.min(100, Math.round((peak / 128) * 100)));
+        meterFrame.current = requestAnimationFrame(measure);
+      };
+      measure();
       const next = new MediaRecorder(stream.current);
       chunks.current = [];
       next.ondataavailable = (event) => event.data.size > 0 && chunks.current.push(event.data);
       next.onstop = () => {
         const blob = new Blob(chunks.current, { type: next.mimeType || 'audio/webm' });
         stream.current?.getTracks().forEach((track) => track.stop());
-        stream.current = null; setAudio(blob); setState('done');
+        stream.current = null; stopMeter(); setAudio(blob); setState('done');
       };
       recorder.current = next; next.start(); setState('recording');
       timer.current = window.setInterval(() => setSeconds((value) => value + 1), 1000);
@@ -81,7 +104,8 @@ function VoiceRecorder({ helper, submitLabel = '음성 제출', onSubmit }: { he
     if (state !== 'recording' && timer.current) { window.clearInterval(timer.current); timer.current = null; }
     if (seconds >= 60) stop();
   }, [seconds, state]);
-  useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); stream.current?.getTracks().forEach((track) => track.stop()); }, []);
+  useEffect(() => () => { if (timer.current) window.clearInterval(timer.current); if (meterFrame.current) cancelAnimationFrame(meterFrame.current); if (audioContext.current) void audioContext.current.close(); stream.current?.getTracks().forEach((track) => track.stop()); }, []);
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
   const title = state === 'recording' ? '듣고 있습니다' : state === 'done' ? '녹음이 완료됐어요' : state === 'loading' ? 'AI가 내용을 정리하고 있어요' : '말로 알려주세요';
   return <div className="flex min-h-[340px] flex-col items-center justify-center rounded-2xl bg-[#E8F2E3] p-6 text-center">
     <button type="button" onClick={state === 'recording' ? stop : start} disabled={state === 'loading'} aria-label={state === 'recording' ? '녹음 중지' : '녹음 시작'} className={`flex h-28 w-28 items-center justify-center rounded-full text-white shadow-[0_16px_35px_rgba(47,93,53,0.25)] transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/30 ${state === 'recording' ? 'animate-pulse bg-[#A83F38]' : 'bg-deep hover:bg-[#244D2B]'}`}>
@@ -89,9 +113,10 @@ function VoiceRecorder({ helper, submitLabel = '음성 제출', onSubmit }: { he
     </button>
     <h2 className="mt-6 text-2xl font-black">{title}</h2>
     <p className="mt-2 font-medium text-muted">{state === 'recording' ? `${seconds}초 / 60초` : helper}</p>
+    {state === 'recording' && <div className="mt-4 w-full max-w-md rounded-xl bg-white/80 p-3"><div className="flex justify-between text-sm font-extrabold"><span>입력 음량</span><span>{level < 3 ? '소리가 작아요' : '음성 감지 중'}</span></div><meter aria-label="마이크 입력 음량" min="0" max="100" value={level} className="mt-2 h-3 w-full" /></div>}
     {error && <p role="alert" className="mt-5 max-w-md rounded-xl bg-[#FDE7E4] px-4 py-3 font-bold text-[#8A302B]">{error}</p>}
     {state === 'recording' && <ActionButton className="mt-5" variant="danger" onClick={stop}>그만 말하기</ActionButton>}
-    {state === 'done' && <div className="mt-5 flex flex-wrap justify-center gap-3"><ActionButton variant="secondary" onClick={start}><RefreshCw className="h-5 w-5" />다시 녹음</ActionButton><ActionButton onClick={submit}>{submitLabel}<ArrowRight className="h-5 w-5" /></ActionButton></div>}
+    {state === 'done' && <div className="mt-5 w-full max-w-md"><audio controls src={previewUrl} aria-label="내 녹음 다시 듣기" className="w-full" /><div className="mt-4 flex flex-wrap justify-center gap-3"><ActionButton variant="secondary" onClick={start}><RefreshCw className="h-5 w-5" />다시 녹음</ActionButton><ActionButton onClick={submit}>{submitLabel}<ArrowRight className="h-5 w-5" /></ActionButton></div></div>}
     {isMockApi && state === 'idle' && <ActionButton className="mt-5" variant="quiet" onClick={async () => { setState('loading'); try { await onSubmit(new Blob(['demo'], { type: 'audio/webm' })); setState('idle'); } catch (reason) { setState('idle'); setError(errorText(reason)); } }}>데모 음성으로 진행</ActionButton>}
   </div>;
 }
@@ -124,7 +149,7 @@ export function OwnerHomeScreen({ go, session, setSession }: OwnerScreenProps) {
 
 export function OwnerTodayTeamScreen({ go }: OwnerScreenProps) {
   const [team, setTeam] = useState<TodayWorkTeam | null>(null); const [sessions, setSessions] = useState<OwnerWorkSession[]>([]); const [selected, setSelected] = useState<Record<string, string>>({}); const [assigning, setAssigning] = useState<string | null>(null); const [loading, setLoading] = useState(true); const [error, setError] = useState(''); const [copyStatus, setCopyStatus] = useState('');
-  const showTeam = (next: TodayWorkTeam) => setTeam(next);
+  const showTeam = (next: TodayWorkTeam) => setTeam((current) => current?.team_id === next.team_id && !next.join_url ? { ...next, join_url: current.join_url } : next);
   useEffect(() => { let active = true; Promise.all([api.getTodayTeam(), api.listSessions()]).then(([next, result]) => { if (active) { showTeam(next); setSessions(result.items); } }).catch((reason) => { if (active && (!(reason instanceof ApiError) || reason.code !== 'NOT_FOUND')) setError(errorText(reason)); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
   useEffect(() => { if (!team) return; const timer = window.setInterval(() => api.getTodayTeam().then(showTeam).catch((reason) => setError(errorText(reason))), 4000); return () => window.clearInterval(timer); }, [team?.team_id]);
   const create = async () => { setLoading(true); setError(''); try { await showTeam(await api.createTodayTeam()); } catch (reason) { setError(errorText(reason)); } finally { setLoading(false); } };

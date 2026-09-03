@@ -1,7 +1,8 @@
-import { ChevronDown, Menu, Sprout, X } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import type { LandingContent, Locale } from '../types';
 import { Container } from './ui';
+import { BrandMark } from './BrandMark';
 
 interface HeaderProps {
   content: LandingContent;
@@ -32,9 +33,7 @@ export function Header({ content, locale, onLocaleChange, appHref }: HeaderProps
       <Container>
         <div className="flex min-h-[76px] items-center justify-between gap-4">
           <a href="#top" className="group flex shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25" aria-label="밭머리 홈">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sage text-deep transition group-hover:-rotate-6">
-              <Sprout className="h-7 w-7" strokeWidth={2.5} aria-hidden="true" />
-            </span>
+            <BrandMark className="h-10 w-14 transition group-hover:-rotate-3" />
             <span className="flex items-baseline gap-3">
               <strong className="text-2xl font-black tracking-tight text-ink">밭머리</strong>
               <span className="hidden text-sm font-bold text-primary xl:inline">{content.tagline}</span>

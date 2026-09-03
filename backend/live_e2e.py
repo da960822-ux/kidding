@@ -9,7 +9,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-BASE_URL = os.getenv("LIVE_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+BASE_URL = os.getenv("LIVE_API_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
 ORIGIN = os.getenv("LIVE_FRONTEND_ORIGIN", "http://127.0.0.1:5173")
 
 

@@ -2,8 +2,9 @@ import { createOpenAiRequests } from './openai-requests.mjs';
 import { createHash } from 'node:crypto';
 
 function outputText(response) {
-  if (typeof response?.output_text !== 'string' || !response.output_text.trim()) throw new TypeError('INVALID_PROVIDER_RESPONSE');
-  try { return JSON.parse(response.output_text); } catch { throw new TypeError('INVALID_PROVIDER_RESPONSE'); }
+  const text = response?.output_text ?? response?.output?.flatMap((item) => item.content ?? []).find((item) => item.type === 'output_text')?.text;
+  if (typeof text !== 'string' || !text.trim()) throw new TypeError('INVALID_PROVIDER_RESPONSE');
+  try { return JSON.parse(text); } catch { throw new TypeError('INVALID_PROVIDER_RESPONSE'); }
 }
 
 function nonEmpty(value) { return typeof value === 'string' && value.trim(); }

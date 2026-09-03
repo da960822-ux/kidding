@@ -2,7 +2,7 @@ import asyncio
 import json
 import unittest
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 from app.p0_runtime import (
     BridgeError,
@@ -31,23 +31,25 @@ class NodeBridgeTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, "BRIDGE_INPUT_INVALID")
 
     def test_uses_jsonl_stdio_and_returns_only_json_object(self):
-        process = type(
-            "Process",
-            (),
-            {
-                "stdin": type("Stdin", (), {"write": lambda self, value: setattr(self, "value", value), "drain": AsyncMock(), "close": lambda self: None})(),
-                "communicate": AsyncMock(return_value=(b'{"ok":true,"result":{"quantity":15}}\n', b"")),
-                "returncode": 0,
-            },
-        )()
+        process = type("Process", (), {"stdout": b'{"ok":true,"result":{"quantity":15}}\n', "returncode": 0})()
         bridge = NodeBridge("node", "ai/bridge.mjs")
 
-        with patch("app.p0_runtime.asyncio.create_subprocess_exec", new=AsyncMock(return_value=process)) as spawn:
+        with patch("app.p0_runtime.subprocess.run", return_value=process) as spawn:
             result = asyncio.run(bridge.call("PARSE_QUANTITY_CHANGE", {"transcript": "15망", "expected_version": 1}))
 
         self.assertEqual(result, {"quantity": 15})
-        self.assertEqual(spawn.call_args.args, ("node", "ai/bridge.mjs"))
-        self.assertEqual(json.loads(process.stdin.value), {"operation": "PARSE_QUANTITY_CHANGE", "payload": {"transcript": "15망", "expected_version": 1}})
+        self.assertEqual(spawn.call_args.args[0], ["node", "ai/bridge.mjs"])
+        self.assertEqual(json.loads(spawn.call_args.kwargs["input"]), {"operation": "PARSE_QUANTITY_CHANGE", "payload": {"transcript": "15망", "expected_version": 1}})
+
+    def test_preserves_safe_bridge_failure_code(self):
+        process = type("Process", (), {"stdout": b'{"ok":false,"error":{"code":"TRANSCRIBE_AUDIO_OPENAI_REQUEST_FAILED_429"}}\n', "returncode": 0})()
+        bridge = NodeBridge("node", "ai/bridge.mjs")
+
+        with patch("app.p0_runtime.subprocess.run", return_value=process):
+            with self.assertRaises(BridgeError) as raised:
+                asyncio.run(bridge.call("TRANSCRIBE_AUDIO", {"audio_base64": "YQ=="}))
+
+        self.assertEqual(raised.exception.code, "TRANSCRIBE_AUDIO_OPENAI_REQUEST_FAILED_429")
 
 
 class OwnerCookieTests(unittest.TestCase):

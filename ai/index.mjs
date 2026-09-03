@@ -11,7 +11,8 @@ const structureSchema = JSON.parse(await readFile(new URL('../docs/schemas/struc
 const quantitySchema = JSON.parse(await readFile(new URL('../docs/schemas/quantity-change-v1.schema.json', import.meta.url), 'utf8'));
 
 function assertStructure(value) {
-  if (!validateStructureV2(value).ok) throw new TypeError('INVALID_STRUCTURE_V2');
+  const validation = validateStructureV2(value);
+  if (!validation.ok) throw new TypeError(`INVALID_STRUCTURE_V2_${validation.code}`);
   return value;
 }
 

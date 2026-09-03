@@ -1,5 +1,6 @@
-import { Mail, MessageCircle, MessagesSquare, Sprout } from 'lucide-react';
+import { Mail, MessageCircle, MessagesSquare } from 'lucide-react';
 import type { LandingContent } from '../types';
+import { BrandMark } from './BrandMark';
 import { Container } from './ui';
 
 export function Footer({ content }: { content: LandingContent }) {
@@ -19,7 +20,7 @@ export function Footer({ content }: { content: LandingContent }) {
     <footer className="border-t border-deep/10 bg-cream py-10">
       <Container className="grid gap-8 lg:grid-cols-[1fr_auto_auto] lg:items-center">
         <div className="flex items-start gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sage text-deep"><Sprout className="h-6 w-6" aria-hidden="true" /></span>
+          <BrandMark className="h-9 w-12" />
           <div>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <strong className="text-xl font-black text-ink">밭머리</strong>

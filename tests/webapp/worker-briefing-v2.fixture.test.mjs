@@ -43,7 +43,7 @@ test('new drafts are v2-only and QR SPA entry paths are deployable', async () =>
   assert.match(contracts, /contract_version:\s*'structure-v2';/);
   assert.match(contracts, /ontology_version:\s*'ontology-v2';/);
   const rewrites = JSON.parse(vercel).rewrites.map(({ source }) => source);
-  assert.deepEqual(rewrites, ['/w/:path*', '/team/:path*', '/worker/:path*']);
+  assert.deepEqual(rewrites, ['/(.*)']);
 });
 
 test('legacy reads render stored steps but do not expose quantity mutation', async () => {

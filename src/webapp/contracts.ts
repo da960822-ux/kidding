@@ -2,11 +2,15 @@ import type { WorkerLocale } from './model';
 
 export type TaskCode =
   | 'ONION_HARVEST'
-  | 'ONION_COLLECT'
-  | 'BAGGING'
-  | 'LOADING'
-  | 'WAREHOUSE_TRANSPORT'
-  | 'STACKING';
+  | 'ONION_TRIMMING'
+  | 'ONION_SORTING'
+  | 'ONION_TRANSPORT'
+  | 'STRAWBERRY_HARVEST'
+  | 'STRAWBERRY_SORTING'
+  | 'STRAWBERRY_INSPECTION'
+  | 'STRAWBERRY_PACKING';
+
+export type TaskFamily = 'ONION' | 'STRAWBERRY';
 
 export type Interpretation = 'READY' | 'AMBIGUOUS' | 'UNSUPPORTED';
 export type RiskLevel = 'LOW' | 'HIGH' | 'UNKNOWN';
@@ -62,7 +66,7 @@ export interface WorkStep {
   description_ko: string;
   video: {
     asset_id: string;
-    task_code: string;
+    task_code: TaskCode;
     video_url: string;
     provenance: 'AI_GENERATED_PREGENERATED';
     review_status: 'PENDING' | 'APPROVED' | 'REJECTED';
@@ -76,7 +80,7 @@ export interface WorkStep {
 }
 
 export interface WorkState {
-  task_family: 'ONION';
+  task_family: TaskFamily;
   location: {
     raw_text: string | null;
     kind: 'DEICTIC' | 'NAMED' | 'UNSPECIFIED';

@@ -2,12 +2,12 @@
 
 ## 준비
 
-배포 URL, AI 사전 생성·사람 검수된 LOW 양파 영상 6개, 언어별 source snapshot이 있는 검수 가이드 rows를 준비한다. [Safety Policy](docs/SAFETY_POLICY.md)를 확인한다. 원음·실명·비밀키는 공개하지 않는다.
+배포 URL, AI 사전 생성·사람 검수된 LOW 양파·딸기 영상 8개, 언어별 source snapshot이 있는 검수 가이드 rows를 준비한다. [Safety Policy](docs/SAFETY_POLICY.md)를 확인한다. 원음·실명·비밀키는 공개하지 않는다.
 
 ## 시나리오
 
-1. “저짝 양파 스무 망 캐갖고 다 허면 차에 실어서 창고로 옮겨”를 녹음한다.
-2. transcript와 AI 구조화 결과를 확인한다. 양파 `task_code`와 수량 `20망`을 표시하고, `저짝`은 `raw_text`로 보존하되 `kind: DEICTIC`, `canonical_name: null`로 표시한다.
+1. “저짝 양파 스무 망 캐서 손질하고 분류한 다음 집하장까지 손수 옮겨”를 녹음한다.
+2. transcript와 AI 구조화 결과를 확인한다. `task_family: ONION`과 신규 양파 `task_code`, 수량 `20망`을 표시하고, `저짝`은 `raw_text`로 보존하되 `kind: DEICTIC`, `canonical_name: null`로 표시한다.
 3. 한국어 요약 TTS를 듣고 `맞아, 전달`을 선택한다. 필요한 보완은 음성으로만 추가한다.
 4. 랜딩에서 농장주를 고르면 자동 데모 세션이 시작된다. `CO_PRESENT`를 고르고 `vi`를 선택해 owner 폰에서 단계별 검수 영상과 TTS briefing을 재생한다.
 5. `REMOTE`도 고르고 `ne`를 선택한다. 두 번째 휴대폰에서 익명 24시간 링크를 열어 최신 `PUBLISHED` 작업을 확인한다.

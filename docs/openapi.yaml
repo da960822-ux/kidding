@@ -3,8 +3,9 @@ info:
   title: Batmeori API
   version: 1.0.0
   description: >-
-    Provider-neutral P0 REST contract. P0 supports onion, vi/ne, and quantity
-    changes. AI interpretation and WorkVersion lifecycle are separate enums.
+    Provider-neutral P0 REST contract. P0 supports onion and strawberry,
+    vi/ne, and quantity changes. AI interpretation and WorkVersion lifecycle
+    are separate enums.
 servers:
   - url: https://api.example.invalid
     description: Deployment value is supplied by environment; this URL is not a source fact.
@@ -61,7 +62,7 @@ paths:
               example:
                 draft_id: d_01
                 draft_revision: 0
-                summary_ko: 농장주가 가리킨 곳의 양파 20망을 수확해 창고로 옮깁니다.
+                summary_ko: 농장주가 가리킨 곳의 양파 20망을 수확합니다.
                 interpretation: AMBIGUOUS
                 state:
                   task_family: ONION
@@ -463,7 +464,7 @@ components:
         sequence: { type: integer, minimum: 1 }
         task_code:
           anyOf:
-            - { type: string, enum: [ONION_HARVEST, ONION_COLLECT, BAGGING, LOADING, WAREHOUSE_TRANSPORT, STACKING] }
+            - { type: string, enum: [ONION_HARVEST, ONION_TRIMMING, ONION_SORTING, ONION_TRANSPORT, STRAWBERRY_HARVEST, STRAWBERRY_SORTING, STRAWBERRY_INSPECTION, STRAWBERRY_PACKING] }
             - { type: 'null' }
           description: null is only for an owner-overridden non-safety unsupported step.
         title_ko: { type: string }
@@ -486,7 +487,7 @@ components:
       required: [asset_id, task_code, video_url, provenance, review_status, safety_level, captions_text]
       properties:
         asset_id: { type: string }
-        task_code: { type: string }
+        task_code: { type: string, enum: [ONION_HARVEST, ONION_TRIMMING, ONION_SORTING, ONION_TRANSPORT, STRAWBERRY_HARVEST, STRAWBERRY_SORTING, STRAWBERRY_INSPECTION, STRAWBERRY_PACKING] }
         video_url: { type: string, format: uri-reference, description: P0 uses a FE public/videos static path. }
         provenance: { type: string, const: AI_GENERATED_PREGENERATED }
         review_status: { type: string, enum: [PENDING, APPROVED, REJECTED] }
@@ -517,7 +518,7 @@ components:
       type: object
       required: [task_family, location, location_display, quantity, deadline, safety, notes, steps]
       properties:
-        task_family: { type: string, enum: [ONION] }
+        task_family: { type: string, enum: [ONION, STRAWBERRY] }
         location: { $ref: '#/components/schemas/DeicticLocation' }
         location_display: { type: string, description: Worker-visible text; DEICTIC keeps raw location and asks for on-site confirmation. }
         quantity: { anyOf: [{ $ref: '#/components/schemas/Quantity' }, { type: string, const: UNSPECIFIED }, { type: 'null' }] }
@@ -525,11 +526,32 @@ components:
         safety: { type: array, items: { type: string } }
         notes: { type: [string, 'null'] }
         steps: { type: array, minItems: 0, items: { $ref: '#/components/schemas/Step' } }
+      allOf:
+        - if: { properties: { task_family: { const: ONION } }, required: [task_family] }
+          then:
+            properties:
+              steps:
+                items:
+                  properties:
+                    task_code:
+                      anyOf:
+                        - { type: string, enum: [ONION_HARVEST, ONION_TRIMMING, ONION_SORTING, ONION_TRANSPORT] }
+                        - { type: 'null' }
+        - if: { properties: { task_family: { const: STRAWBERRY } }, required: [task_family] }
+          then:
+            properties:
+              steps:
+                items:
+                  properties:
+                    task_code:
+                      anyOf:
+                        - { type: string, enum: [STRAWBERRY_HARVEST, STRAWBERRY_SORTING, STRAWBERRY_INSPECTION, STRAWBERRY_PACKING] }
+                        - { type: 'null' }
     PublishedWorkState:
       type: object
       required: [task_family, location, location_display, quantity, deadline, safety, notes, steps]
       properties:
-        task_family: { type: string, enum: [ONION] }
+        task_family: { type: string, enum: [ONION, STRAWBERRY] }
         location: { $ref: '#/components/schemas/DeicticLocation' }
         location_display: { type: string, description: Worker-visible text; DEICTIC keeps raw location and asks for on-site confirmation. }
         quantity: { anyOf: [{ $ref: '#/components/schemas/Quantity' }, { type: string, const: UNSPECIFIED }, { type: 'null' }] }
@@ -537,6 +559,27 @@ components:
         safety: { type: array, items: { type: string } }
         notes: { type: [string, 'null'] }
         steps: { type: array, minItems: 1, items: { $ref: '#/components/schemas/Step' } }
+      allOf:
+        - if: { properties: { task_family: { const: ONION } }, required: [task_family] }
+          then:
+            properties:
+              steps:
+                items:
+                  properties:
+                    task_code:
+                      anyOf:
+                        - { type: string, enum: [ONION_HARVEST, ONION_TRIMMING, ONION_SORTING, ONION_TRANSPORT] }
+                        - { type: 'null' }
+        - if: { properties: { task_family: { const: STRAWBERRY } }, required: [task_family] }
+          then:
+            properties:
+              steps:
+                items:
+                  properties:
+                    task_code:
+                      anyOf:
+                        - { type: string, enum: [STRAWBERRY_HARVEST, STRAWBERRY_SORTING, STRAWBERRY_INSPECTION, STRAWBERRY_PACKING] }
+                        - { type: 'null' }
     WorkDraft:
       type: object
       required: [draft_id, draft_revision, summary_ko, interpretation, state, ambiguities, risk_assessment, transcript, schema_version, contract_version]
@@ -665,7 +708,10 @@ components:
       required: [sequence, task_code, title, description, video, audio_url, delivery_mode, unsupported_reason, segments]
       properties:
         sequence: { type: integer, minimum: 1 }
-        task_code: { type: [string, 'null'] }
+        task_code:
+          anyOf:
+            - { type: string, enum: [ONION_HARVEST, ONION_TRIMMING, ONION_SORTING, ONION_TRANSPORT, STRAWBERRY_HARVEST, STRAWBERRY_SORTING, STRAWBERRY_INSPECTION, STRAWBERRY_PACKING] }
+            - { type: 'null' }
         title: { type: string, minLength: 1 }
         description: { type: string, minLength: 1 }
         video: { anyOf: [{ $ref: '#/components/schemas/VideoAsset' }, { type: 'null' }] }

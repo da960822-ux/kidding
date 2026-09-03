@@ -41,12 +41,12 @@ BE는 다음을 모두 만족할 때만 `PUBLISHED`를 허용한다.
 
 - WorkSession draft가 owner confirmation을 받음
 - 빈 `steps`는 blocking `TASK` ambiguity로 남아 게시 대상이 아님
-- 모든 non-null `task_code`가 양파 ontology에 존재. `null`은 감사된 비안전 미지원 fallback에만 허용
+- 모든 non-null `task_code`가 양파·딸기 8개 ontology에 존재하고 `task_family`와 일치. 불일치는 `422 SCHEMA_INVALID`; `null`은 감사된 비안전 미지원 fallback에만 허용
 - 안전표현과 `OFFICIAL_GUIDE` 번역은 언어별 source snapshot을 가짐. `source_page`, `source_url`, `license`, 사람 검수 `verified`가 없으면 `OFFICIAL_GUIDE` 표기 금지
 - 매칭 영상은 `review_status: APPROVED`, `safety_level: LOW`, `provenance: AI_GENERATED_PREGENERATED`, [Safety Policy](SAFETY_POLICY.md) assessment를 만족
 - 영상이 없으면 텍스트+TTS fallback이 명시됨
 
-HIGH/UNKNOWN risk assessment, 검수되지 않은 안전 번역, invalid JSON, schema invalid, auth/version conflict, 또는 blocking ambiguity는 자동 게시·자동 변경 금지다. LOW 비안전 미지원 작업만 owner가 허용된 reason으로 `PUBLISH_AS_IS`할 수 있다. P0 영상은 기계가 정지한 상태의 수작업만 다룬다. 운전·회전날·농약·고소작업은 HIGH risk로 분류하며, `LOADING`·`WAREHOUSE_TRANSPORT`에는 차량 운전 장면을 넣지 않는다.
+HIGH/UNKNOWN risk assessment, 검수되지 않은 안전 번역, invalid JSON, schema invalid, auth/version conflict, 또는 blocking ambiguity는 자동 게시·자동 변경 금지다. LOW 비안전 미지원 작업만 owner가 허용된 reason으로 `PUBLISH_AS_IS`할 수 있다. P0 영상은 검수된 LOW 작업만 다룬다. 운전·차량 또는 동력 장비 이동·회전날·농약·고소작업은 HIGH risk로 분류하며, `ONION_TRANSPORT`도 차량·동력 장비를 운전하거나 이동시키면 게시하지 않는다.
 
 ## 책임·인계
 

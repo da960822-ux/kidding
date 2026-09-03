@@ -4,7 +4,7 @@
 
 P0 release gate는 서로 섞지 않는 두 tier다.
 
-- **Transcript tier:** 비식별 양파 지시 JSONL 30건(`dataset_version` 필수). 정상 사투리/장소·대상, 수량 표현, 수량 변경 5건, 모호 지시 5건 이상으로 구성한다. production/수집 원음은 저장하지 않고 transcript와 gold 구조만 보관한다.
+- **Transcript tier:** 비식별 양파·딸기 지시 JSONL 30건(`dataset_version` 필수). 두 작물과 8개 task code를 모두 포함하고, 정상 사투리/장소·대상, 수량 표현, 수량 변경 5건, 모호 지시 5건 이상으로 구성한다. `task_family`/code 불일치 negative case를 별도로 포함한다. production/수집 원음은 저장하지 않고 transcript와 gold 구조만 보관한다.
 - **STT smoke tier:** `evals/audio/manifest.jsonl`과 PII 없는 합성 한국어 WAV 3건. 30건 구조화 지표의 분모에 넣지 않으며 STT 입력 경로만 확인한다.
 
 합성 fixture는 Windows `Microsoft Heami` `ko-KR` TTS로 생성한다. `synthetic:true`, voice/provider metadata, 원문 SHA-256, WAV duration과 expected case를 manifest에 기록한다. 이 fixture는 사람 녹음이 아니다.

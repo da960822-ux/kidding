@@ -10,7 +10,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 |---|---|---|
 | `id` | UUID | primary key |
 | `location` | JSONB | 원문·종류·정규명; unknown 허용 |
-| `task_family` | text | P0=`ONION` |
+| `task_family` | text | P0=`ONION|STRAWBERRY` |
 | `status` | enum | P0=`PUBLISHED`; 확인 전 상태는 `work_drafts`에만 존재 |
 | `current_version` | integer | 최초 publish=1, 증가만 허용 |
 | `created_at`, `updated_at` | timestamp | server time |
@@ -41,7 +41,9 @@ WorkVersion lifecycle의 canonical 값은 `PUBLISHED`, `SUPERSEDED`다. `DRAFT`�
 
 모호한 draft는 `ambiguities[]`에 `field`, `message`, `blocking`, `kind`(`SAFETY|TASK|LOCATION|QUANTITY|TIME|OTHER`)를 기록한다. `blocking:false`인 경우 owner가 `PUBLISH_AS_IS` 또는 `SUPPLEMENT`를 선택할 수 있다. 그대로 전달하면 `ambiguity_override`, `override_reason`, `overridden_at`을 version 감사 필드에 기록하고 worker state에 `확인이 필요한 지시`를 표시한다. `SAFETY` ambiguity, HIGH 위험, schema invalid, no executable step은 override할 수 없다. unsupported non-safety task는 `task_code: null` 또는 `UNSUPPORTED` marker와 video null, text+TTS fallback으로 owner가 전달할 수 있다.
 
-`state_json.steps[]`는 `{sequence, task_code, title_ko, description_ko, quantity?}`이며 `sequence`는 1부터 연속이다. non-null `task_code`는 P0 allowlist만 허용하고, `null`은 감사된 비안전 `UNSUPPORTED` fallback에만 허용한다. `quantity`는 `{value: positive integer, unit: non-empty string}`이다.
+`state_json.steps[]`는 `{sequence, task_code, title_ko, description_ko, quantity?}`이며 `sequence`는 1부터 연속이다. non-null `task_code`는 P0 8개 allowlist만 허용하고 접두사가 `task_family`와 일치해야 한다. 불일치는 `SCHEMA_INVALID`로 거부한다. `null`은 감사된 비안전 `UNSUPPORTED` fallback에만 허용한다. `quantity`는 `{value: positive integer, unit: non-empty string}`이다.
+
+DB migration과 publish RPC는 `(task_family='ONION' AND task_code IN (ONION 4개)) OR (task_family='STRAWBERRY' AND task_code IN (STRAWBERRY 4개)) OR task_code IS NULL`을 같은 의미의 CHECK로 강제한다. `task_code IS NULL`은 별도의 override 감사 조건을 통과한 경우에만 publish할 수 있다.
 
 각 step은 `video`(asset id/url/provenance/review_status/safety_level) 또는 null, `audio_url` 또는 null, `delivery_mode`(`VIDEO|TEXT_TTS|TEXT`), `unsupported_reason` 또는 null을 가진다. `task_code:null`은 owner가 override한 non-safety `UNSUPPORTED`에만 허용하고 `delivery_mode`는 `TEXT_TTS` 또는 `TEXT`다. `location`은 `{raw_text, kind, canonical_name}`과 worker 표시용 `location_display`를 보존한다. DEICTIC은 장소를 정규화하지 않는다.
 
@@ -77,7 +79,7 @@ source page/url/license 또는 사람 검수가 없으면 `verified=true` 금지
 
 `id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider?`, `prompt_version`, `generated_at`, `reviewer?`, `review_status`, `safety_level`, `purpose`, `captions_text`. API는 `public_path`를 배포 origin과 결합해 `video_url`로 반환한다.
 
-P0 허용 provenance는 `AI_GENERATED_PREGENERATED`; 6개 task_code 모두 사람 검수 `APPROVED`가 필요하다. 기계 정지 상태 수작업만 LOW로 허용한다. 운전·회전날·농약·고소작업은 HIGH로 기록하고 게시하지 않는다. `LOADING`·`WAREHOUSE_TRANSPORT` 자산은 차량 운전 장면을 포함하지 않는다.
+P0 허용 provenance는 `AI_GENERATED_PREGENERATED`; 8개 task_code 모두 사람 검수 `APPROVED`가 필요하다. LOW로 검수된 작업만 게시한다. 운전·차량 또는 동력 장비 이동·회전날·농약·고소작업은 HIGH로 기록하고 게시하지 않는다. `ONION_TRANSPORT` 자산은 차량·동력 장비 운전 또는 이동 장면을 포함하지 않는다.
 
 영상은 FE `public/videos`에 둔 정적 `video/*` 자산이며 배포 플랫폼 CDN으로 제공한다. 모바일 재생 가능한 크기와 `captions_text`를 가져야 하고 runtime 생성·별도 object storage는 P0에 두지 않는다.
 
@@ -97,5 +99,5 @@ raw audio는 STT 처리 중 임시 저장만 하고 성공·실패 무관 즉시
 - `work_sessions 1—N worker_links`; link는 하나의 `language_code`를 가지며 재발급 시 같은 language의 기존 row를 revoke한다.
 - `work_teams 1—N work_team_members`, `work_teams 1—N work_team_invites`; team 종료 시 invite도 함께 무효화한다.
 - `guide_phrases 1—N guide_translations`; `(phrase_key, language_code)` unique.
-- `visual_assets.task_code`는 6개 ontology code만 참조한다.
+- `visual_assets.task_code`는 양파·딸기 8개 ontology code만 참조한다.
 - BE가 schema·migration·transaction을 소유하고, AI는 검수된 guide/asset manifest만 제공한다. FE는 DB에 직접 접근하지 않고 `openapi.yaml`만 사용한다.

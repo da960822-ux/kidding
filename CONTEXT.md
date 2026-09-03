@@ -20,8 +20,12 @@ _Avoid_: revision (UI 표시는 `v1` 가능)
 WorkVersion 안에서 순서가 있는 하나의 실행 단계.
 _Avoid_: action, instruction (일반 문장)
 
+**task_family**
+작업 대상 작물. P0 허용값은 양파 `ONION`과 딸기 `STRAWBERRY`이며 한 WorkSession은 하나의 작물만 가진다.
+_Avoid_: crop label, free-text crop
+
 **task_code**  
-TaskStep의 정규 행위를 식별하는 대문자 snake case 코드. P0 허용값은 `ONION_HARVEST`, `ONION_COLLECT`, `BAGGING`, `LOADING`, `WAREHOUSE_TRANSPORT`, `STACKING`이다.
+TaskStep의 정규 행위를 식별하는 대문자 snake case 코드. P0 허용값은 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`, `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. non-null 값은 같은 단계가 속한 `task_family` 접두사와 반드시 일치한다.
 `task_code:null`은 새 코드가 아니라, 농장주가 전달을 선택한 비안전 미지원 작업을 뜻한다.
 _Avoid_: crop code, free-text action
 
@@ -88,7 +92,7 @@ GuidePhrase에 연결된 언어별 공식 번역. source page/url/license와 사
 농장주 경로를 고르면 별도 입력 없이 시작되는 P0용 짧은 이용 상태. 개인 계정이나 로그인으로 부르지 않는다.
 
 **Worker entry**  
-근로자가 별도 로그인 없이 농장주에게 받은 WorkerLink를 여는 진입 경로. 유효한 링크가 없으면 작업 내용을 보여주지 않는다.
+근로자가 별도 로그인 없이 농장주에게 받은 링크로 들어오는 진입 경로. Today work team 참여에서는 국적 선택, Team invite 확인, 표시명 입력 순서로 진행하며 QR 인식만으로는 참여가 완료되지 않는다. 유효한 WorkerLink가 없으면 작업 내용을 보여주지 않는다.
 
 **Today work team**  
 한 농장의 오늘 작업에 참여하는 임시 근로자 묶음. 계정이나 장기 인력명부가 아니며, 농장주가 보여준 QR의 초대가 만료되면 새로 참여할 수 없다.
@@ -100,7 +104,7 @@ Today work team에 별명, 국적, 안내 언어만 제출해 참여한 사람. 
 Team member가 직접 고르는 국가 정보. 선택지는 베트남(`VN`), 필리핀(`PH`), 라오스(`LA`), 캄보디아(`KH`), 태국(`TH`), 네팔(`NP`), 미얀마(`MM`), 몽골(`MN`)이다. 안내 언어와 동일한 개념이 아니다.
 
 **Team invite**  
-Today work team 참여 URL을 담은 QR 또는 같은 URL의 수동 입력값. 추측하기 어려운 token을 가지며 오늘 작업팀과 함께 만료된다.
+Today work team 참여 URL을 담은 QR 또는 같은 URL의 수동 입력값. QR을 인식한 시점에는 후보 초대만 확보하며, Team member는 국적·표시명·안내 언어를 제출한 뒤에만 생성된다. 추측하기 어려운 token을 가지며 오늘 작업팀과 함께 만료된다.
 
 **WorkerLink**  
 WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 링크. 로그인 없이 열며 고정 버전이 아니라 Latest Published를 보여준다.

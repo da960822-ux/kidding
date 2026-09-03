@@ -9,7 +9,7 @@
 | safety ambiguity | `OVERRIDE_NOT_ALLOWED`(422) | 강한 차단 | 게시 금지 | AI |
 | no executable step | empty `steps` + blocking `TASK` draft, publish block | 강한 차단 | 게시 금지 | AI |
 | unsupported non-safety task_code | LOW 비안전만 owner override 시 task_code null/marker, video null, text+TTS | 미지원·확인 필요 badge | policy/reason audit | AI |
-| 임의의 non-null task_code | `422`, 자동 매칭 금지 | 지원 범위 표시 | allowlist 차단 | AI: ontology 검증 |
+| 임의의 non-null task_code 또는 `task_family`/code 불일치 | `422 SCHEMA_INVALID`, 자동 매칭 금지 | 지원 범위 표시 | 8개 allowlist·family 일치 차단 | AI: ontology 검증 |
 | guide MISS 일반 작업표현 | `AI_TRANSLATION` + 언어별 source snapshot 표시 | fallback badge | source snapshot 기록 | AI: 번역 |
 | guide MISS 안전표현/검수 없음 | 자동 게시 금지 | 확인 필요 표시 | safety gate 차단 | AI: source 검수 |
 | HIGH/UNKNOWN risk 또는 HIGH 영상 | `PUBLISHED` 거부 | 텍스트 fallback 또는 차단 표시 | Safety Policy assessment gate, HIGH/UNKNOWN 절대 게시 금지 | AI: 위험 등급 검수 |

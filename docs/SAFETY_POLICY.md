@@ -22,6 +22,7 @@
 | 차량 운전·차량 이동 작업 | HIGH | BLOCKED |
 | 회전날·동력 기계·농약/화학물질·고소 작업 | HIGH | BLOCKED |
 | 안전 맥락 부족 또는 safety ambiguity | UNKNOWN | BLOCKED |
-| `LOADING`/`WAREHOUSE_TRANSPORT`의 수작업, 정지 차량만 | LOW | 다른 blocking gate가 없을 때만 가능 |
+| `ONION_TRANSPORT`의 사람 손 운반 | LOW | 차량·동력 장비 이동이 없고 다른 blocking gate가 없을 때만 가능 |
+| `ONION_TRANSPORT`에서 차량·동력 장비 운전 또는 이동 | HIGH | BLOCKED |
 
 BE가 이 행렬과 interpretation으로 게시 결과를 계산한다. HIGH/UNKNOWN, safety ambiguity, invalid schema, 또는 executable step 없음은 override할 수 없다. HIGH asset은 기록할 수 있지만 publish하지 않는다. 안전표현은 verified `OFFICIAL_GUIDE` provenance가 없으면 publish하지 않는다.

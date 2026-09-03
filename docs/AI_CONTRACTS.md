@@ -17,7 +17,7 @@
 
 ```json
 {
-  "transcript": "저짝 양파 스무 망 캐갖고 다 허면 차에 실어서 창고로 옮겨",
+  "transcript": "저짝 양파 스무 망 캐서 손질하고 분류한 다음 집하장까지 손수 옮겨",
   "language_code": "ko",
   "confidence": 0.0,
   "schema_version": "1",
@@ -29,12 +29,12 @@
 
 ## 구조화 `structure-v1`
 
-입력: transcript와 양파 ontology. 출력 최소:
+입력: transcript와 양파·딸기 ontology. 출력 최소:
 
 ```json
 {
   "interpretation": "AMBIGUOUS",
-  "summary_ko": "농장주가 가리킨 곳의 양파 20망을 수확해 창고로 옮깁니다.",
+  "summary_ko": "농장주가 가리킨 곳의 양파 20망을 수확하고 손질·분류한 뒤 집하장까지 손수 옮깁니다.",
   "location": {"raw_text": "저짝", "kind": "DEICTIC", "canonical_name": null},
   "task_family": "ONION",
   "quantity": {"value": 20, "unit": "망"},
@@ -42,7 +42,10 @@
   "safety": [],
   "notes": null,
   "steps": [
-    {"sequence": 1, "task_code": "ONION_HARVEST", "title_ko": "양파 수확", "description_ko": "양파를 수확한다", "unsupported_reason": null}
+    {"sequence": 1, "task_code": "ONION_HARVEST", "title_ko": "양파 수확", "description_ko": "양파를 수확한다", "unsupported_reason": null},
+    {"sequence": 2, "task_code": "ONION_TRIMMING", "title_ko": "양파 손질", "description_ko": "양파의 마른 줄기와 뿌리를 손질한다", "unsupported_reason": null},
+    {"sequence": 3, "task_code": "ONION_SORTING", "title_ko": "양파 분류", "description_ko": "상한 양파를 골라 분류한다", "unsupported_reason": null},
+    {"sequence": 4, "task_code": "ONION_TRANSPORT", "title_ko": "양파 운반", "description_ko": "분류한 양파를 집하장까지 손수 옮긴다", "unsupported_reason": null}
   ],
   "ambiguities": [
     {"field": "location", "message": "'저짝'은 현장에서 농장주가 가리킨 위치 확인이 필요합니다.", "blocking": false, "kind": "LOCATION"}
@@ -54,7 +57,7 @@
 
 `interpretation`은 `READY`, `AMBIGUOUS`, `UNSUPPORTED` 중 하나다. `ambiguities[]` 원소는 `field`, `message`, `blocking`, `kind`(`SAFETY|TASK|LOCATION|QUANTITY|TIME|OTHER`)를 가진다. AI는 추측하지 않고 unknown을 `UNSPECIFIED` 또는 `null`로 둔다. 실행할 단계가 없으면 blocking; 대상·장소가 불명확하면 ambiguity; 수량은 언급됐지만 값 또는 단위가 모호할 때만 질문한다. `deadline`/`notes`는 선택이므로 질문하지 않는다. 질문은 한 번에 하나, 답변은 기존 draft에 merge한다. non-blocking ambiguity는 owner가 `PUBLISH_AS_IS` 또는 `SUPPLEMENT`를 선택할 수 있다. unsupported non-safety task는 `task_code:null`/`UNSUPPORTED` marker와 video null로 남겨 text+TTS fallback을 허용한다. safety ambiguity는 강제 gate다.
 
-P0 task_code는 `ONION_HARVEST`, `ONION_COLLECT`, `BAGGING`, `LOADING`, `WAREHOUSE_TRANSPORT`, `STACKING`이다. unsupported non-safety task는 `task_code:null`과 `unsupported_reason`으로 반환한다. owner override 뒤 BE가 `delivery_mode: TEXT_TTS|TEXT`로 보존한다. 안전·HIGH·schema invalid·no executable step은 override할 수 없다. safety는 입력에 명시된 것만 보존한다.
+P0 task_code는 양파 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`와 딸기 `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. output의 `task_family`와 non-null `task_code` 접두사가 일치하지 않으면 invalid다. 구 코드를 새 코드로 조용히 매핑하지 않는다. unsupported non-safety task는 `task_code:null`과 `unsupported_reason`으로 반환한다. owner override 뒤 BE가 `delivery_mode: TEXT_TTS|TEXT`로 보존한다. 안전·HIGH·schema invalid·no executable step은 override할 수 없다. safety는 입력에 명시된 것만 보존한다.
 
 LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구조화 JSON만 반환하고 BE가 검수 manifest와 TTS 결과를 결합해 `openapi.yaml`의 DraftState/PublishedWorkState를 만든다.
 
@@ -111,7 +114,7 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 ## 영상 매칭 `visual-match-v1`
 
-입력: allowlisted `task_code`; 출력: `visual_asset_id` 또는 `null`. asset은 `provenance: AI_GENERATED_PREGENERATED`, `review_status: APPROVED`, `safety_level: LOW`일 때만 매칭·게시한다. HIGH는 생성·기록 가능하지만 게시 금지. P0 영상은 기계 정지 수작업뿐이며 운전·회전날·농약·고소작업을 포함하지 않는다.
+입력: allowlisted `task_code`; 출력: `visual_asset_id` 또는 `null`. 새 8개 asset은 생성 직후 `provenance: AI_GENERATED_PREGENERATED`, `review_status: PENDING`으로 기록한다. 사람 검수로 `APPROVED`되고 `safety_level: LOW`인 경우에만 매칭·게시한다. HIGH는 생성·기록 가능하지만 게시 금지. `ONION_TRANSPORT`도 차량·동력 장비를 운전하거나 이동시키는 장면이면 HIGH다.
 
 ## FE/BE/AI 인계
 

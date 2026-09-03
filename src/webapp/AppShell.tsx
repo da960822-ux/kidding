@@ -22,6 +22,7 @@ interface AppShellProps extends PropsWithChildren {
   go: (screen: AppScreen) => void;
   setWorkerLocale: (locale: WorkerLocale) => void;
   hideNavigation?: boolean;
+  hideHeader?: boolean;
 }
 
 const ownerNav: Array<{ screen: AppScreen; label: string; icon: typeof Home }> = [
@@ -30,7 +31,7 @@ const ownerNav: Array<{ screen: AppScreen; label: string; icon: typeof Home }> =
   { screen: 'owner-current', label: '진행 중 작업', icon: ClipboardList },
 ];
 
-export function AppShell({ children, role, active, workerLocale, go, setWorkerLocale, hideNavigation = false }: AppShellProps) {
+export function AppShell({ children, role, active, workerLocale, go, setWorkerLocale, hideNavigation = false, hideHeader = false }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const workerLabels = workerLocale === 'vi'
     ? { menu: 'Menu công việc', today: 'Công việc', landing: 'Trang giới thiệu' }
@@ -48,7 +49,7 @@ export function AppShell({ children, role, active, workerLocale, go, setWorkerLo
 
   return (
     <div className="batmeori-webapp min-h-screen bg-[#F5F7F3] text-ink">
-      <header className="sticky top-0 z-40 border-b border-deep/10 bg-white/95 backdrop-blur">
+      {!hideHeader && <header className="sticky top-0 z-40 border-b border-deep/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex min-h-[72px] max-w-[1500px] items-center justify-between gap-4 px-4 sm:px-6">
           <a href="/" className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 sm:gap-3" aria-label="밭머리 랜딩페이지">
             <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-deep text-white"><Sprout className="h-6 w-6" aria-hidden="true" /></span>
@@ -74,7 +75,7 @@ export function AppShell({ children, role, active, workerLocale, go, setWorkerLo
             </button>
           </div>}
         </div>
-      </header>
+      </header>}
 
       <div className={`mx-auto grid max-w-[1500px] ${hideNavigation ? '' : 'lg:grid-cols-[240px_minmax(0,1fr)]'}`}>
         {!hideNavigation && <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} border-b border-deep/10 bg-[#EEF3EC] p-4 lg:block lg:min-h-[calc(100vh-72px)] lg:border-b-0 lg:border-r lg:p-5`}>

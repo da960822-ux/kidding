@@ -1,5 +1,7 @@
 import type {
   ApiErrorCode,
+  AssignmentReceipt,
+  TeamAssignmentsResponse,
   IssuedWorkerLink,
   InitialPublishResult,
   OverrideReason,
@@ -43,7 +45,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const fallback = { code: 'INTERNAL_ERROR' as const, message: '요청을 처리하지 못했습니다. 다시 시도해주세요.' };
     const error = await response.json().catch(() => fallback) as Partial<typeof fallback>;
     const apiError = new ApiError(response.status, error.code ?? fallback.code, error.message ?? fallback.message);
-    if (response.status === 401 && path !== '/api/v1/owner/session') window.dispatchEvent(new CustomEvent(ownerUnauthorizedEvent, { detail: { generation: requestAuthGeneration } }));
+    if (response.status === 401 && !path.startsWith('/api/v1/owner/') && !path.startsWith('/api/v1/work-team-members/')) window.dispatchEvent(new CustomEvent(ownerUnauthorizedEvent, { detail: { generation: requestAuthGeneration } }));
     throw apiError;
   }
   if (response.status === 204) return undefined as T;
@@ -62,6 +64,17 @@ function audioForm(audio: Blob, fields: Record<string, string | number> = {}) {
 }
 
 const realApi = {
+  startOwnerSession: async () => {
+    const storageKey = 'batmeori-owner-start-key';
+    const key = window.sessionStorage.getItem(storageKey) ?? idempotencyKey();
+    window.sessionStorage.setItem(storageKey, key);
+    const session = await request<OwnerSession>('/api/v1/owner/start', { method: 'POST', headers: { 'Idempotency-Key': key } });
+    window.sessionStorage.removeItem(storageKey);
+    return session;
+  },
+  createTeamOwnerSession: (teamId: string, pin: string) => request<OwnerSession>('/api/v1/owner/team-session', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ team_id: teamId, pin }),
+  }),
   createOwnerSession: (farmCode: string, pin: string) => request<OwnerSession>('/api/v1/owner/session', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ farm_code: farmCode, pin }),
   }),
@@ -113,6 +126,10 @@ const realApi = {
     const result = await request<{ assignments: WorkerAssignment[] }>('/api/v1/work-team-members/me/assignments');
     return result.assignments;
   },
+  getMyTeamAssignments: () => request<TeamAssignmentsResponse>('/api/v1/work-team-members/me/assignments'),
+  acknowledgeAssignment: (sessionId: string, expectedVersion: number) => request<AssignmentReceipt>(`/api/v1/work-team-members/me/assignments/${encodeURIComponent(sessionId)}/acknowledgement`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ expected_version: expectedVersion }),
+  }),
 };
 
 const mockOwnerSessionKey = 'batmeori-demo-owner-session';
@@ -121,8 +138,55 @@ const readMockOwnerSession = () => {
   const value = window.localStorage.getItem(mockOwnerSessionKey);
   return value ? JSON.parse(value) as OwnerSession : null;
 };
+const mockTeamDataKeys = ['batmeori-demo-today-team', 'batmeori-demo-session', 'batmeori-demo-sessions'];
+function archiveMockTeam() {
+  const raw = window.localStorage.getItem(mockTeamDataKeys[0]);
+  if (!raw) return;
+  const team = JSON.parse(raw) as TodayWorkTeam;
+  window.localStorage.setItem(`batmeori-demo-team-data-${team.team_id}`, JSON.stringify(mockTeamDataKeys.map((key) => window.localStorage.getItem(key))));
+}
 const mockApi = {
   ...mockApiBase,
+  startOwnerSession: async (): Promise<OwnerSession> => {
+    const current = readMockOwnerSession();
+    if (current?.team && new Date(current.expires_at).getTime() > Date.now()) return current;
+    archiveMockTeam();
+    const teamId = crypto.randomUUID();
+    const expires = new Date(Date.now() + 60 * 60_000).toISOString();
+    const next: OwnerSession = { authenticated: true, expires_at: expires, farm: { code: teamId, display_name: '임시 작업팀' }, team: { team_id: teamId, status: 'PENDING', expires_at: expires, management_url: null, pin: null } };
+    window.localStorage.setItem(mockOwnerSessionKey, JSON.stringify(next));
+    window.localStorage.removeItem('batmeori-demo-today-team');
+    window.localStorage.removeItem('batmeori-demo-session');
+    window.localStorage.removeItem('batmeori-demo-sessions');
+    return next;
+  },
+  createTeamOwnerSession: async (teamId: string, pin: string): Promise<OwnerSession> => {
+    const saved = window.localStorage.getItem(`batmeori-demo-team-access-${teamId}`);
+    const session = saved ? JSON.parse(saved) as OwnerSession : null;
+    if (!session || session.team?.pin !== pin || new Date(session.expires_at).getTime() <= Date.now()) throw new ApiError(401, 'UNAUTHORIZED', '팀에 연결할 수 없습니다. 관리 링크와 PIN 또는 만료 시간을 확인해주세요.');
+    const currentTeam = window.localStorage.getItem(mockTeamDataKeys[0]);
+    if (!currentTeam || (JSON.parse(currentTeam) as TodayWorkTeam).team_id !== teamId) {
+      archiveMockTeam();
+      const savedData = window.localStorage.getItem(`batmeori-demo-team-data-${teamId}`);
+      if (savedData) (JSON.parse(savedData) as (string | null)[]).forEach((value, index) => value === null ? window.localStorage.removeItem(mockTeamDataKeys[index]) : window.localStorage.setItem(mockTeamDataKeys[index], value));
+    }
+    window.localStorage.setItem(mockOwnerSessionKey, JSON.stringify(session));
+    return session;
+  },
+  confirmDraft: async (...args: Parameters<typeof mockApiBase.confirmDraft>) => {
+    const result = await mockApiBase.confirmDraft(...args);
+    const owner = readMockOwnerSession();
+    if (owner?.team?.status === 'PENDING') {
+      const expires = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
+      const pin = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1_000_000).padStart(6, '0');
+      const next: OwnerSession = { ...owner, expires_at: expires, team: { ...owner.team, status: 'ACTIVE', expires_at: expires, management_url: `${window.location.origin}/owner/manage/${owner.team.team_id}`, pin } };
+      window.localStorage.setItem(mockOwnerSessionKey, JSON.stringify(next));
+      window.localStorage.setItem(`batmeori-demo-team-access-${owner.team.team_id}`, JSON.stringify(next));
+      const team = await mockApiBase.createTodayTeam();
+      window.localStorage.setItem('batmeori-demo-today-team', JSON.stringify({ ...team, team_id: owner.team.team_id, expires_at: expires }));
+    }
+    return result;
+  },
   createOwnerSession: async (farmCode: string, pin: string) => {
     const session = await mockApiBase.createOwnerSession(pin);
     const next: OwnerSession = { ...session, farm: { code: farmCode.trim(), display_name: '밭머리 데모 농장' } };
@@ -131,7 +195,7 @@ const mockApi = {
   },
   getOwnerSession: async () => {
     const session = readMockOwnerSession();
-    if (!session) throw new ApiError(401, 'UNAUTHORIZED', '인증이 필요합니다.');
+    if (!session || new Date(session.expires_at).getTime() <= Date.now()) throw new ApiError(401, 'UNAUTHORIZED', '인증이 필요합니다.');
     return session;
   },
   getDraft: (draftId: string) => draftId === 'draft-demo-01'
@@ -139,11 +203,13 @@ const mockApi = {
     : Promise.reject(new ApiError(404, 'NOT_FOUND', '작업을 찾을 수 없습니다.')),
   deleteOwnerSession: () => { window.localStorage.removeItem(mockOwnerSessionKey); return Promise.resolve(); },
   createTodayTeam: () => {
+    if (readMockOwnerSession()?.team?.status === 'PENDING') return Promise.reject(new ApiError(409, 'VERSION_CONFLICT', '첫 작업을 확정하면 팀 QR이 열립니다.'));
     const stored = window.localStorage.getItem('batmeori-demo-today-team');
     const team = stored ? JSON.parse(stored) as TodayWorkTeam : null;
     return team && new Date(team.expires_at) > new Date() ? Promise.resolve(team) : mockApiBase.createTodayTeam();
   },
   getTodayTeam: async () => {
+    if (readMockOwnerSession()?.team?.status === 'PENDING') throw new ApiError(409, 'VERSION_CONFLICT', '첫 작업을 확정하면 팀 QR이 열립니다.');
     const team = await mockApiBase.getTodayTeam();
     const stored = window.localStorage.getItem('batmeori-demo-today-team');
     return stored ? { ...team, join_url: (JSON.parse(stored) as TodayWorkTeam).join_url } : team;

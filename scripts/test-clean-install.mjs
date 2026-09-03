@@ -53,6 +53,8 @@ try {
   }
   await clean.exec(readFileSync(resolve(root, 'supabase/tests/provision_farm_owner.sql'), 'utf8'));
   console.log('PASS: farm provisioning, PIN rotation, stable owner identity, rollback');
+  await clean.exec(readFileSync(resolve(root, 'supabase/tests/temporary_team_access.sql'), 'utf8'));
+  console.log('PASS: temporary team activation, fixed expiry, PIN isolation and version acknowledgements');
   const { rows } = await clean.query('select to_regprocedure($1) as leftover', [signature]);
   assert.equal(rows[0].leftover, null, 'Final cleanup removes the historical overload');
   await assert.rejects(clean.exec(bootstrap), /clean_install_bootstrap_requires_empty_database/);

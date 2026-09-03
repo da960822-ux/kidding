@@ -36,7 +36,13 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `today_work_teams` / `today_work_team_members` / `today_work_assignments`
 
-`today_work_teams`는 `id`, `farm_id`, Asia/Seoul `work_date`, `invite_token_hash`, `invite_issue_idempotency_key`, `issued_at`, `expires_at`, `created_at`를 가진다. `(farm_id, work_date)`는 unique다. raw QR token은 DB에 저장하지 않고, owner API가 저장된 발급 키로 같은 Farm·작업일의 URL을 재구성한다. 명시적 재발급만 발급 키와 hash를 교체한다.
+새 임시 팀은 별도 자동 Farm 경계를 하나씩 사용한다. `owner_id`(nullable FK), `owner_pin_hash`(nullable bcrypt), `bootstrap_key_hash`(nullable unique), `activated_at`(nullable)를 추가한다. 기존 팀은 이 값이 null인 legacy로 보존한다. 새 팀의 미확정 작성 공간은 생성부터 1시간 만료이며 첫 `work_sessions` insert와 같은 transaction의 trigger가 `activated_at`, `issued_at`, `expires_at = activated_at + interval '24 hours'`를 단 한 번 설정한다. 작업 추가·버전 변경은 이 시각을 갱신하지 않는다. `work_date`는 표시·legacy 호환 필드이며 새 팀 조회·권한은 날짜 대신 team ID를 사용한다. 모든 새 팀 write는 DB에서도 만료를 검사한다.
+
+`start_temporary_work_team` RPC는 private Farm, 비활성 legacy owner, PIN hash, QR hash, pending 팀을 원자 생성한다. bootstrap key의 HMAC hash로 재시도를 재사용한다. `authenticate_temporary_team`은 활성·미만료 팀의 hash만 검사하며 PIN 원문을 반환하지 않는다. PIN은 server secret과 독립 domain으로 재구성하고 owner 인증 응답에만 제공한다. 참가 QR과 관리 링크는 별개다. 공개·authenticated role은 RPC를 실행하거나 관리 hash를 읽을 수 없다.
+
+`today_work_assignments`에는 nullable `acknowledged_version`(positive integer), `acknowledged_at`을 추가한다. 둘 다 null이거나 둘 다 값이 있어야 한다. `acknowledge_team_assignment`는 team/member/active assignment 경계와 만료를 검사하고 WorkSession을 lock해 현재 version과 요청 expected_version을 비교한다. stale이면 conflict, 같은 버전이면 최초 시각을 유지한다. receipt는 mutable assignment 메타데이터이며 WorkVersion·WorkerBriefing 저장값을 바꾸지 않는다.
+
+`today_work_teams`는 `id`, `farm_id`, Asia/Seoul `work_date`, `invite_token_hash`, `invite_issue_idempotency_key`, `issued_at`, `expires_at`, `created_at`를 가진다. 기존 `(farm_id, work_date)` unique는 보존하며 새 팀은 독립 Farm을 사용한다. raw QR token은 DB에 저장하지 않고 저장된 발급 키로 같은 팀의 URL을 재구성한다. 명시적 재발급만 발급 키와 hash를 교체한다.
 
 `today_work_team_members`는 `id`, `team_id`, `display_name`, `language_code`(`vi|ne`), `joined_at`, `join_idempotency_key`를 가진다. `(team_id, join_idempotency_key)`는 unique다. 영구 worker profile, 전화번호, 국적, 로그인 credential은 저장하지 않는다.
 
@@ -58,7 +64,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## owner PIN session과 공개 경계
 
-P0는 별도 owner session table 없이 Farm access code로 Farm을 선택하고, service-role 전용 `authenticate_farm_owner(farm_code, pin)`이 해당 Farm의 active credential hash를 검증한다. 반환한 `owner_id`, `farm_id`, expiry는 server secret으로 서명한 짧은 cookie에만 둔다. `pin_hash`는 Python·client response에 노출하지 않는다. provisioning RPC는 운영자 입력으로 Farm과 salted `pgcrypto` hash를 원자적으로 생성하거나 갱신한다. `HttpOnly`, `Secure`, exact Origin 검증을 유지하며 static CSRF header는 없다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 당일 임시 roster용으로만 저장한다.
+기존 농장 인증 호환 경로는 별도 owner session table 없이 Farm access code로 Farm을 선택하고, service-role 전용 `authenticate_farm_owner(farm_code, pin)`이 해당 Farm의 active credential hash를 검증한다. 반환한 `owner_id`, `farm_id`, expiry는 server secret으로 서명한 짧은 cookie에만 둔다. `pin_hash`는 Python·client response에 노출하지 않는다. provisioning RPC는 운영자 입력으로 Farm과 salted `pgcrypto` hash를 원자적으로 생성하거나 갱신한다. `HttpOnly`, `Secure`, exact Origin 검증을 유지하며 static CSRF header는 없다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 당일 임시 roster용으로만 저장한다.
 
 농장 코드 인증 전환은 expand/contract 순서를 따른다. 먼저 새 provisioning·인증 RPC를 추가하고 배포된 BE 전환과 농장 provisioning을 검증할 때까지 기존 PIN-only 인증 RPC를 유지한다. 전환 완료 뒤 후속 migration에서 기존 인증·seed RPC와 현재 BE가 호출하지 않는 legacy publish·link RPC를 삭제한다. 저장된 legacy WorkVersion과 읽기 경로는 이 RPC 정리의 대상이 아니다.
 

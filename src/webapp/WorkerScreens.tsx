@@ -1,7 +1,7 @@
 import { AlertCircle, ArrowLeft, ArrowRight, Camera, Check, ChevronLeft, ChevronRight, Clock3, History, Link2Off, UserRound, Volume2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from './api';
-import type { LegacyWorkerBriefing, TeamMember, V2WorkerBriefing, V2WorkerStep, WorkerAssignment, WorkerBriefingBadge } from './contracts';
+import type { AssignmentReceipt, LegacyWorkerBriefing, TeamMember, V2WorkerBriefing, V2WorkerStep, WorkerAssignment, WorkerBriefingBadge } from './contracts';
 import type { AppScreen, ScreenProps, WorkerLocale } from './model';
 import type { Locale } from '../types';
 import { ActionButton, Callout, FactRow, PageHeading, Panel, PanelHeader, ProgressBar, StatusBadge } from './ScreenUI';
@@ -148,14 +148,63 @@ function LegacyWorkerBriefingView({ assignment }: { assignment: LegacyWorkerBrie
 function LinkError({ locale, code, retry }: { locale: WorkerLocale; code: string; retry?: () => void }) { const t = labels[locale]; const expired = code === 'LINK_EXPIRED'; const Icon = expired ? Clock3 : code === 'ACCESS_DENIED' ? Link2Off : AlertCircle; return <div className="mx-auto max-w-xl py-10 text-center sm:py-20"><div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#FFF0BF] text-[#805D09]"><Icon className="h-10 w-10" /></div><h1 className="mt-6 text-3xl font-black">{t.unavailable}</h1><p className="mt-4 text-lg font-bold leading-8 text-muted">{expired ? t.expired : t.invalid}</p>{retry && !expired && <ActionButton className="mt-6" onClick={retry}>{t.retry}</ActionButton>}</div>; }
 
 export function WorkerScreenRouter({ screen, go, token, locale, entryLocale, setLocale }: WorkerScreenProps) {
-  const [assignment, setAssignment] = useState<WorkerAssignment | null>(null); const [assignments, setAssignments] = useState<WorkerAssignment[]>([]); const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null); const [errorCode, setErrorCode] = useState(''); const [refresh, setRefresh] = useState(0); const [updated, setUpdated] = useState(false); const [waiting, setWaiting] = useState(false); const isTeamMember = token === '__team_member__';
-  useEffect(() => { if (screen === 'worker-entry') return; if (!token) { setAssignment(null); setErrorCode('ACCESS_DENIED'); return; } const receive = (items: WorkerAssignment[]) => { const next = items.find((item) => item.session_id === selectedSessionId) ?? items[0] ?? null; setAssignments(items); setWaiting(!next && isTeamMember); if (!next) { setAssignment(null); setErrorCode(''); return; } setAssignment((current) => { if (!current || current.session_id !== next.session_id) return next; if (next.version > current.version) { window.speechSynthesis.cancel(); setUpdated(true); return next; } return current; }); setSelectedSessionId((current) => current ?? next.session_id); setLocale(next.language_code); setErrorCode(''); }; const load = () => (isTeamMember ? api.getMyTodayAssignments() : api.getAssignment(token).then((item) => [item])).then(receive).catch((reason) => { const code = reason instanceof ApiError ? reason.code : 'INTERNAL_ERROR'; if (code === 'LINK_EXPIRED' || code === 'ACCESS_DENIED') { setAssignment(null); window.speechSynthesis.cancel(); } setWaiting(false); setErrorCode(code); }); load(); const timer = window.setInterval(() => { if (document.visibilityState === 'visible') load(); }, 5000); const focus = () => document.visibilityState === 'visible' && load(); document.addEventListener('visibilitychange', focus); window.addEventListener('focus', focus); return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', focus); window.removeEventListener('focus', focus); window.speechSynthesis.cancel(); }; }, [token, screen === 'worker-entry', refresh, isTeamMember, selectedSessionId, setLocale]);
+  const [assignments, setAssignments] = useState<WorkerAssignment[]>([]); const [receipts, setReceipts] = useState<AssignmentReceipt[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null); const [errorCode, setErrorCode] = useState(''); const [refresh, setRefresh] = useState(0); const [updated, setUpdated] = useState(false); const [loaded, setLoaded] = useState(false);
+  const [acknowledging, setAcknowledging] = useState(false); const [ackError, setAckError] = useState('');
+  const generation = useRef(0); const knownVersions = useRef(new Map<string, number>()); const mounted = useRef(true); const currentToken = useRef(token); currentToken.current = token;
+  const isTeamMember = token === '__team_member__';
+  const assignment = assignments.find((item) => item.session_id === selectedSessionId) ?? assignments[0] ?? null;
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current += 1; }; }, []);
+  useEffect(() => { setAssignments([]); setReceipts([]); setSelectedSessionId(null); setLoaded(false); setUpdated(false); setErrorCode(''); setAckError(''); knownVersions.current.clear(); }, [token]);
+  useEffect(() => {
+    if (screen === 'worker-entry') return;
+    if (!token) { setErrorCode('ACCESS_DENIED'); return; }
+    let active = true; let loading = false;
+    const load = async () => {
+      if (loading) return;
+      loading = true;
+      const request = ++generation.current;
+      try {
+        const result = isTeamMember ? await api.getMyTeamAssignments() : { assignments: [await api.getAssignment(token)], receipts: [] };
+        if (!active || request !== generation.current) return;
+        if (result.assignments.some((item) => knownVersions.current.has(item.session_id) && item.version > knownVersions.current.get(item.session_id)!)) { setUpdated(true); window.speechSynthesis.cancel(); }
+        knownVersions.current = new Map(result.assignments.map((item) => [item.session_id, item.version]));
+        setAssignments(result.assignments); setReceipts(result.receipts); setLoaded(true); setErrorCode('');
+        if (result.assignments[0]) setLocale(result.assignments[0].language_code);
+      } catch (reason) {
+        if (!active || request !== generation.current) return;
+        const code = reason instanceof ApiError ? reason.code : 'INTERNAL_ERROR';
+        if (['LINK_EXPIRED', 'ACCESS_DENIED', 'UNAUTHORIZED'].includes(code)) { setAssignments([]); setReceipts([]); window.speechSynthesis.cancel(); }
+        setErrorCode(code); setLoaded(true);
+      } finally { loading = false; }
+    };
+    void load(); const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 5000);
+    const focus = () => { if (document.visibilityState === 'visible') void load(); };
+    document.addEventListener('visibilitychange', focus); window.addEventListener('focus', focus);
+    return () => { active = false; generation.current += 1; window.clearInterval(timer); document.removeEventListener('visibilitychange', focus); window.removeEventListener('focus', focus); window.speechSynthesis.cancel(); };
+  }, [token, screen === 'worker-entry', refresh, isTeamMember, setLocale]);
   if (screen === 'worker-entry') return <WorkerEntry entryLocale={entryLocale} workerLocale={locale} setLocale={setLocale} />;
   if (errorCode && !assignment) return <LinkError locale={locale} code={errorCode} retry={() => setRefresh((value) => value + 1)} />;
-  if (waiting) return <div className="mx-auto max-w-xl py-10 text-center sm:py-20"><span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-[#DDE9D8] text-deep"><Clock3 className="h-10 w-10" /></span><h1 className="mt-6 text-3xl font-black">{labels[locale].today}</h1><p className="mt-4 text-lg font-bold text-muted">{labels[locale].waiting}</p><ActionButton className="mt-6" variant="secondary" onClick={() => setRefresh((value) => value + 1)}>{labels[locale].retry}</ActionButton></div>;
+  if (loaded && !assignment) return <div className="mx-auto max-w-xl py-10 text-center sm:py-20"><Clock3 className="mx-auto h-12 w-12 text-deep" /><h1 className="mt-6 text-3xl font-black">{labels[locale].today}</h1><p className="mt-4 text-lg font-bold text-muted">{labels[locale].waiting}</p><ActionButton className="mt-6" variant="secondary" onClick={() => setRefresh((value) => value + 1)}>{labels[locale].retry}</ActionButton></div>;
   if (!assignment) return <div role="status" className="mx-auto max-w-xl rounded-2xl bg-white p-8 text-center font-black text-deep">Loading · Đang tải · लोड हुँदैछ</div>;
   if (assignment.contract_version === 'structure-v1') return <LegacyWorkerBriefingView assignment={assignment} />;
-  const t = labels[assignment.language_code];
+  const t = labels[assignment.language_code]; const vi = assignment.language_code === 'vi';
+  const pending = assignments.filter((item) => receipts.find((receipt) => receipt.work_session_id === item.session_id)?.acknowledged_version !== item.version);
+  const acknowledged = receipts.some((item) => item.work_session_id === assignment.session_id && item.acknowledged_version === assignment.version);
+  const acknowledge = async () => {
+    if (acknowledging) return;
+    setAcknowledging(true); setAckError('');
+    try {
+      const receipt = await api.acknowledgeAssignment(assignment.session_id, assignment.version);
+      if (!mounted.current || currentToken.current !== token) return;
+      generation.current += 1;
+      setReceipts((items) => [...items.filter((item) => item.work_session_id !== receipt.work_session_id), receipt]);
+    } catch (reason) {
+      if (!mounted.current || currentToken.current !== token) return;
+      if (reason instanceof ApiError && reason.status === 409) { setAckError(vi ? 'Hướng dẫn đã thay đổi. Hãy đọc lại và xác nhận.' : 'निर्देशन बदलिएको छ। फेरि पढेर पुष्टि गर्नुहोस्।'); setRefresh((value) => value + 1); }
+      else setAckError(vi ? 'Chưa gửi được xác nhận. Hãy thử lại.' : 'पुष्टि पठाउन सकिएन। फेरि प्रयास गर्नुहोस्।');
+    } finally { if (mounted.current) setAcknowledging(false); }
+  };
   const v2Assignments = assignments.filter((item): item is V2WorkerBriefing => item.contract_version === 'worker-briefing-v2');
-  return <>{updated && <div role="status" aria-live="assertive" className="mb-5 rounded-2xl bg-[#173F24] p-5 text-lg font-black text-white">{t.updated}</div>}{errorCode && <div role="alert" className="mb-5 flex flex-col gap-3 rounded-2xl bg-[#FFF0BF] p-5 text-base font-extrabold text-[#654B16] sm:flex-row sm:items-center sm:justify-between"><span>{t.stale}</span><ActionButton variant="secondary" onClick={() => setRefresh((value) => value + 1)}>{t.retry}</ActionButton></div>}{screen === 'worker-step' ? <WorkerStepView key={assignment.version} assignment={assignment} go={go} /> : <WorkerLatest assignment={assignment} assignments={v2Assignments} selectAssignment={setSelectedSessionId} go={go} />}</>;
+  return <>{(updated || isTeamMember && pending.length > 0) && <div role="status" aria-live="polite" className="mb-5 rounded-2xl bg-[#173F24] p-5 text-lg font-black text-white">{updated && <p>{t.updated}</p>}{isTeamMember && pending.length > 0 && <p>{vi ? `${pending.length} hướng dẫn chưa xác nhận` : `${pending.length} निर्देशन पुष्टि गर्न बाँकी छ`}</p>}</div>}{errorCode && <div role="alert" className="mb-5 rounded-2xl bg-[#FFF0BF] p-5 font-bold text-[#654B16]">{t.stale}<ActionButton variant="secondary" onClick={() => setRefresh((value) => value + 1)}>{t.retry}</ActionButton></div>}{screen === 'worker-step' ? <WorkerStepView key={`${assignment.session_id}-${assignment.version}`} assignment={assignment} go={go} /> : <WorkerLatest assignment={assignment} assignments={v2Assignments} selectAssignment={(id) => { setSelectedSessionId(id); setAckError(''); }} go={go} />}{isTeamMember && <section className="mt-5 rounded-2xl bg-white p-5"><p className="mb-3 font-bold text-muted">{vi ? 'Xác nhận bạn đã hiểu hướng dẫn này. Đây không phải báo hoàn thành công việc.' : 'यो निर्देशन बुझेको पुष्टि गर्नुहोस्। यो काम सम्पन्न भएको सूचना होइन।'}</p><ActionButton className="w-full" disabled={acknowledged || acknowledging || Boolean(errorCode)} onClick={acknowledge}>{acknowledged ? vi ? 'Đã xác nhận hướng dẫn' : 'निर्देशन पुष्टि भयो' : acknowledging ? vi ? 'Đang gửi…' : 'पठाउँदै…' : vi ? 'Tôi đã hiểu hướng dẫn' : 'मैले निर्देशन बुझें'}</ActionButton>{ackError && <p role="alert" className="mt-3 font-bold text-[#8A302B]">{ackError}</p>}</section>}</>;
 }

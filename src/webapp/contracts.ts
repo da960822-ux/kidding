@@ -22,6 +22,19 @@ export interface TeamMember {
   language_code: WorkerLocale;
   joined_at: string;
   assignment_session_ids: string[];
+  assignment_receipts?: AssignmentReceipt[];
+}
+
+export interface AssignmentReceipt {
+  work_session_id: string;
+  current_version: number;
+  acknowledged_version: number | null;
+  acknowledged_at: string | null;
+}
+
+export interface TeamAssignmentsResponse {
+  assignments: WorkerAssignment[];
+  receipts: AssignmentReceipt[];
 }
 
 export interface TodayWorkTeam {
@@ -283,6 +296,7 @@ export type ApiErrorCode =
 export interface OwnerSession {
   authenticated: true;
   expires_at: string;
+  team?: { team_id: string; status: 'PENDING' | 'ACTIVE'; expires_at: string; management_url: string | null; pin: string | null } | null;
   farm: {
     code: string;
     display_name: string;

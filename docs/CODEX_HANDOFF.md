@@ -32,6 +32,14 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 
 ## 현재 구현 상태
 
+### 2026-09-04 임시 팀 관리·지시 확인 변경
+
+- 새 진입은 농장 코드·농장명·PIN 입력 없이 작업 녹음부터 시작한다. 첫 게시에서 팀 관리 PIN·참가 QR을 활성화하며 24시간 만료를 고정한다. 같은 기기는 cookie, 다른 기기는 관리 링크+PIN으로 복귀한다. 기존 농장 cookie로 새 작업을 시작하면 새 임시 팀을 만들고 기존 데이터는 보존한다.
+- 개인별 배정은 별도 receipt로 확인 버전·시각을 저장한다. 새 배정·버전 변경은 근로자 화면에서 알리고 명시적 확인을 받는다. 농장주는 미확인·확인함·변경 확인 필요를 본다. 화면을 닫은 동안 OS 푸시 알림은 아직 구현하지 않았다.
+- 운영 Supabase에 `018` additive migration 적용과 이력 등록, service-role readiness를 확인했다. 기존 `001`~`016`과 함께 적용됐으며 `017` 삭제 migration은 여전히 적용하지 않았다.
+- AI unit 55개, Python 87개, 브라우저 46개, frontend fixture 4개, manifest/dataset·proxy·contract·build 검사 통과. PGlite 전체 migration replay와 PIN·만료·rollback·stale/foreign acknowledgement 검사 통과. 느린 polling 응답 폐기 문제를 수정하고 6초 지연 브라우저 검사로 확인했다.
+- 배포 후 `backend/live_e2e.py`를 실행하면 새 팀 시작·첫 게시·관리 PIN 복귀·QR·개인 배정·확인 기록과 실제 browser cookie를 함께 검증한다. 테스트가 자체 임시 팀을 만들므로 사전 발급 농장 코드·PIN은 필요하지 않다.
+
 - `backend/app/main.py`: FastAPI API, PIN/member cookie 인증, draft/version/link/team 흐름, BE schema/risk/guide/video gate
 - `backend/app/ai.py`: Node AI runtime으로 연결하는 private JSONL/stdio transport. Provider 구현과 선택은 Node runtime과 server-only 환경변수가 소유한다.
 - `docs/openapi.yaml`: 현재 API 계약

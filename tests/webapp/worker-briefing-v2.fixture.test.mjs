@@ -44,8 +44,8 @@ test('new drafts are v2-only and QR SPA entry paths are deployable', async () =>
   assert.match(contracts, /schema_version:\s*'2';/);
   assert.match(contracts, /contract_version:\s*'structure-v2';/);
   assert.match(contracts, /ontology_version:\s*'ontology-v2';/);
-  const apiRewrite = vercel.indexOf("source: '/api/:path*'");
-  const spaFallback = vercel.indexOf("source: '/(.*)'");
+  const apiRewrite = vercel.indexOf("routes.rewrite('/api/:path*'");
+  const spaFallback = vercel.indexOf("routes.rewrite('/(.*)'");
   assert.ok(apiRewrite >= 0 && apiRewrite < spaFallback, 'API proxy must precede the SPA fallback');
 });
 

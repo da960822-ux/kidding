@@ -60,10 +60,6 @@ def main() -> None:
         raise RuntimeError("set LIVE_E2E=1 to run the paid live flow")
     if not BASE_URL or not ORIGIN or not EXPECTED_REVISION:
         raise RuntimeError("LIVE_API_BASE_URL, LIVE_FRONTEND_ORIGIN, and LIVE_EXPECTED_REVISION are required")
-    farm_code = os.getenv("LIVE_FARM_CODE")
-    owner_pin = os.getenv("LIVE_FARM_OWNER_PIN")
-    if not farm_code or not owner_pin:
-        raise RuntimeError("LIVE_FARM_CODE and LIVE_FARM_OWNER_PIN for a provisioned farm owner are required")
     status, _, health = request("/health")
     assert status == 200 and health["revision"] == EXPECTED_REVISION, health
     status, _, readiness = request("/ready")
@@ -71,11 +67,12 @@ def main() -> None:
     status, _, unauthorized = request("/api/v1/work-sessions")
     assert status == 401 and unauthorized["code"] == "UNAUTHORIZED", unauthorized
     status, headers, owner_session = request(
-        "/api/v1/owner/session",
-        json.dumps({"farm_code": farm_code, "pin": owner_pin}).encode(),
-        {"Content-Type": "application/json"},
+        "/api/v1/owner/start",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        method="POST",
     )
-    assert status == 201 and owner_session["farm"]["code"] == farm_code.lower(), owner_session
+    assert status == 201 and owner_session["team"]["status"] == "PENDING"
+    assert owner_session["team"]["pin"] is None and owner_session["team"]["management_url"] is None
     cookie = next(value for name, value in headers.items() if name.lower() == "set-cookie").split(";", 1)[0]
     status, _, forbidden = request(
         "/api/v1/work-teams/today",
@@ -107,6 +104,18 @@ def main() -> None:
     )
     assert status == 201
     session_id = published["work_session"]["session_id"]
+    status, _, active_owner = request("/api/v1/owner/session", headers={"Cookie": cookie})
+    assert status == 200 and active_owner["team"]["status"] == "ACTIVE"
+    team_access = active_owner["team"]
+    assert len(team_access["pin"]) == 6 and team_access["pin"].isdigit()
+    assert team_access["management_url"].endswith(f"/owner/manage/{team_access['team_id']}")
+    status, resumed_headers, resumed_owner = request(
+        "/api/v1/owner/team-session",
+        json.dumps({"team_id": team_access["team_id"], "pin": team_access["pin"]}).encode(),
+        {"Content-Type": "application/json"},
+    )
+    assert status == 201 and resumed_owner["team"] == team_access
+    cookie = next(value for name, value in resumed_headers.items() if name.lower() == "set-cookie").split(";", 1)[0]
     status, _, sessions = request("/api/v1/work-sessions", headers={"Cookie": cookie})
     assert status == 200 and any(item["session_id"] == session_id for item in sessions["items"]), sessions
     status, _, session = request(f"/api/v1/work-sessions/{session_id}", headers={"Cookie": cookie})
@@ -204,6 +213,7 @@ def main() -> None:
         method="POST",
     )
     assert status in {200, 201} and team["join_url"], team
+    assert team["team_id"] == team_access["team_id"] and team["expires_at"] == team_access["expires_at"]
     original_team_url = team["join_url"]
     status, _, repeated_team = request(
         "/api/v1/work-teams/today",
@@ -224,6 +234,7 @@ def main() -> None:
     )
     assert status == 200 and rotated_team["team_id"] == team["team_id"], rotated_team
     assert rotated_team["join_url"] != original_team_url, rotated_team
+    assert rotated_team["expires_at"] == team_access["expires_at"]
     status, _, repeated_rotation = request(
         "/api/v1/work-teams/today/invite/rotate",
         headers={"Cookie": cookie, "Idempotency-Key": rotate_key},
@@ -257,9 +268,20 @@ def main() -> None:
     assert status == 200 and len(assignments["assignments"]) == 1, assignments
     team_assignment = assignments["assignments"][0]
     assert team_assignment["session_id"] == session_id and team_assignment["version"] == 2, team_assignment
+    assert assignments["receipts"][0]["acknowledged_version"] is None
+    ack_path = f"/api/v1/work-team-members/me/assignments/{session_id}/acknowledgement"
+    ack_headers = {"Content-Type": "application/json", "Cookie": member_cookie}
+    assert request(ack_path, json.dumps({"expected_version": 1}).encode(), ack_headers)[0] == 409
+    status, _, receipt = request(ack_path, json.dumps({"expected_version": 2}).encode(), ack_headers)
+    assert status == 200 and receipt["acknowledged_version"] == 2
+    assert request(ack_path, json.dumps({"expected_version": 2}).encode(), ack_headers)[2] == receipt
+    status, _, roster = request("/api/v1/work-teams/today", headers={"Cookie": cookie})
+    member_roster = next(item for item in roster["members"] if item["member_id"] == member["member_id"])
+    assert status == 200 and member_roster["assignment_receipts"][0] == receipt
     subprocess.run(
         ["node", str(project_root / "scripts" / "check-live-browser-sessions.mjs")],
         cwd=project_root,
+        env={**os.environ, "LIVE_TEAM_ID": team_access["team_id"], "LIVE_TEAM_PIN": team_access["pin"], "LIVE_WORK_SESSION_ID": session_id},
         check=True,
     )
     print(json.dumps({"live_e2e": "PASS", "session_id": session_id}))

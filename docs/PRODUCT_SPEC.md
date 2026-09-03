@@ -15,15 +15,23 @@
 - `CO_PRESENT`: 농장주 PIN 세션의 owner 폰에서 언어를 골라 함께 보기
 - `REMOTE`: 언어를 하나 골라 로그인 없는 24시간 익명 browser 링크 `${PUBLIC_WEB_BASE_URL}/w/{token}` 발급. 해당 route는 JSON assignment endpoint로 Latest Published를 읽는다.
 - 오늘 작업팀: 농장주가 오늘의 QR 하나를 열고, 근로자는 별명과 `vi|ne`만 제출한다. 농장주는 roster를 보고 사람별로 하나 이상 WorkSession을 배정할 수 있다. 참가자 브라우저는 자기 배정의 Latest Published만 읽는다.
-- 농장주 접근: 운영자가 발급한 Farm access code와 Owner PIN을 함께 확인한다. 공개 회원가입·PIN 복구·개인 농장주 계정은 P1이며, PIN이나 PIN 파생값을 QR에 포함하지 않는다.
-- 오늘 작업팀 QR은 같은 Farm·같은 Asia/Seoul 작업일 동안 다시 열어도 동일하다. 농장주가 명시적으로 재발급할 때만 이전 QR을 폐기한다.
+- 농장주 접근: 농장 코드·농장명·PIN 입력 없이 첫 작업을 작성한다. 첫 확정 시 팀의 24시간 관리 PIN과 참가 QR을 자동 발급한다. 같은 기기는 쿠키로 관리하고 다른 기기는 관리 링크와 PIN으로 복귀한다. 공개 회원가입·개인 계정은 없다. PIN이나 PIN 파생값은 참가 QR에 포함하지 않는다.
+- 작업팀은 첫 확정부터 정확히 24시간 유효하다. 작업 추가·수량 변경·QR 재발급으로 만료 시각이나 PIN이 바뀌지 않는다. 새 팀은 별도의 관리 PIN·QR을 사용한다.
+
+## 임시 팀 시작과 배정 확인
+
+농장주 선택은 바로 녹음 화면으로 연결한다. 서버는 입력 없는 임시 작성 권한을 발급하고, 미확정 작성 공간은 1시간 뒤 만료한다. 첫 게시와 팀 활성화는 같은 DB transaction이며 실패하면 PIN·QR을 발급하지 않는다. 활성화 후 팀 관리 링크·6자리 PIN·만료 시각을 농장주에게 보여주고 복사할 수 있게 한다. PIN만으로 전체 팀을 검색하지 않는다. 기존 농장 인증 API와 기존 데이터는 이전 운영 환경 호환을 위해 보존하되 새 시작 화면에서는 사용하지 않는다.
+
+근로자 배정 화면은 새 배정과 모든 배정 작업의 버전 변경을 감지해 선택 언어(`vi|ne`)로 알린다. 확인하지 않은 작업은 재접속해도 남는다. 근로자가 실제 표시된 버전에 대해 `지시 확인`을 누르면 서버에 확인 버전·시각을 저장한다. 단순 조회나 알림 표시를 확인으로 간주하지 않는다. 농장주는 개인별 `미확인`·`확인함`·`변경 확인 필요` 상태를 본다. 확인과 작업 완료는 구분한다. 변경 중 구버전 확인은 `409 VERSION_CONFLICT`로 거부하고 최신 내용을 다시 보여준다.
+
+기본 알림은 열린 작업 화면의 5초 polling 및 focus 복귀 갱신이다. 화면을 닫거나 휴대폰을 잠근 동안의 OS 푸시는 이 경로가 보장하지 않는다. 네트워크 실패 시 미확인 상태를 유지하고 재시도를 안내한다.
 - 제외: 영구 근로자 등록·계정, 전화번호, SMS, 개인 프로필, 채팅, 국적 수집
 
 P1: 농장주 회원가입/계정관리, SMS, 질문, 양파·딸기 이외 작물·추가 언어, 오프라인 캐시, 통계, 급여·출퇴근, 기관 매칭 관리.
 
 ## 배포·보안 경계
 
-Vercel production FE는 `VITE_API_BASE_URL`을 비워 같은 origin의 `/api`를 호출한다. `vercel.ts`는 build-time `API_UPSTREAM_ORIGIN` HTTPS origin으로 `/api/:path*`만 external rewrite한 뒤 SPA fallback을 적용한다. browser mock은 `VITE_USE_MOCK_API=true`인 명시적 개발 선택일 뿐, URL 미설정의 production fallback이 아니다. Render의 `FRONTEND_ORIGINS`, `PUBLIC_WEB_BASE_URL`, `PUBLIC_API_BASE_URL`은 같은 공개 Vercel origin이어야 한다. BE의 `PUBLIC_WEB_BASE_URL`은 `DEMO_FALLBACK=1`이 아닌 환경에서 필수이며 `/ready`와 REMOTE 발급을 차단하는 deployment gate다. owner mutation은 Farm access code와 Owner PIN으로 발급된 farm-scoped signed cookie와 `FRONTEND_ORIGINS` exact Origin으로만 보호하며, 정적 CSRF header는 사용하지 않는다.
+Vercel production FE는 `VITE_API_BASE_URL`을 비워 같은 origin의 `/api`를 호출한다. `vercel.ts`는 build-time `API_UPSTREAM_ORIGIN` HTTPS origin으로 `/api/:path*`만 external rewrite한 뒤 SPA fallback을 적용한다. browser mock은 `VITE_USE_MOCK_API=true`인 명시적 개발 선택일 뿐, URL 미설정의 production fallback이 아니다. Render의 `FRONTEND_ORIGINS`, `PUBLIC_WEB_BASE_URL`, `PUBLIC_API_BASE_URL`은 같은 공개 Vercel origin이어야 한다. BE의 `PUBLIC_WEB_BASE_URL`은 `DEMO_FALLBACK=1`이 아닌 환경에서 필수이며 `/ready`와 REMOTE 발급을 차단하는 deployment gate다. owner mutation은 서버가 발급한 팀 범위 signed cookie(legacy는 farm-scoped cookie)와 `FRONTEND_ORIGINS` exact Origin으로만 보호하며, 정적 CSRF header는 사용하지 않는다.
 
 ## 핵심 흐름
 

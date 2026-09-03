@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const teamToken = `team-${'a'.repeat(32)}`;
-const ownerAuth = { authenticated: true, expires_at: new Date(Date.now() + 60 * 60_000).toISOString(), farm: { code: 'farm-demo', display_name: '밭머리 데모 농장' } };
+const ownerAuth = { authenticated: true, expires_at: new Date(Date.now() + 60 * 60_000).toISOString(), farm: { code: 'farm-demo', display_name: '밭머리 데모 농장' }, team: { team_id: 'team-id', status: 'ACTIVE', expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), management_url: 'http://127.0.0.1:4186/owner/manage/team-id', pin: '123456' } };
 const team = {
   team_id: 'team-id', work_date: '2026-09-03', status: 'ACTIVE', join_url: `http://127.0.0.1:5173/team/${teamToken}`, expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), members: [{ member_id: 'member-id', display_name: 'Nguyễn', language_code: 'vi', joined_at: '2026-09-03T00:00:00.000Z', assignment_session_ids: ['work-demo-01'] }],
 };
@@ -28,42 +28,35 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript((value) => localStorage.setItem('batmeori-demo-owner-session', JSON.stringify(value)), ownerAuth);
 });
 
-test('owner logs in with farm code and PIN, sees the farm, and logs out', async ({ page }) => {
+test('owner starts without farm credentials and logs out', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto('/start');
   await page.evaluate(() => localStorage.removeItem('batmeori-demo-owner-session'));
   await page.getByRole('button', { name: /농장주예요/ }).click();
-  await expect(page.getByRole('heading', { name: '농장주 로그인' })).toBeVisible();
-  await page.getByLabel('농장 코드').fill('farm-jeonnam');
-  await page.getByLabel('PIN').fill('1234');
-  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
-  await expect(page.getByText('밭머리 데모 농장').first()).toBeVisible();
-  await expect(page.getByText('farm-jeonnam').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: '평소 말투 그대로 말씀하세요' })).toBeVisible();
+  await expect(page.locator('input')).toHaveCount(0);
+  await expect(page.getByText('farm-demo', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '로그아웃' }).click();
   await expect(page).toHaveURL(/\/start$/);
 });
 
-test('expired owner session logs in again and returns to the same mobile screen', async ({ page }) => {
+test('lost owner authorization requires explicit recovery without creating a team', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 760 });
   await page.goto('/owner/team');
+  await expect(page.getByRole('heading', { name: '오늘 작업팀', exact: true })).toBeVisible();
   await page.evaluate(() => { localStorage.removeItem('batmeori-demo-owner-session'); window.dispatchEvent(new Event('batmeori:owner-unauthorized')); });
-  await expect(page.getByRole('heading', { name: '농장주 로그인' })).toBeVisible();
-  await page.getByLabel('농장 코드').fill('farm-demo');
-  await page.getByLabel('PIN').fill('1234');
-  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
-  await expect(page.getByRole('heading', { name: '오늘 작업팀' })).toBeVisible();
-  await expect(page).toHaveURL(/\/owner\/team$/);
+  await expect(page.getByRole('heading', { name: '팀 관리 다시 열기' })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('batmeori-demo-owner-session'))).toBeNull();
+  await expect(page.getByRole('button', { name: '새 팀으로 시작' })).toBeVisible();
 });
 
-test('relogin to another farm clears the prior work route', async ({ page }) => {
+test('explicit new team clears the prior work route', async ({ page }) => {
   await page.goto('/owner/work/work-demo-01');
-  await expect(page.getByText('farm-demo').first()).toBeVisible();
+  await expect(page.getByText('24시간 작업팀').first()).toBeVisible();
   await page.evaluate(() => { localStorage.removeItem('batmeori-demo-owner-session'); window.dispatchEvent(new Event('batmeori:owner-unauthorized')); });
-  await page.getByLabel('농장 코드').fill('farm-other');
-  await page.getByLabel('PIN').fill('1234');
-  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
-  await expect(page).toHaveURL(/\/owner\/home$/);
-  await expect(page.getByRole('heading', { name: '오늘 어떤 작업을 시킬까요?' })).toBeVisible();
+  await page.getByRole('button', { name: '새 팀으로 시작' }).click();
+  await expect(page).toHaveURL(/\/owner\/new$/);
+  await expect(page.getByRole('heading', { name: '평소 말투 그대로 말씀하세요' })).toBeVisible();
 });
 
 test('mobile current-work navigation falls back to home until a work is loaded', async ({ page }) => {

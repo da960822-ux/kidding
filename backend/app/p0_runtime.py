@@ -37,6 +37,7 @@ class OwnerIdentity:
     owner_id: str
     farm_id: str
     expires_at: int
+    team_id: str | None = None
 
 
 def _encoded(value: bytes) -> str:
@@ -58,12 +59,15 @@ def verify_owner_cookie(value: str | None, secret: str) -> OwnerIdentity | None:
         signature = base64.urlsafe_b64decode(encoded_signature + "===")
         decoded = json.loads(payload)
         identity = OwnerIdentity(
-            owner_id=str(decoded["owner_id"]), farm_id=str(decoded["farm_id"]), expires_at=int(decoded["expires_at"])
+            owner_id=str(decoded["owner_id"]), farm_id=str(decoded["farm_id"]), expires_at=int(decoded["expires_at"]),
+            team_id=decoded.get("team_id"),
         )
     except (KeyError, TypeError, ValueError, base64.binascii.Error, json.JSONDecodeError):
         return None
     expected = hmac.new(secret.encode(), payload, hashlib.sha256).digest()
     if not identity.owner_id or not identity.farm_id or identity.expires_at <= int(time.time()):
+        return None
+    if identity.team_id is not None and (not isinstance(identity.team_id, str) or not identity.team_id):
         return None
     return identity if hmac.compare_digest(signature, expected) else None
 

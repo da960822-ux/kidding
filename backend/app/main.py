@@ -60,6 +60,7 @@ TEAM_JOIN_REQUEST_LIMIT = 12
 pin_failures: dict[tuple[str, str], list[float]] = {}
 ai_requests: dict[str, list[float]] = {}
 team_join_requests: dict[str, list[float]] = {}
+owner_start_requests: dict[str, list[float]] = {}
 
 
 def load_local_env() -> None:
@@ -336,10 +337,24 @@ class OwnerFarm(StrictModel):
     display_name: str
 
 
+class TeamPinLoginRequest(StrictModel):
+    team_id: uuid.UUID
+    pin: str = Field(pattern=r"^[0-9]{6}$")
+
+
+class OwnerTeamAccess(StrictModel):
+    team_id: str
+    status: Literal["PENDING", "ACTIVE"]
+    expires_at: datetime
+    management_url: str | None = None
+    pin: str | None = None
+
+
 class OwnerSession(StrictModel):
     authenticated: bool = True
     expires_at: datetime
     farm: OwnerFarm
+    team: OwnerTeamAccess | None = None
 
 
 class WorkDraft(StrictModel):
@@ -434,12 +449,24 @@ class WorkerLinkIssueResponse(StrictModel):
     issued_worker_links: list[IssuedWorkerLink]
 
 
+class AssignmentReceipt(StrictModel):
+    work_session_id: str
+    current_version: int = Field(ge=1)
+    acknowledged_version: int | None = Field(default=None, ge=1)
+    acknowledged_at: datetime | None = None
+
+
+class AcknowledgeAssignmentRequest(StrictModel):
+    expected_version: int = Field(ge=1, strict=True)
+
+
 class TeamMember(StrictModel):
     member_id: str
     display_name: str = Field(min_length=1, max_length=30)
     language_code: str
     joined_at: datetime
     assignment_session_ids: list[str] = Field(default_factory=list)
+    assignment_receipts: list[AssignmentReceipt] = Field(default_factory=list)
 
     @field_validator("language_code")
     @classmethod
@@ -490,6 +517,7 @@ class TeamAssignmentMeta(StrictModel):
 
 class TeamAssignmentsResponse(StrictModel):
     assignments: list[dict[str, Any]] = Field(default_factory=list)
+    receipts: list[AssignmentReceipt] = Field(default_factory=list)
 
 
 class QuantityChangeParseResult(StrictModel):
@@ -880,16 +908,26 @@ def team_members(client: Client, team_id: str) -> list[TeamMember]:
     )
     ids = [str(row["id"]) for row in rows]
     assignments_by_member: dict[str, list[str]] = {member_id: [] for member_id in ids}
+    receipts_by_member: dict[str, list[AssignmentReceipt]] = {member_id: [] for member_id in ids}
     if ids:
         assignment_rows = row_data(
             client.table("today_work_assignments")
-            .select("team_member_id,work_session_id")
+            .select("team_member_id,work_session_id,acknowledged_version,acknowledged_at")
             .in_("team_member_id", ids)
             .is_("revoked_at", "null")
             .execute()
         )
         for assignment in assignment_rows:
             assignments_by_member.setdefault(str(assignment["team_member_id"]), []).append(str(assignment["work_session_id"]))
+        session_ids = list({str(row["work_session_id"]) for row in assignment_rows})
+        versions = {
+            str(row["id"]): row["current_version"]
+            for row in row_data(client.table("work_sessions").select("id,current_version").in_("id", session_ids).eq("status", "PUBLISHED").execute())
+        } if session_ids else {}
+        for assignment in assignment_rows:
+            session_id = str(assignment["work_session_id"])
+            if session_id in versions:
+                receipts_by_member[str(assignment["team_member_id"])].append(assignment_receipt(assignment, versions[session_id]))
     return [
         TeamMember(
             member_id=str(row["id"]),
@@ -897,9 +935,17 @@ def team_members(client: Client, team_id: str) -> list[TeamMember]:
             language_code=row["language_code"],
             joined_at=row["joined_at"],
             assignment_session_ids=assignments_by_member[str(row["id"])],
+            assignment_receipts=receipts_by_member[str(row["id"])],
         )
         for row in rows
     ]
+
+
+def assignment_receipt(row: dict[str, Any], version: int) -> AssignmentReceipt:
+    return AssignmentReceipt(
+        work_session_id=str(row["work_session_id"]), current_version=version,
+        acknowledged_version=row.get("acknowledged_version"), acknowledged_at=row.get("acknowledged_at"),
+    )
 
 
 def today_team_response(client: Client, team_row: dict[str, Any], join_url: str) -> TodayWorkTeam:
@@ -935,7 +981,49 @@ def require_owner(cookie: str | None) -> OwnerIdentity:
     identity = verify_session(cookie)
     if identity is None:
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
+    if identity.team_id:
+        owner_team_row(db_client(), identity)
     return identity
+
+
+def owner_team_row(client: Client, owner: OwnerIdentity, active: bool = False) -> dict[str, Any]:
+    rows = row_data(client.table("today_work_teams").select("*").eq("id", owner.team_id).eq("farm_id", owner.farm_id).eq("owner_id", owner.owner_id).limit(1).execute())
+    if not rows or utc_datetime(rows[0]["expires_at"]) <= now_utc():
+        raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
+    if active and not rows[0].get("activated_at"):
+        raise ApiError(409, "VERSION_CONFLICT", "첫 작업을 확정한 뒤 작업팀을 열 수 있습니다.")
+    return rows[0]
+
+
+def owner_today_team(client: Client, owner: OwnerIdentity) -> dict[str, Any]:
+    if owner.team_id:
+        return owner_team_row(client, owner, active=True)
+    work_date, _ = today_seoul()
+    return one_row(client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute())
+
+
+def team_management_pin(team_id: str) -> str:
+    digest = hmac.new(settings.owner_session_secret.encode(), f"team-management-pin:{team_id}".encode(), hashlib.sha256).digest()
+    return f"{int.from_bytes(digest, 'big') % 1_000_000:06d}"
+
+
+def temporary_owner_response(team: dict[str, Any], response: Response | None = None) -> OwnerSession:
+    active = bool(team.get("activated_at"))
+    expires_at = utc_datetime(team["expires_at"])
+    if response is not None:
+        # Pending grants only one hour in DB; the cookie covers a late first publish plus 24 hours.
+        cookie_expiry = expires_at if active else expires_at + timedelta(hours=24)
+        identity = OwnerIdentity(str(team["owner_id"]), str(team["farm_id"]), int(cookie_expiry.timestamp()), str(team["id"]))
+        response.set_cookie(COOKIE_NAME, sign_session(identity), max_age=max(1, int((cookie_expiry - now_utc()).total_seconds())), httponly=True, secure=True, samesite="none", path="/")
+        response.headers["Cache-Control"] = "no-store"
+    base_url = settings.public_web_base_url or (settings.origins[0] if settings.demo_fallback and settings.origins else "")
+    if active and not base_url:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "공개 웹 주소가 준비되지 않았습니다.")
+    return OwnerSession(expires_at=expires_at, farm=OwnerFarm(code="", display_name="작업팀"), team=OwnerTeamAccess(
+        team_id=str(team["id"]), status="ACTIVE" if active else "PENDING", expires_at=expires_at,
+        management_url=f"{base_url}/owner/manage/{team['id']}" if active else None,
+        pin=team_management_pin(str(team["id"])) if active else None,
+    ))
 
 
 def require_origin(request: Request) -> None:
@@ -1616,6 +1704,72 @@ async def ready() -> dict[str, str]:
     return {"status": "ready", "revision": settings.app_revision}
 
 
+@app.post("/api/v1/owner/start", status_code=201, response_model=OwnerSession)
+async def start_owner_team(
+    request: Request, response: Response,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> OwnerSession:
+    require_origin(request)
+    try:
+        key = uuid.UUID(idempotency_key or "")
+        if key.version != 4:
+            raise ValueError()
+    except ValueError:
+        raise ApiError(422, "SCHEMA_INVALID", "무작위 UUID Idempotency-Key가 필요합니다.")
+    if await request.body():
+        raise ApiError(422, "SCHEMA_INVALID", "입력 없이 시작하세요.")
+    if not settings.auth_configured:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    address = client_address(request)
+    recent = [stamp for stamp in owner_start_requests.get(address, []) if time.time() - stamp < AI_REQUEST_WINDOW_SECONDS]
+    owner_start_requests[address] = recent
+    if len(recent) >= AI_REQUEST_LIMIT:
+        raise ApiError(429, "RATE_LIMITED", "잠시 후 다시 시도하세요.")
+    recent.append(time.time())
+    existing = verify_session(batmeori_owner_session)
+    if existing and existing.team_id:
+        try:
+            return temporary_owner_response(owner_team_row(db_client(), existing), response)
+        except ApiError as exc:
+            if exc.status_code != 401:
+                raise
+    team_id, owner_id, farm_id = (str(uuid.uuid4()) for _ in range(3))
+    issue_key = secrets.token_hex(32)
+    try:
+        team = one_row(db_client().rpc("start_temporary_work_team", {
+            "p_team_id": team_id, "p_owner_id": owner_id, "p_farm_id": farm_id,
+            "p_bootstrap_key_hash": hash_link_token(f"team-bootstrap:{key}"),
+            "p_pin": team_management_pin(team_id),
+            "p_invite_token_hash": hash_link_token(today_team_token(team_id, issue_key)), "p_invite_issue_key": issue_key,
+        }).execute())
+    except Exception as exc:
+        if "expired_team" in str(exc):
+            raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "작업팀을 시작할 수 없습니다.")
+    if utc_datetime(team["expires_at"]) <= now_utc():
+        raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
+    return temporary_owner_response(team, response)
+
+
+@app.post("/api/v1/owner/team-session", status_code=201, response_model=OwnerSession)
+async def issue_team_owner_session(payload: TeamPinLoginRequest, request: Request, response: Response) -> OwnerSession:
+    require_origin(request)
+    team_id = str(payload.team_id)
+    check_pin_rate_limit(request, team_id)
+    if not settings.auth_configured:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    try:
+        rows = row_data(db_client().rpc("authenticate_temporary_team", {"p_team_id": team_id, "p_pin": payload.pin}).execute())
+    except Exception:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    if not rows or not rows[0].get("activated_at") or utc_datetime(rows[0]["expires_at"]) <= now_utc():
+        record_pin_failure(request, team_id)
+        raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
+    clear_pin_failures(request, team_id)
+    return temporary_owner_response(rows[0], response)
+
+
 @app.post("/api/v1/owner/session", status_code=201, response_model=OwnerSession)
 async def issue_owner_session(payload: PinLoginRequest, request: Request, response: Response) -> OwnerSession:
     require_origin(request)
@@ -1659,6 +1813,8 @@ async def current_owner_session(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> OwnerSession:
     owner = require_owner(batmeori_owner_session)
+    if owner.team_id:
+        return temporary_owner_response(owner_team_row(db_client(), owner))
     try:
         farm = one_row(
             db_client().table("farms").select("slug,display_name").eq("id", owner.farm_id).limit(1).execute(),
@@ -1872,7 +2028,9 @@ async def confirm_draft(
             raise
         except AiProviderError:
             raise
-        except Exception:
+        except Exception as exc:
+            if "expired_team" in str(exc):
+                raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
             raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
     session_row = one_row(client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
     version_row = one_row(
@@ -2041,7 +2199,9 @@ async def confirm_quantity_change(
         ).execute()
     except AiProviderError:
         raise
-    except Exception:
+    except Exception as exc:
+        if "expired_team" in str(exc):
+            raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
         raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
     if not row_data(result):
         raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
@@ -2069,6 +2229,9 @@ async def create_today_team(
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
+    if owner.team_id:
+        team_row = owner_today_team(client, owner)
+        return today_team_response(client, team_row, today_team_join_url(team_row, request))
     work_date, expires_at = today_seoul()
     rows = row_data(
         client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
@@ -2106,11 +2269,8 @@ async def get_today_team(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
     owner = require_owner(batmeori_owner_session)
-    work_date, _ = today_seoul()
     client = db_client()
-    team_row = one_row(
-        client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
-    )
+    team_row = owner_today_team(client, owner)
     return today_team_response(client, team_row, today_team_join_url(team_row, request))
 
 
@@ -2124,21 +2284,18 @@ async def rotate_today_team(
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
-    work_date, expires_at = today_seoul()
-    team_row = one_row(
-        client.table("today_work_teams").select("id").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
-    )
+    team_row = owner_today_team(client, owner)
     token = today_team_token(str(team_row["id"]), issue_key)
     team_row = one_row(
         client.rpc(
             "rotate_today_work_team_invite",
             {
                 "p_farm_id": owner.farm_id,
-                "p_work_date": work_date,
+                "p_work_date": str(team_row["work_date"]),
                 "p_idempotency_key": issue_key,
                 "p_invite_token_hash": hash_link_token(token),
                 "p_issued_at": now_utc().isoformat(),
-                "p_expires_at": expires_at.isoformat(),
+                "p_expires_at": utc_datetime(team_row["expires_at"]).isoformat(),
             },
         ).execute()
     )
@@ -2166,6 +2323,8 @@ async def join_today_team(
         "ACCESS_DENIED",
     )
     expires_at = utc_datetime(team_row["expires_at"])
+    if team_row.get("owner_id") and not team_row.get("activated_at"):
+        raise ApiError(404, "ACCESS_DENIED", "찾을 수 없습니다.")
     if expires_at <= now_utc():
         raise ApiError(410, "LINK_EXPIRED", "참여 시간이 끝났습니다. QR을 다시 열어주세요.")
     member_identity = verify_team_member(batmeori_team_member)
@@ -2245,10 +2404,7 @@ async def assign_today_team_member(
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
-    work_date, _ = today_seoul()
-    team_row = one_row(
-        client.table("today_work_teams").select("id").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
-    )
+    team_row = owner_today_team(client, owner)
     one_row(
         client.table("today_work_team_members")
         .select("id")
@@ -2324,17 +2480,42 @@ async def get_my_today_assignments(
     )
     assignment_rows = row_data(
         client.table("today_work_assignments")
-        .select("work_session_id")
+        .select("work_session_id,acknowledged_version,acknowledged_at")
         .eq("team_member_id", member_id)
         .eq("farm_id", team_row["farm_id"])
         .is_("revoked_at", "null")
         .order("assigned_at")
         .execute()
     )
-    return {"assignments": [
+    assignments = [
         stored_worker_briefing(client, str(row["work_session_id"]), member["language_code"], str(team_row["farm_id"]))
         for row in assignment_rows
-    ]}
+    ]
+    return {"assignments": assignments, "receipts": [assignment_receipt(row, package["version"]) for row, package in zip(assignment_rows, assignments)]}
+
+
+@app.post("/api/v1/work-team-members/me/assignments/{sessionId}/acknowledgement", response_model=AssignmentReceipt)
+async def acknowledge_my_assignment(
+    sessionId: uuid.UUID, payload: AcknowledgeAssignmentRequest, request: Request,
+    batmeori_team_member: str | None = Cookie(default=None, alias=TEAM_MEMBER_COOKIE_NAME),
+) -> AssignmentReceipt:
+    require_origin(request)
+    team_id, member_id = require_team_member(batmeori_team_member)
+    try:
+        row = one_row(db_client().rpc("acknowledge_team_assignment", {
+            "p_team_id": team_id, "p_member_id": member_id, "p_session_id": str(sessionId),
+            "p_expected_version": payload.expected_version,
+        }).execute())
+    except Exception as exc:
+        reason = str(exc)
+        if "expired_team" in reason:
+            raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
+        if "assignment_not_found" in reason:
+            raise ApiError(404, "NOT_FOUND", "찾을 수 없습니다.") from exc
+        if "version_conflict" in reason:
+            raise ApiError(409, "VERSION_CONFLICT", "최신 지시를 다시 확인하세요.") from exc
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "잠시 후 다시 시도하세요.") from exc
+    return AssignmentReceipt.model_validate(row)
 
 
 @app.post("/api/v1/work-sessions/{sessionId}/worker-links", status_code=201, response_model=WorkerLinkIssueResponse)

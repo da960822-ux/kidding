@@ -197,7 +197,7 @@ class ContractMigrationReviewTests(unittest.TestCase):
             "issue_worker_link(uuid, text, jsonb)",
         )
 
-        self.assertEqual(contract_path, sorted(migrations.glob("*.sql"))[-1])
+        self.assertGreater(contract_path.name, "202609030015_farm_code_owner_credentials.sql")
         for signature in obsolete_signatures:
             self.assertIn(f"drop function if exists public.{signature};", contract)
             self.assertNotIn(f'"{signature.split("(", 1)[0]}"', backend)

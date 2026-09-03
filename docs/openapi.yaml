@@ -7,7 +7,7 @@ info:
     ontology-v2 for onion and strawberry, vi/ne, quantity
     changes, CO_PRESENT owner briefing, REMOTE anonymous language links, and
     a 24-hour anonymous today-team QR roster for person-specific assignments.
-    Every owner mutation requires an owner PIN cookie and exact allowed Origin;
+    Owner mutations require a signed workspace/team cookie and exact allowed Origin, except the explicitly public start and credential endpoints;
     worker links require neither. Clients never submit owner_id or farm_id.
     Issued worker URLs are browser /w/{token} routes.
 servers:
@@ -19,10 +19,60 @@ tags:
   - name: Team
   - name: System
 paths:
+  /api/v1/owner/start:
+    post:
+      tags: [Owner]
+      summary: Start or resume an input-free temporary team workspace
+      description: Exact Origin and rate limit required. Random UUID Idempotency-Key reuses pending workspace on retry. Pending expires after one hour; first atomic publish activates the team's fixed 24 hours. An existing valid temporary-team cookie resumes its team; a legacy farm cookie starts a new temporary workspace.
+      security: []
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201': { description: Workspace cookie issued., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerSession' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+  /api/v1/owner/team-session:
+    post:
+      tags: [Owner]
+      summary: Resume an active temporary team with its management link and PIN
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/TeamPinLoginRequest' } } }
+      responses:
+        '201': { description: Team-scoped secure cookie issued., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerSession' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '503': { $ref: '#/components/responses/ProviderUnavailable' }
+  /api/v1/work-team-members/me/assignments/{sessionId}/acknowledgement:
+    post:
+      tags: [Worker, Team]
+      summary: Explicitly acknowledge the currently displayed assigned version
+      description: Exact Origin required. Checks active member assignment and team expiry. Same-version retry preserves first acknowledged_at; stale version is 409. Reading alone never acknowledges.
+      security: [{ teamMemberSession: [] }]
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, additionalProperties: false, required: [expected_version], properties: { expected_version: { type: integer, minimum: 1 } } } } }
+      responses:
+        '200': { description: Recorded acknowledgement., content: { application/json: { schema: { $ref: '#/components/schemas/AssignmentReceipt' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/VersionConflict' }
+        '422': { $ref: '#/components/responses/Unprocessable' }
   /api/v1/owner/session:
     post:
       tags: [Owner]
-      summary: Issue a farm-scoped owner session cookie
+      summary: Legacy provisioned-farm authentication compatibility endpoint
       security: []
       requestBody:
         required: true
@@ -238,7 +288,7 @@ paths:
     post:
       tags: [Owner, Team]
       summary: Create or return today's anonymous QR invite
-      description: Creates the Asia/Seoul work-date team when absent. Repeated calls return the same farm/day QR. The raw token is reproducible from server-only secret material and is never stored.
+      description: Temporary owners receive their active team regardless of calendar date; pending is 409. Legacy owners retain the farm/day creation path. Repeated calls return the same QR, reconstructed from server-only secret material.
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
@@ -420,6 +470,33 @@ components:
         authenticated: { type: boolean, const: true }
         expires_at: { type: string, format: date-time }
         farm: { $ref: '#/components/schemas/OwnerFarm' }
+        team: { anyOf: [{ $ref: '#/components/schemas/OwnerTeamAccess' }, { type: 'null' }] }
+    TeamPinLoginRequest:
+      type: object
+      additionalProperties: false
+      required: [team_id, pin]
+      properties:
+        team_id: { type: string, format: uuid }
+        pin: { type: string, pattern: '^[0-9]{6}$', writeOnly: true }
+    OwnerTeamAccess:
+      type: object
+      additionalProperties: false
+      required: [team_id, status, expires_at, management_url, pin]
+      properties:
+        team_id: { type: string, format: uuid }
+        status: { type: string, enum: [PENDING, ACTIVE] }
+        expires_at: { type: string, format: date-time }
+        management_url: { type: [string, 'null'], format: uri }
+        pin: { type: [string, 'null'], description: Owner-only management PIN. Never included in worker QR or briefing. }
+    AssignmentReceipt:
+      type: object
+      additionalProperties: false
+      required: [work_session_id, current_version, acknowledged_version, acknowledged_at]
+      properties:
+        work_session_id: { type: string, format: uuid }
+        current_version: { type: integer, minimum: 1 }
+        acknowledged_version: { type: [integer, 'null'], minimum: 1 }
+        acknowledged_at: { type: [string, 'null'], format: date-time }
     TeamMember:
       type: object
       additionalProperties: false
@@ -430,6 +507,7 @@ components:
         language_code: { type: string, enum: [vi, ne] }
         joined_at: { type: string, format: date-time }
         assignment_session_ids: { type: array, uniqueItems: true, items: { type: string, format: uuid } }
+        assignment_receipts: { type: array, items: { $ref: '#/components/schemas/AssignmentReceipt' } }
     TodayWorkTeam:
       type: object
       additionalProperties: false
@@ -438,7 +516,7 @@ components:
         team_id: { type: string, format: uuid }
         work_date: { type: string, format: date, description: Asia/Seoul work date. }
         status: { type: string, const: ACTIVE }
-        join_url: { type: string, format: uri, description: Stable for this farm/day until the owner explicitly rotates it. }
+        join_url: { type: string, format: uri, description: Stable for this team until the owner explicitly rotates it; rotation does not extend expiry. }
         expires_at: { type: string, format: date-time }
         members: { type: array, items: { $ref: '#/components/schemas/TeamMember' } }
     JoinTeamRequest:
@@ -464,9 +542,10 @@ components:
     TeamAssignmentsResponse:
       type: object
       additionalProperties: false
-      required: [assignments]
+      required: [assignments, receipts]
       properties:
         assignments: { type: array, items: { $ref: '#/components/schemas/WorkerBriefing' } }
+        receipts: { type: array, items: { $ref: '#/components/schemas/AssignmentReceipt' } }
     Quantity:
       type: object
       required: [value, unit]

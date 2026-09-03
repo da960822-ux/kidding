@@ -5,14 +5,14 @@
 ## 농장주 접근
 
 **Farm**
-작업, 당일 팀, 농장주 접근 권한이 서로 섞이지 않는 운영 경계.
+작업과 농장주 접근 권한이 서로 섞이지 않는 운영 경계. 임시 작업팀을 시작할 때 자동으로 마련하며 농장 등록을 요구하지 않는다.
 
 **Farm access code**
-농장주가 어느 Farm에 접근하려는지 선택하는 공개 가능한 짧은 코드. 비밀정보가 아니며 Owner PIN과 함께 사용한다.
+기존 운영자 발급 방식에서 Farm을 선택하던 코드. 새 임시 작업팀 흐름에서는 사용자에게 생성이나 입력을 요구하지 않는다.
 _Avoid_: owner ID, farm ID, PIN
 
 **Owner PIN**
-선택한 Farm의 농장주임을 확인하는 비밀 번호. TodayWorkTeam QR이나 WorkerLink를 만드는 재료로 사용하지 않는다.
+하나의 임시 작업팀을 24시간 관리하기 위한 농장주의 비밀 번호. 팀 관리 링크와 함께 사용하며 작업 추가·수정으로 바뀌지 않는다. 참가 QR과 별개다.
 _Avoid_: account password, team code, QR code
 
 ## 작업
@@ -102,10 +102,10 @@ GuidePhrase에 연결된 언어별 공식 번역. source page/url/license와 사
 WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 browser 링크. 공개 URL은 `/w/{token}`이며 로그인 없이 열고 JSON assignment를 통해 고정 버전이 아닌 Latest Published를 보여준다.
 
 **TodayWorkTeam**
-Asia/Seoul의 오늘 날짜에만 유효한 익명 작업팀. 농장주가 QR 하나를 열고, 참가자는 같은 QR에서 별명과 `vi|ne`만 제출한다. 영구 근로자 명부나 계정이 아니다.
+첫 작업 확정부터 24시간 유효한 익명 작업팀. 여러 작업과 개인별 배정을 관리하며 참가자는 QR에서 별명과 `vi|ne`만 제출한다. 자정이나 작업 변경으로 유효기간이 바뀌지 않는다.
 
 **TodayWorkTeam QR**
-Farm의 TodayWorkTeam에 참여하는 당일 초대장. 같은 Farm과 같은 작업일에는 다시 열어도 동일하며, 농장주가 명시적으로 재발급할 때만 이전 초대장이 폐기된다.
+TodayWorkTeam에 참여하는 임시 초대장. 같은 팀에서는 작업 추가·변경에도 동일하며, 농장주가 명시적으로 재발급할 때만 이전 초대장이 폐기된다. 재발급해도 팀 만료 시각은 유지된다.
 _Avoid_: Owner PIN QR, worker account QR
 
 **TeamMember**
@@ -114,6 +114,9 @@ _Avoid_: Worker (영구 고용인·계정을 뜻함)
 
 **TeamAssignment**
 TeamMember와 WorkSession의 연결. 근로자 화면은 연결된 WorkSession의 Latest Published를 읽으므로 수량 버전은 고정하지 않는다.
+
+**Assignment acknowledgement**
+근로자가 배정된 작업의 특정 버전을 직접 확인했다는 기록. 작업 완료나 이해도 검증을 뜻하지 않으며, 내용이 변경되면 새 버전의 확인이 필요하다.
 
 **Delivery mode**  
 P0 owner의 전달 선택. `CO_PRESENT`는 owner cookie briefing에서 언어를 고르고 같이 본다. `REMOTE`는 언어 하나로 익명 WorkerLink를 발급한다.

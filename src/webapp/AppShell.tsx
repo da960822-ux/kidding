@@ -66,11 +66,11 @@ export function AppShell({ children, role, active, workerLocale, go, ownerSessio
                 <LockKeyhole className="h-4 w-4" aria-hidden="true" />{workerLocale === 'vi' ? 'Tiếng Việt' : 'नेपाली'}
               </span>
             ) : (
-              ownerSession && <span className="hidden rounded-full bg-sage/60 px-4 py-2 text-sm font-extrabold text-deep sm:inline-flex">{ownerSession.farm.code}</span>
+              ownerSession && <span className="hidden rounded-full bg-sage/60 px-4 py-2 text-sm font-extrabold text-deep sm:inline-flex">{ownerSession.team?.status === 'PENDING' ? '작업 작성 중' : '24시간 작업팀'}</span>
             )}
             <div className="hidden items-center gap-2 rounded-full bg-[#EFF3ED] py-1.5 pl-1.5 pr-3 sm:flex">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white"><UserRound className="h-4 w-4" aria-hidden="true" /></span>
-              <strong className="text-sm">{role === 'owner' ? ownerSession?.farm.display_name ?? '농장주' : workerLocale === 'vi' ? 'Người lao động' : 'कामदार'}</strong>
+              <strong className="text-sm">{role === 'owner' ? '농장주' : workerLocale === 'vi' ? 'Người lao động' : 'कामदार'}</strong>
             </div>
             {role === 'owner' && <button type="button" onClick={() => setMobileMenuOpen((open) => !open)} className="flex h-12 w-12 items-center justify-center rounded-xl border border-deep/10 lg:hidden" aria-expanded={mobileMenuOpen} aria-label={mobileMenuOpen ? '메뉴 닫기' : '메뉴 열기'}>
               {mobileMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
@@ -81,8 +81,8 @@ export function AppShell({ children, role, active, workerLocale, go, ownerSessio
 
       <div className={`mx-auto grid max-w-[1500px] ${hideNavigation ? '' : 'lg:grid-cols-[240px_minmax(0,1fr)]'}`}>
         {!hideNavigation && <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} border-b border-deep/10 bg-[#EEF3EC] p-4 lg:block lg:min-h-[calc(100vh-72px)] lg:border-b-0 lg:border-r lg:p-5`}>
-          {role === 'owner' && ownerSession && <div className="mb-5 rounded-2xl bg-white p-4"><span className="block text-sm font-bold text-muted">현재 농장</span><strong className="mt-1 block text-base text-deep">{ownerSession.farm.display_name}</strong><span className="mt-1 block text-sm font-bold text-muted">{ownerSession.farm.code}</span></div>}
-          <p className="mb-3 hidden px-3 text-sm font-extrabold text-muted lg:block">{role === 'owner' ? '농장 관리' : workerLabels.menu}</p>
+          {role === 'owner' && ownerSession && <div className="mb-5 rounded-2xl bg-white p-4"><span className="block text-sm font-bold text-muted">현재 팀</span><strong className="mt-1 block text-base text-deep">{ownerSession.team?.status === 'PENDING' ? '첫 작업을 확정해주세요' : '작업팀 관리'}</strong><span className="mt-1 block text-sm font-bold text-muted">{ownerSession.team?.status === 'PENDING' ? '작업 작성 중' : '24시간 작업팀'}</span></div>}
+          <p className="mb-3 hidden px-3 text-sm font-extrabold text-muted lg:block">{role === 'owner' ? '팀 관리' : workerLabels.menu}</p>
           <nav className="hidden gap-1.5 lg:grid" aria-label={role === 'owner' ? '웹앱 메뉴' : workerLabels.menu}>
             {nav.map(({ screen, label, icon: Icon }) => {
               const selected = activeRoot === screen || (screen === 'owner-current' && ['owner-change', 'owner-change-confirm'].includes(active));

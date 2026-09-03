@@ -3,23 +3,21 @@ import { randomUUID } from 'node:crypto';
 import { chromium } from '@playwright/test';
 
 const origin = process.env.LIVE_FRONTEND_ORIGIN;
-const farmCode = process.env.LIVE_FARM_CODE;
-const pin = process.env.LIVE_FARM_OWNER_PIN;
-if (process.env.LIVE_E2E !== '1' || !origin || !farmCode || !pin) {
-  throw new Error('LIVE_E2E=1, LIVE_FRONTEND_ORIGIN, LIVE_FARM_CODE and LIVE_FARM_OWNER_PIN are required');
+const teamId = process.env.LIVE_TEAM_ID;
+const pin = process.env.LIVE_TEAM_PIN;
+if (process.env.LIVE_E2E !== '1' || !origin || !teamId || !pin) {
+  throw new Error('LIVE_E2E=1, LIVE_FRONTEND_ORIGIN, LIVE_TEAM_ID and LIVE_TEAM_PIN are required');
 }
 
 // Real browser cookie acceptance: never extract, inject, or resend Cookie headers.
 const browser = await chromium.launch({ headless: true });
 try {
   const owner = await browser.newPage();
-  await owner.goto(`${origin}/start`);
-  await owner.getByRole('button', { name: /농장주예요/ }).click();
-  await owner.getByLabel('농장 코드').fill(farmCode);
+  await owner.goto(`${origin}/owner/manage/${encodeURIComponent(teamId)}`);
   await owner.getByLabel('PIN', { exact: true }).fill(pin);
   const login = owner.waitForResponse((response) =>
-    response.url() === `${origin}/api/v1/owner/session` && response.request().method() === 'POST');
-  await owner.getByRole('button', { name: '내 농장으로 들어가기' }).click();
+    response.url() === `${origin}/api/v1/owner/team-session` && response.request().method() === 'POST');
+  await owner.getByRole('button', { name: '이 팀 열기' }).click();
   assert.equal((await login).status(), 201, 'same-origin owner login');
 
   const ownerState = await owner.evaluate(async () => {

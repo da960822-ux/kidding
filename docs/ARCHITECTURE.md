@@ -2,7 +2,18 @@
 
 ## current P0 ownership and briefing boundary
 
-운영자가 발급한 Farm access code와 Owner PIN으로 만든 farm-scoped cookie가 owner mutation을 보호한다. 로그인 뒤 client는 owner/farm selector를 mutation에 보내지 않는다. WorkDraft, WorkSession, WorkerLink, TodayWorkTeam, TeamAssignment는 current P0 state를 사용한다. CO_PRESENT, remote, assignment는 같은 최신 `PUBLISHED` WorkVersion의 저장된 언어별 `worker-briefing-v2` package를 그대로 반환한다.
+새 시작 경로는 입력 없이 임시 작업팀 작성 cookie를 발급한다. 서버가 만든 독립 Farm 경계를 재사용해 팀 간 작업을 분리한다. cookie의 team_id·farm_id와 DB의 고정 만료를 매 요청 검사한다. 첫 publish transaction에서 팀을 활성화하고 24시간 만료를 확정한다. 관리 링크와 PIN은 팀 복귀용이며 참가 QR과 분리한다. 기존 운영자 발급 farm 인증은 호환 경로로 보존한다. client는 mutation에 owner/farm selector를 보내지 않는다. CO_PRESENT, remote, assignment는 같은 최신 `PUBLISHED` WorkVersion의 저장된 언어별 `worker-briefing-v2` package를 반환한다.
+
+## 임시 팀·확인 API
+
+- `POST /api/v1/owner/start`: exact Origin, 무작위 UUID Idempotency-Key, IP 제한. 입력 없는 1시간 pending 공간과 cookie를 반환한다. 같은 키 재시도는 같은 공간을 반환한다. 유효한 임시 팀 cookie가 있으면 기존 팀을 유지한다. 기존 농장 cookie만 있으면 새 임시 작성 공간을 만든다. 기존 농장 작업의 직접 조회는 호환 경로로 유지한다.
+- `POST /api/v1/owner/team-session`: `{team_id,pin}`으로 활성·미만료 팀을 확인하고 cookie를 발급한다. 없는 팀·틀린 PIN·만료는 일반화된 401, 반복 실패는 429다.
+- `GET /api/v1/owner/session`: 기존 DTO에 nullable `team` 추가. 팀 DTO는 `{team_id,status:PENDING|ACTIVE,expires_at,management_url:null|string,pin:null|string}`이다. PIN과 관리 URL은 ACTIVE인 owner 응답에만 제공한다. 관리 URL은 `/owner/manage/{team_id}`이다.
+- 기존 `/work-teams/today`는 임시 owner의 정확한 팀을 반환한다. pending이면 409이며 자정 날짜로 다른 팀을 만들지 않는다. rotate는 초대 hash만 교체하고 만료를 연장하지 않는다.
+- `GET /api/v1/work-team-members/me/assignments`: immutable `assignments`는 그대로 두고 별도 `receipts` 배열을 반환한다. 각 receipt는 `{work_session_id,current_version,acknowledged_version:null|integer,acknowledged_at:null|date-time}`이다. owner roster의 각 TeamMember에도 `assignment_receipts`를 제공한다.
+- `POST /api/v1/work-team-members/me/assignments/{sessionId}/acknowledgement`: member cookie와 exact Origin, `{expected_version}`. 동일 팀·현재 활성 배정·최신 버전을 transaction에서 확인하고 receipt를 반환한다. 타인 배정은 404, 만료는 401, 버전 충돌은 409. 같은 버전 재시도는 최초 확인 시각을 유지한다.
+
+확인 기록은 mutable assignment에만 두고 저장된 AI briefing schema는 변경하지 않는다. 작업 변경 뒤 현재 버전과 확인 버전의 차이로 재확인 상태를 계산한다.
 
 ## 경계
 
@@ -47,13 +58,13 @@ REMOTE 발급은 별도 `public.issue_worker_link_v2(p_farm_id uuid, p_session_i
 - `REMOTE`: `vi|ne` 중 하나를 고른 뒤 언어별 익명 링크를 발급한다. 사람 등록·로그인·전화번호 없이 링크 보유자가 본다.
 - 링크는 발급 후 24시간 유효하고, 재발급 시 같은 session·언어의 기존 활성 링크를 폐기한다.
 - 링크는 공개 검색·채팅·답장 채널이 아니다. 외부 오류는 일반화하고 만료만 재발급 안내를 준다.
-- TodayWorkTeam: owner cookie로 Farm의 당일 QR URL을 연다. 같은 Farm·작업일에는 저장된 발급 키로 동일 URL을 복원하고, 명시적 재발급에서만 기존 QR을 폐기한다. 참가자는 그 URL에서 별명·`vi|ne`만 제출한다. 서버는 임시 TeamMember browser cookie를 발급하며, cookie는 team 만료와 함께 끝난다. 농장주는 TeamAssignment로 하나 이상 WorkSession을 연결한다. 근로자는 ID를 입력하지 않고 자기 cookie로만 연결된 최신 `PUBLISHED` state를 읽는다.
+- TodayWorkTeam: owner cookie의 활성 팀 QR URL을 연다. 같은 팀에는 저장된 발급 키로 동일 URL을 복원하고, 명시적 재발급에서만 기존 QR을 폐기한다. 참가자는 그 URL에서 별명·`vi|ne`만 제출한다. 서버는 임시 TeamMember browser cookie를 발급하며, cookie는 team 만료와 함께 끝난다. 농장주는 TeamAssignment로 하나 이상 WorkSession을 연결한다. 근로자는 ID를 입력하지 않고 자기 cookie로만 연결된 최신 `PUBLISHED` state를 읽는다.
 
 `worker-briefing-v2` package builder는 source WorkVersion step 배열을 삭제·정렬 변경 없이 locale별로 변환한다. `context.safety[]`는 locale text를 담고 verified guide provenance는 `source_detail[]`의 `SAFETY`/`step_sequence:null` entries로 보존하며, video caption도 같은 locale로 변환한다. worker DTO의 TTS `text_hash`는 UI 비표시 opaque fingerprint이고, exact text/audio bytes/cache key는 Node↔BE private transport에만 남긴다.
 
 ## 인증·게시 gate
 
-P0 농장주 인증은 service-role 전용 `authenticate_farm_owner(farm_code, pin)` RPC가 선택한 Farm의 active credential PIN hash를 검증해 반환한 `owner_id`, `farm_id`만 cookie claim으로 쓴다. Python은 PIN hash를 읽지 않는다. 운영 시 service-role 전용 provisioning RPC에 Farm access code·표시명·PIN을 전달해 Farm과 salted hash를 원자적으로 생성하거나 갱신하며 migration·로그·응답에 raw PIN을 두지 않는다. owner mutation은 cookie의 farm claim과 `FRONTEND_ORIGINS` exact Origin을 요구한다. 정적 CSRF header는 사용하지 않는다.
+기존 농장 인증 호환 경로는 service-role 전용 `authenticate_farm_owner(farm_code, pin)` RPC가 선택한 Farm의 active credential PIN hash를 검증해 반환한 `owner_id`, `farm_id`만 cookie claim으로 쓴다. Python은 PIN hash를 읽지 않는다. 운영 시 service-role 전용 provisioning RPC에 Farm access code·표시명·PIN을 전달해 Farm과 salted hash를 원자적으로 생성하거나 갱신하며 migration·로그·응답에 raw PIN을 두지 않는다. owner mutation은 cookie의 farm claim과 `FRONTEND_ORIGINS` exact Origin을 요구한다. 정적 CSRF header는 사용하지 않는다.
 
 BE는 schema·ontology·risk assessment·번역 source·영상 provenance/review를 재검증한다. HIGH/UNKNOWN 위험, safety ambiguity, schema invalid, no executable step은 게시하지 않는다. 안전표현은 verified `OFFICIAL_GUIDE` source가 없으면 자동 게시하지 않는다.
 

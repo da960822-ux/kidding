@@ -23,8 +23,15 @@
 | worker DTO에 transcript/risk/identity/token/cache key 또는 UI의 TTS hash 노출 | `422 SCHEMA_INVALID`, package·게시 금지 | 비노출 | DTO/UI allowlist 검증 | package builder 검증 |
 | TTS safety 또는 step 누락 | `422 SCHEMA_INVALID`, package·게시 금지 | 텍스트 노출 금지 | TTS input 재검증 | package builder 재생성 |
 | owner 인증 없음 | mutation `401` | PIN 재입력 | cookie 검증 | - |
-| Farm access code 또는 Owner PIN 불일치 | 일반화된 `401` | 두 값을 다시 확인 | 조합 검증·rate limit | - |
+| 기존 농장 인증 호환 경로의 Farm access code 또는 Owner PIN 불일치 | 일반화된 `401` | 두 값을 다시 확인 | 조합 검증·rate limit | - |
 | owner 세션 만료 | `401` | 재로그인 뒤 원래 화면 복귀 | cookie 만료·삭제 | - |
+| 임시 팀 관리 링크/PIN 불일치·만료 | 일반화된 `401`; 반복 실패 `429` | PIN 재입력 또는 새 팀 시작, 자동으로 기존 작업을 새 팀에 옮기지 않음 | 정확한 team/farm·DB 만료 검사 | - |
+| 미확정 팀에서 QR 요청 | `409 VERSION_CONFLICT` | 첫 작업 확정 안내 | pending 초대·배정 금지 | - |
+| 자정 경과·작업 변경·QR 재발급 | 팀 활성화부터 고정 24시간 | 기존 팀 유지·실제 만료 시각 표시 | 날짜로 새 팀을 생성하거나 expiry 연장 금지 | - |
+| 새 배정·배정 작업 변경 | 미확인 receipt와 최신 briefing | vi/ne 알림·명시적 지시 확인 | 조회만으로 확인 저장 금지 | - |
+| 근로자의 구버전 확인 | `409 VERSION_CONFLICT` | 최신 내용 표시 후 다시 확인 | session lock과 expected_version 비교 | - |
+| 확인 저장 실패 | 오류·미확인 유지 | 성공 표시 금지, 재시도 | 최초 성공 시각 유지·idempotent 처리 | - |
+| 작업 화면 닫힘·기기 잠금 | polling 알림 보장 불가 | 재접속 시 미확인 배정 표시 | OS 푸시 전송으로 오인시키지 않음 | - |
 | 초안 복구 | 유효·미확정 v2만 `200 no-store`; 만료/타 Farm/없음 `404`, 확정 `409`, legacy `422` | 원음 없이 해석 결과 재표시, 실패 시 새 녹음 안내 | farm·expiry·confirmed·contract 검사 | - |
 | confirm에 delivery mode/language가 들어감 | `422 SCHEMA_INVALID` | publish 뒤 전달 화면에서 선택 | confirm은 공용 `vi`·`ne` package만 publish | - |
 | REMOTE link issue 또는 CO_PRESENT briefing의 언어 누락/허용값 외 입력 | `422 SCHEMA_INVALID` | `vi|ne`를 다시 선택 | 별도 link/briefing endpoint 검증 | - |
@@ -32,7 +39,7 @@
 | remote token invalid/revoked | 일반화된 `404` | 접근 불가 화면 | 내부 사유 비공개 | - |
 | today-team QR invalid/revoked | 일반화된 `404` | 접근 불가·QR 재표시 | token hash·expiry 검사 | - |
 | today-team QR 명시적 재발급 | 이전 QR `404` | 새 QR만 공유 | 새 hash 저장·기존 token 폐기 | - |
-| today-team QR 만료 | `410`, 새 QR 안내 | 농장주에게 QR 재열기 안내 | Asia/Seoul work date/expiry 검사 | - |
+| today-team QR 만료 | `410`, 새 QR 안내 | 농장주에게 QR 재열기 안내 | 저장된 team expiry 검사 | - |
 | 팀 배정 없음 | `200` 빈 assignments | 배정 대기 화면 | member cookie 범위만 조회 | - |
 | concurrent quantity change | `409` | 최신 version 재확인 | transaction/version 검사 | - |
 | legacy v1 WorkVersion quantity preview/confirm | `422 LEGACY_READ_ONLY` | legacy version은 읽기 전용 안내 | remap·mutation 없이 차단 | version contract |
@@ -46,4 +53,4 @@
 
 ## 원칙
 
-`AI는 추측하지 않는다. 결정은 농장주가 한다.` raw audio는 즉시 삭제하고 transcript는 owner 감사용으로만 보관하며 anonymous worker API에는 절대 반환하지 않는다. P0는 영구 근로자 개인정보·계정·채팅을 저장하지 않는다. TodayWorkTeam은 별명·언어만 가진 Asia/Seoul 작업일 임시 roster이며 해당 날짜 자정에 만료한다. 이는 24시간 원격 WorkerLink와 다르다. `CO_PRESENT`, `REMOTE`, team assignment는 모두 같은 최신 WorkVersion을 읽는다. REMOTE URL은 browser `/w/{token}` route이고 owner mutation은 PIN cookie와 exact Origin만 사용한다.
+`AI는 추측하지 않는다. 결정은 농장주가 한다.` raw audio는 즉시 삭제하고 transcript는 owner 감사용으로만 보관하며 anonymous worker API에는 절대 반환하지 않는다. P0는 영구 근로자 개인정보·계정·채팅을 저장하지 않는다. 새 TodayWorkTeam은 별명·언어만 가진 임시 roster이며 첫 작업 확정부터 24시간 뒤 만료한다. 기존 팀의 저장된 만료는 변경하지 않는다. `CO_PRESENT`, `REMOTE`, team assignment는 모두 같은 최신 WorkVersion을 읽는다. REMOTE URL은 browser `/w/{token}` route이고 owner mutation은 PIN cookie와 exact Origin만 사용한다.

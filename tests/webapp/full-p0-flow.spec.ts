@@ -5,12 +5,6 @@ test.setTimeout(60_000);
 test('owner instruction reaches remote and today-team workers, then quantity refreshes', async ({ context, page }) => {
   await page.goto('/start');
   await page.getByRole('button', { name: /농장주예요/ }).click();
-  await page.getByLabel('농장 코드').fill('farm-demo');
-  await page.getByLabel('PIN').fill('1234');
-  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
-  await expect(page.getByRole('heading', { name: '오늘 어떤 작업을 시킬까요?' })).toBeVisible();
-
-  await page.getByText('새 작업 지시하기').click();
   await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
   await expect(page.getByRole('heading', { name: '제가 이렇게 이해했어요' })).toBeVisible();
   await page.getByRole('button', { name: '확정하기' }).click();
@@ -41,7 +35,6 @@ test('owner instruction reaches remote and today-team workers, then quantity ref
 
   await page.bringToFront();
   await page.goto('/owner/team');
-  await page.getByRole('button', { name: '오늘 작업팀 열기' }).click();
   const teamUrl = await page.getByText(/\/team\/team-/).textContent();
   expect(teamUrl).toBeTruthy();
 

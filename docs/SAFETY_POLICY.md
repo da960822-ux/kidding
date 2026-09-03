@@ -4,6 +4,8 @@
 
 ## current contract guard
 
+임시 팀 작성·관리 권한 변경은 아래 게시 gate를 완화하지 않는다. 첫 게시 실패 시 팀 활성화도 rollback한다. 근로자의 지시 확인은 이해·작업 완료·안전 승인으로 취급하지 않는다.
+
 `structure-v2`/`ontology-v2` current-code family/task-code mismatch, retired 또는 unknown code를 새 write에 쓰는 경우, schema invalidity, HIGH/UNKNOWN risk, no executable step은 publish blocker다. `structure-v1`은 read-only다. Worker response에는 risk assessment를 포함하지 않으며 video metadata는 APPROVED/LOW만 허용한다.
 
 Worker briefing의 `context.safety[]`는 locale text를 담고, 해당 문구의 verified `OFFICIAL_GUIDE` HIT provenance는 `source_detail[]`의 `SAFETY`/`step_sequence:null` entry로 보존한다. safety guide MISS, unverified source, page/url/license 누락은 fallback 번역하지 않고 publish를 차단한다. 안전 문구는 TTS input에도 포함하지만 risk level/reason은 worker DTO에 노출하지 않는다.

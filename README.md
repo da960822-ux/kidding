@@ -24,19 +24,19 @@
 
 같은 `PUBLISHED` WorkSession을 세 방식이 공유합니다. 어느 경로로 보더라도 최신 version의 동일한 worker briefing을 받습니다.
 
-운영자가 농장별 접근 코드와 PIN을 발급하면 농장주는 그 두 값으로 자기 농장에 접속합니다. PIN은 QR에 포함되지 않으며, 로그인으로 확인된 농장만 오늘의 작업과 작업팀을 관리할 수 있습니다.
+농장주는 등록 없이 바로 작업을 입력합니다. 첫 작업을 확정하면 작업팀의 관리 PIN과 참가 QR을 자동 발급합니다. 같은 기기는 바로 관리하고, 다른 기기는 관리 링크와 PIN으로 복귀합니다. 팀은 첫 확정부터 24시간 유효하며 작업 추가·변경으로 PIN이나 만료 시각이 바뀌지 않습니다.
 
 1. **함께 보기 `CO_PRESENT`** — 농장주가 `vi` 또는 `ne`를 골라 자신의 폰에서 근로자와 함께 briefing을 확인합니다.
 2. **원격 링크 `REMOTE`** — 언어별 24시간 익명 링크 `/w/{token}`을 발급합니다. 로그인·전화번호·앱 설치가 필요 없습니다.
 3. **오늘 작업팀 `TodayWorkTeam`** — 농장주가 QR 하나를 열고, 근로자가 별명과 언어를 직접 고릅니다. 한 사람에게 여러 작업을 배정할 수 있습니다.
 
 ```text
-농장 코드 + PIN → 농장 세션
+입력 없는 임시 작성 공간
   └─ 농장주 음성 → STT → structure-v2 WorkDraft
-      └─ 농장주 확인 → PUBLISHED WorkVersion + vi/ne WorkerBriefing
+      └─ 농장주 확인 → PUBLISHED WorkVersion + vi/ne WorkerBriefing + 첫 팀의 24시간 관리 PIN
           ├─ CO_PRESENT
           ├─ REMOTE /w/{token}
-          └─ 같은 농장·같은 날짜의 TodayWorkTeam QR → 작업 배정
+          └─ 같은 TodayWorkTeam QR → 개인별 작업 배정 → 지시 확인 기록
 ```
 
 ## 작지만 닫힌 P0 범위
@@ -48,7 +48,7 @@
 | 양파·딸기 | 다른 작물 |
 | 베트남어 `vi`, 네팔어 `ne` | 추가 언어 |
 | 수량 변경 | 위치·작업·안전 정보 자동 변경 |
-| Asia/Seoul 당일·자정 만료 팀원 | 영구 근로자 프로필·로그인·전화번호·SMS |
+| 팀 활성화부터 24시간 유효한 팀원 | 영구 근로자 프로필·로그인·전화번호·SMS |
 | 검수된 LOW 영상, text+TTS fallback | runtime 영상 생성 |
 
 ### 작업 ontology
@@ -159,7 +159,7 @@ Vercel은 browser의 `/api/:path*`를 `API_UPSTREAM_ORIGIN`으로 reverse proxy�
 
 `backend/live_e2e.py`는 API smoke 뒤 `scripts/check-live-browser-sessions.mjs`를 실행합니다. 별도 실제 browser context에서 로그인·QR join 뒤 `/api` 요청의 cookie 유지와 owner/member 격리를 검증하며 Cookie header를 주입하지 않습니다. 로컬 통과는 Vite proxy만 증명하므로 Vercel rewrite는 배포 preview에서 같은 검증을 실행해야 합니다.
 
-마이그레이션 적용 후 운영자 환경에서 농장별 접근 정보를 발급하거나 PIN을 교체합니다. PIN 원문은 데이터베이스와 로그에 저장하지 않습니다.
+새 임시 팀은 `018` migration 적용 후 자동 발급되므로 운영자 등록이 필요 없습니다. 다음 명령은 기존 농장 인증 호환 경로 전용입니다. PIN 원문은 데이터베이스와 로그에 저장하지 않습니다.
 
 ```powershell
 $env:FARM_CODE = '<발급할 농장 코드>'
@@ -184,15 +184,13 @@ pnpm run check:contracts
 pnpm run test:web
 ```
 
-실제 provider·Supabase·Storage·Chrome 영상 재생까지 확인하려면 로컬 FE/BE를 실행하고 운영자가 발급한 테스트 농장 코드와 PIN을 환경변수로 전달합니다. 이 검증은 유료 provider 호출을 포함합니다.
+실제 provider·Supabase·Storage·Chrome 영상 재생까지 확인하려면 로컬 FE/BE를 실행합니다. 검증 스크립트가 임시 팀을 생성하고 첫 작업 확정 뒤 관리 PIN 복귀와 개인별 확인 기록을 검사합니다. 이 검증은 유료 provider 호출을 포함합니다.
 
 ```powershell
 $env:LIVE_E2E = '1'
 $env:LIVE_API_BASE_URL = 'https://your-render-service.example'
 $env:LIVE_FRONTEND_ORIGIN = 'https://your-app.vercel.app'
 $env:LIVE_EXPECTED_REVISION = '<배포할 Git commit SHA>'
-$env:LIVE_FARM_CODE = '<테스트 농장 코드>'
-$env:LIVE_FARM_OWNER_PIN = '<secret-store의 테스트 농장 PIN>'
 pnpm test
 ```
 

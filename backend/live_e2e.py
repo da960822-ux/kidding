@@ -88,8 +88,8 @@ def main() -> None:
     manifest = [json.loads(line) for line in (fixture_dir / "manifest.jsonl").read_text(encoding="utf-8").splitlines()]
     expected_transcript = next(item["transcript"] for item in manifest if item["file"] == fixture_name)
 
-    # This fixture covers two steps, Korean STT accuracy, and the two reviewed
-    # videos rendered in the real worker browser route.
+    # This fixture covers two steps, Korean STT accuracy, reviewed harvest video,
+    # and transport instructions delivered through text and TTS.
     body, content_type = multipart_audio(fixture_dir / fixture_name, {"language_hint": "ko"})
     status, _, draft = request(
         "/api/v1/work-sessions/drafts/from-audio",
@@ -125,10 +125,15 @@ def main() -> None:
     if worker["tts"]["audio_url"]:
         audio_url = urllib.parse.urlsplit(worker["tts"]["audio_url"])
         assert f"{audio_url.scheme}://{audio_url.netloc}" == ORIGIN, worker["tts"]["audio_url"]
-    expected_videos = {(step["sequence"], step["task_code"]) for step in worker["steps"] if step["task_code"]}
+    project_root = pathlib.Path(__file__).resolve().parents[1]
+    policy = json.loads((project_root / "ai/references/delivery-policy-v2.json").read_text(encoding="utf-8"))
+    excluded = set(policy["video_excluded_task_codes"])
+    expected_videos = {
+        (step["sequence"], step["task_code"]) for step in worker["steps"]
+        if step["task_code"] and step["task_code"] not in excluded
+    }
     actual_videos = {(video["step_sequence"], video["task_code"]) for video in worker["video"]}
     assert actual_videos == expected_videos, {"expected": sorted(expected_videos), "actual": sorted(actual_videos)}
-    project_root = pathlib.Path(__file__).resolve().parents[1]
     browser_env = {
         **os.environ,
         "LIVE_WORKER_URL": worker_url,

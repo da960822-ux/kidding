@@ -313,7 +313,7 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: { type: string, enum: [UNAUTHORIZED, NOT_FOUND, ACCESS_DENIED, LINK_EXPIRED, VERSION_CONFLICT, LEGACY_READ_ONLY, OVERRIDE_NOT_ALLOWED, SCHEMA_INVALID, PROVIDER_UNAVAILABLE, RATE_LIMITED, INTERNAL_ERROR] }
+        code: { type: string, enum: [UNAUTHORIZED, NOT_FOUND, ACCESS_DENIED, LINK_EXPIRED, VERSION_CONFLICT, LEGACY_READ_ONLY, OVERRIDE_NOT_ALLOWED, AUDIO_UNCLEAR, SCHEMA_INVALID, PROVIDER_UNAVAILABLE, RATE_LIMITED, INTERNAL_ERROR] }
         message: { type: string }
         request_id: { type: string }
         details: { type: object, additionalProperties: true }

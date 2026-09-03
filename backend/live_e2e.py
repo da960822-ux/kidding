@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import os
 import pathlib
+import subprocess
 import urllib.error
 import urllib.request
 import uuid
 
-BASE_URL = os.getenv("LIVE_API_BASE_URL", "http://127.0.0.1:8001").rstrip("/")
+BASE_URL = os.getenv("LIVE_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 ORIGIN = os.getenv("LIVE_FRONTEND_ORIGIN", "http://127.0.0.1:5173")
 
 
@@ -60,16 +61,21 @@ def main() -> None:
     assert status == 201
     cookie = next(value for name, value in headers.items() if name.lower() == "set-cookie").split(";", 1)[0]
     fixture_dir = pathlib.Path(__file__).resolve().parents[1] / "evals" / "audio"
+    fixture_name = "01-clear-work-instruction.wav"
+    manifest = [json.loads(line) for line in (fixture_dir / "manifest.jsonl").read_text(encoding="utf-8").splitlines()]
+    expected_transcript = next(item["transcript"] for item in manifest if item["file"] == fixture_name)
 
-    # The warehouse-transport fixture is intentionally safety-blocked. Use the
-    # low-risk deictic fixture and exercise the documented owner override.
-    body, content_type = multipart_audio(fixture_dir / "03-deictic-location.wav", {"language_hint": "ko"})
+    # This fixture covers two steps, Korean STT accuracy, and the two reviewed
+    # videos rendered in the real worker browser route.
+    body, content_type = multipart_audio(fixture_dir / fixture_name, {"language_hint": "ko"})
     status, _, draft = request(
         "/api/v1/work-sessions/drafts/from-audio",
         body,
         {"Content-Type": content_type, "Cookie": cookie, "Idempotency-Key": f"live-draft-{uuid.uuid4().hex}"},
     )
     assert status == 200 and draft["state"]["steps"], draft
+    assert draft["transcript"] == expected_transcript, draft["transcript"]
+    assert draft["state"]["quantity"] == {"value": 20, "unit": "망"}, draft["state"]["quantity"]
 
     status, _, published = request(
         f"/api/v1/work-sessions/drafts/{draft['draft_id']}/confirm",
@@ -88,6 +94,21 @@ def main() -> None:
     worker_token = worker_url.rsplit("/", 1)[-1]
     status, _, worker = request(f"/api/v1/worker-links/{worker_token}/assignment")
     assert status == 200 and "transcript" not in json.dumps(worker) and "risk_assessment" not in json.dumps(worker), worker
+    expected_videos = {(step["sequence"], step["task_code"]) for step in worker["steps"] if step["task_code"]}
+    actual_videos = {(video["step_sequence"], video["task_code"]) for video in worker["video"]}
+    assert actual_videos == expected_videos, {"expected": sorted(expected_videos), "actual": sorted(actual_videos)}
+    project_root = pathlib.Path(__file__).resolve().parents[1]
+    browser_env = {
+        **os.environ,
+        "LIVE_WORKER_URL": worker_url,
+        "LIVE_EXPECTED_VIDEO_COUNT": str(len(actual_videos)),
+    }
+    subprocess.run(
+        ["node", str(project_root / "scripts" / "check-live-worker-videos.mjs")],
+        cwd=project_root,
+        env=browser_env,
+        check=True,
+    )
 
     body, content_type = multipart_audio(fixture_dir / "02-quantity-change.wav", {"expected_version": "1"})
     status, _, preview = request(

@@ -2,7 +2,8 @@
 
 | 상황 | 판정/응답 | FE | BE | AI 주담당 |
 |---|---|---|---|---|
-| STT 실패·빈 transcript | 재녹음, 저장하지 않음 | 녹음 재시도 | 오류 envelope | confidence/empty 판정 |
+| 빈 transcript·한국어 음성 불명확 | `422 AUDIO_UNCLEAR`, 저장하지 않음 | 녹음 재생 확인·재시도 | provider 장애와 분리 | confidence/empty 판정 |
+| STT provider 연결·응답 실패 | `503 PROVIDER_UNAVAILABLE` | 잠시 후 재시도 | 안전한 오류 envelope | provider failure 판정 |
 | 구조화 JSON invalid | `422`, draft 저장·게시 금지 | 원문 유지·재시도 | schema validation | 계약 준수 |
 | non-blocking ambiguity | owner가 `PUBLISH_AS_IS`/`SUPPLEMENT` 선택 | 배지·선택 UI | reason/audit 저장 | unknown 보존 |
 | safety ambiguity | `OVERRIDE_NOT_ALLOWED` | 강한 차단 | 게시 금지 | 위험 판정 |

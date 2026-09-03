@@ -28,3 +28,6 @@
 {"id":"v2-28","dataset_version":"transcript-v2","kind":"NEGATIVE_FAMILY","transcript":"딸기 포장","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"ONION_TRIMMING","family_match":false}}
 {"id":"v2-29","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 수확하고 딸기 포장해","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"TASK","blocking":true}}
 {"id":"v2-30","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 수확할 건데 수량은 나중에","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"QUANTITY","blocking":true}}
+{"id":"v2-31","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"1번 밭 양파 스무 망 캐서 창고로 옮겨","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_HARVEST","quantity":{"value":20,"unit":"망"}}}
+{"id":"v2-32","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"1번 밭 양파 이십 망 수확해","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_HARVEST","quantity":{"value":20,"unit":"망"}}}
+{"id":"v2-33","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"1번 밭 양파 20망 수확해","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_HARVEST","quantity":{"value":20,"unit":"망"}}}

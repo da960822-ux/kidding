@@ -4,8 +4,8 @@
 
 P0 release gate는 서로 섞지 않는 두 tier다.
 
-- **Transcript tier:** 비식별 양파·딸기 지시 JSONL 30건(`dataset_version` 필수). 두 작물의 정상 사투리/장소·대상, 수량 표현, 수량 변경 5건, 모호 지시 5건 이상을 포함하고 각 8개 task_code를 최소 한 번씩 다룬다. production/수집 원음은 저장하지 않고 transcript와 gold 구조만 보관한다.
-- **STT smoke tier:** `evals/audio/manifest.jsonl`과 PII 없는 합성 한국어 WAV 3건. 30건 구조화 지표의 분모에 넣지 않으며 STT 입력 경로만 확인한다.
+- **Transcript tier:** 비식별 양파·딸기 지시 JSONL 33건(`dataset_version` 필수). 두 작물의 정상 사투리/장소·대상, 한국어 수량 표현(`스무 망`, `이십 망`, `20망`), 수량 변경 5건, 모호 지시 5건 이상을 포함하고 각 8개 task_code를 최소 한 번씩 다룬다. production/수집 원음은 저장하지 않고 transcript와 gold 구조만 보관한다.
+- **STT smoke tier:** `evals/audio/manifest.jsonl`과 PII 없는 합성 한국어 WAV 3건. 33건 구조화 지표의 분모에 넣지 않으며 STT 입력 경로만 확인한다.
 
 합성 fixture는 Windows `Microsoft Heami` `ko-KR` TTS로 생성한다. `synthetic:true`, voice/provider metadata, 원문 SHA-256, WAV duration과 expected case를 manifest에 기록한다. 이 fixture는 사람 녹음이 아니다.
 
@@ -22,7 +22,7 @@ P0 release gate는 서로 섞지 않는 두 tier다.
 | Official-guide HIT | 검수된 HIT에서 `OFFICIAL_GUIDE` 선택 건 / HIT 건 | 100% |
 | Quantity change | 5개 변경에서 expected before/after 일치 | 5/5 |
 | Translation provenance | 각 언어별 공식 번역이 검수된 source snapshot과 일치 | 100% |
-| STT smoke | 합성 WAV 3건의 file/header/duration/STT expected case PASS | 3/3 |
+| STT smoke | 합성 WAV 3건의 file/header/duration/STT expected case PASS; `stt-smoke-001`의 `창고 앞 밭` 보존 | 3/3 |
 | Contract negative cases | auth/exact Origin, 409, 422, HIGH/UNKNOWN, empty steps, 24h/reissue, transcript non-disclosure, public web readiness, `/w/{token}` assignment, explicit mock opt-in fixtures | 100% PASS |
 | Mobile E2E | `CO_PRESENT` owner briefing과 `REMOTE` 익명 링크 두 branch의 휴대폰 2대 흐름 성공 회수 | 각 3회 연속 |
 

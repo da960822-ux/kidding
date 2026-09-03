@@ -1,19 +1,85 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createOpenAiProvider } from '../lib/openai-provider.mjs';
 
-test('transcription always sends Korean without seeding hallucinated prompt text', async () => {
-  let request;
-  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, fetchImpl: async (_url, init) => {
-    request = init.body;
-    return { ok: true, json: async () => ({ text: '양파 스무 망을 수확해.' }) };
+const transcriptionPrompt = await readFile(new URL('../prompts/prompt-transcription-002.md', import.meta.url), 'utf8');
+const transcriptionReviewPrompt = await readFile(new URL('../prompts/prompt-transcription-review-001.md', import.meta.url), 'utf8');
+
+test('transcription uses Korean and accepts a high-confidence primary result', async () => {
+  const requests = [];
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionPrompt, fetchImpl: async (_url, init) => {
+    requests.push(init.body);
+    return { ok: true, json: async () => ({ text: '양파 스무 망을 수확해.', logprobs: [{ token: '양파', logprob: -0.01 }, { token: ' 스무', logprob: -0.05 }] }) };
   } });
 
   const result = await provider.transcribe({ audio_base64: 'AQID', filename: 'recording.webm', content_type: 'audio/webm', language_hint: 'en' });
 
   assert.deepEqual(result, { transcript: '양파 스무 망을 수확해.' });
-  assert.equal(request.get('language'), 'ko');
-  assert.equal(request.get('prompt'), null);
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].get('model'), 'gpt-transcribe');
+  assert.equal(requests[0].get('language'), 'ko');
+  assert.equal(requests[0].get('response_format'), 'json');
+  assert.deepEqual(requests[0].getAll('include[]'), ['logprobs']);
+  assert.match(requests[0].get('prompt'), /문맥에 맞는 표준 한국어/);
+  assert.doesNotMatch(requests[0].get('prompt'), /양파|딸기|망|뿌리|입가|잎과/);
+  assert.deepEqual(requests[0].getAll('keywords[]'), []);
+});
+
+test('low-confidence transcription is accepted only when independent verification agrees', async () => {
+  const requests = [];
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionPrompt, fetchImpl: async (_url, init) => {
+    requests.push(init.body);
+    return requests.length === 1
+      ? { ok: true, json: async () => ({ text: '양파 스무 망을 수확해.', logprobs: [{ token: ' 스무', logprob: -1.2 }] }) }
+      : { ok: true, json: async () => ({ text: '양파 스무 망을 수확해' }) };
+  } });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '양파 스무 망을 수확해.' });
+  assert.equal(requests.length, 2);
+  assert.equal(requests[1].get('model'), 'gpt-4o-transcribe');
+  assert.equal(requests[1].get('response_format'), null);
+  assert.deepEqual(requests[1].getAll('include[]'), []);
+  assert.equal(requests[1].get('prompt'), transcriptionPrompt.trim());
+});
+
+test('low-confidence disagreement uses contextual candidate selection without hardcoded correction', async () => {
+  let callCount = 0;
+  let reviewRequest;
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionReviewPrompt, fetchImpl: async (_url, init) => {
+    callCount += 1;
+    if (callCount === 1) return { ok: true, json: async () => ({ text: '입가 뿌리를 다듬어.', logprobs: [{ token: '입가', logprob: -1.2 }] }) };
+    if (callCount === 2) return { ok: true, json: async () => ({ text: '잎과 뿌리를 다듬어.' }) };
+    reviewRequest = JSON.parse(init.body);
+    return { ok: true, json: async () => ({ output_text: '{"choice":"B"}' }) };
+  } });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '잎과 뿌리를 다듬어.' });
+  assert.equal(callCount, 3);
+  assert.equal(reviewRequest.model, 'gpt-4o-mini');
+  assert.match(reviewRequest.input[0].content, /<candidate-a>입가 뿌리를 다듬어.<\/candidate-a>/);
+  assert.doesNotMatch(transcriptionReviewPrompt, /양파|딸기|망|뿌리|입가|잎과/);
+});
+
+test('uncertain contextual review still rejects the transcript', async () => {
+  let callCount = 0;
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionReviewPrompt, fetchImpl: async () => {
+    callCount += 1;
+    if (callCount === 1) return { ok: true, json: async () => ({ text: '열 망을 옮겨.', logprobs: [{ token: '열', logprob: -1.2 }] }) };
+    if (callCount === 2) return { ok: true, json: async () => ({ text: '스무 망을 옮겨.' }) };
+    return { ok: true, json: async () => ({ output_text: '{"choice":"UNCLEAR"}' }) };
+  } });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '' });
+});
+
+test('transcription preserves an empty provider transcript for unclear-audio handling', async () => {
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, fetchImpl: async () => ({
+    ok: true,
+    json: async () => ({ text: '' }),
+  }) });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '' });
 });
 
 test('structure requests adapt the contract schema and read REST response output', async () => {

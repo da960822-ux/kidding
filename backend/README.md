@@ -10,7 +10,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
 `/health` checks only that the process is alive. `/ready` returns `503` until
@@ -22,7 +22,7 @@ session for an in-person briefing; `REMOTE` issues one anonymous language link
 that expires after 24 hours. Raw audio and token hashes are never exposed.
 
 The Node bridge needs its server-only provider environment (`OPENAI_API_KEY`,
-optional `OPENAI_MODEL`, and optional `OPENAI_TTS_VOICE`). `DEMO_FALLBACK=1`
+optional `OPENAI_MODEL`, `OPENAI_TRANSCRIBE_MODEL`, `OPENAI_TRANSCRIBE_VERIFICATION_MODEL`, `OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD`, `OPENAI_TRANSCRIPT_REVIEW_MODEL`, and `OPENAI_TTS_VOICE`). `DEMO_FALLBACK=1`
 only permits local public URL defaults for the UI demo; it never replaces Node
 STT, structure, translation, visual matching, or TTS.
 

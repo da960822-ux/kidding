@@ -65,6 +65,12 @@ test('TRANSCRIBE_AUDIO routes validated audio only to the Node transcriber and r
   assert.deepEqual(result, { ok: true, result: { transcript: '양파 수확해' } });
 });
 
+test('TRANSCRIBE_AUDIO classifies an empty transcript as unclear audio', async () => {
+  const request = { operation: 'TRANSCRIBE_AUDIO', payload: { audio_base64: 'AQID', content_type: 'audio/wav' } };
+  const result = await handleJsonlLine(JSON.stringify(request), { transcribeAudio: async () => ({ transcript: '' }) });
+  assert.deepEqual(result, { ok: false, error: { code: 'AUDIO_UNCLEAR' } });
+});
+
 test('TRANSCRIBE_AUDIO rejects invalid audio content type before provider dispatch', async () => {
   const result = await handleJsonlLine(JSON.stringify({ operation: 'TRANSCRIBE_AUDIO', payload: { audio_base64: 'AQID', content_type: 'text/plain' } }), { transcribeAudio: async () => assert.fail('must not dispatch') });
   assert.deepEqual(result, { ok: false, error: { code: 'INVALID_AUDIO_FORMAT' } });

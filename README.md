@@ -117,12 +117,12 @@ FastAPI는 AI provider를 중복 구현하지 않습니다. Node `ai/` runtime �
 
 | 검증 영역 | 현재 자동 검증 |
 |---|---|
-| AI contract | Node test 36개 — 8 task code, identity exclusion, asset match, vi/ne package, quantity regeneration |
-| Backend contract | Python test 34개 — farm scope, owner cookie, atomic publish, legacy read, Node-only boundary |
-| Frontend | API contract check, 브라우저 E2E — QR 언어 선택, `/w/{token}`, 복수 assignment, 최신 version 표시 |
+| AI contract | Node test 43개 — 8 task code, identity exclusion, asset match, vi/ne package, quantity regeneration |
+| Backend contract | Python test 46개 — farm scope, owner cookie, atomic publish, legacy read, Node-only boundary |
+| Frontend | API contract check, 브라우저 E2E 10개 — QR 언어 선택, 원음 재생, `/w/{token}`, 복수 assignment, 최신 version 표시 |
 | Asset | `assets/asset_manifest.csv` 8개 row 검증, checksum mismatch 시 transaction 차단 |
 
-P0 release gate는 30건 transcript evaluation, 별도 STT smoke, contract negative case, 실제 모바일 E2E를 모두 요구합니다. 상세 기준은 [EVALS](docs/EVALS.md)를 확인하세요.
+P0 release gate는 33건 transcript evaluation, 별도 STT smoke, contract negative case, 실제 모바일 E2E를 모두 요구합니다. 상세 기준은 [EVALS](docs/EVALS.md)를 확인하세요.
 
 ## 빠른 실행
 
@@ -149,7 +149,7 @@ Copy-Item .env.example .env
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-`backend/.env`에는 server-only `OPENAI_API_KEY`, 선택적 `OPENAI_MODEL`, `OPENAI_TTS_VOICE`, Supabase와 owner session 설정이 필요합니다. `/ready`는 DB·provider·public web 설정이 충족될 때만 성공합니다. 값 자체는 저장소에 넣지 않습니다.
+`backend/.env`에는 server-only `OPENAI_API_KEY`, 선택적 `OPENAI_MODEL`, `OPENAI_TRANSCRIBE_MODEL`, `OPENAI_TTS_VOICE`, Supabase와 owner session 설정이 필요합니다. `/ready`는 DB·provider·public web 설정이 충족될 때만 성공합니다. 값 자체는 저장소에 넣지 않습니다.
 
 ### 3. 테스트
 
@@ -159,6 +159,14 @@ $env:PYTHONPATH = 'backend'
 python -m unittest discover -s backend -p 'test_*.py' -v
 pnpm run check:contracts
 pnpm run test:web
+```
+
+실제 provider·Supabase·Storage·Chrome 영상 재생까지 확인하려면 로컬 FE/BE를 실행하고 배포용 demo PIN을 환경변수로 전달합니다. 이 검증은 유료 provider 호출을 포함합니다.
+
+```powershell
+$env:LIVE_E2E = '1'
+$env:LIVE_DEMO_OWNER_PIN = '<secret-store의 demo PIN>'
+backend\.venv\Scripts\python.exe backend\live_e2e.py
 ```
 
 ## 팀

@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 class AiProviderError(Exception):
     """A Node runtime failure safe to expose through the API envelope."""
 
+    def __init__(self, code: str = "PROVIDER_UNAVAILABLE") -> None:
+        self.code = code
+        super().__init__("Node AI runtime unavailable")
+
 
 def provider_ready() -> bool:
     node_binary = os.getenv("NODE_BINARY", "node").strip()
@@ -40,7 +44,10 @@ async def bridge_call(operation: str, payload: dict[str, Any]) -> dict[str, Any]
                 float(os.getenv("AI_BRIDGE_TIMEOUT_SECONDS", "60")),
             ).call(operation, payload)
         except (BridgeError, ValueError) as exc:
+            code = getattr(exc, "code", type(exc).__name__)
+            if code == "AUDIO_UNCLEAR":
+                raise AiProviderError(code) from exc
             if attempt:
-                logger.warning("AI bridge failed operation=%s code=%s", operation, getattr(exc, "code", type(exc).__name__))
-                raise AiProviderError("Node AI runtime unavailable") from exc
-    raise AiProviderError("Node AI runtime unavailable")
+                logger.warning("AI bridge failed operation=%s code=%s", operation, code)
+                raise AiProviderError() from exc
+    raise AiProviderError()

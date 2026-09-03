@@ -7,16 +7,54 @@ function outputText(response) {
   try { return JSON.parse(text); } catch { throw new TypeError('INVALID_PROVIDER_RESPONSE'); }
 }
 
-function nonEmpty(value) { return typeof value === 'string' && value.trim(); }
+function threshold(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed < 0 ? parsed : -0.5;
+}
 
-export function createOpenAiProvider({ env, fetchImpl } = {}) {
-  const requests = createOpenAiRequests({ apiKey: env?.OPENAI_API_KEY, model: env?.OPENAI_MODEL || 'gpt-5.6-terra', fetchImpl });
+function comparableTranscript(value) {
+  return value.normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function lowConfidence(logprobs, minimum) {
+  const spokenTokens = Array.isArray(logprobs) ? logprobs.filter((item) => typeof item?.logprob === 'number' && /[\p{L}\p{N}]/u.test(item?.token ?? '')) : [];
+  return !spokenTokens.length || spokenTokens.some((item) => item.logprob < minimum);
+}
+
+export function createOpenAiProvider({ env, fetchImpl, transcriptionPrompt = '', transcriptionReviewPrompt = '' } = {}) {
+  const transcriptionModel = env?.OPENAI_TRANSCRIBE_MODEL || 'gpt-transcribe';
+  const verificationModel = env?.OPENAI_TRANSCRIBE_VERIFICATION_MODEL || 'gpt-4o-transcribe';
+  const reviewModel = env?.OPENAI_TRANSCRIPT_REVIEW_MODEL || 'gpt-4o-mini';
+  const minimumLogprob = threshold(env?.OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD);
+  const requests = createOpenAiRequests({
+    apiKey: env?.OPENAI_API_KEY,
+    model: env?.OPENAI_MODEL || 'gpt-5.6-terra',
+    transcriptionModel,
+    fetchImpl,
+  });
   return {
     metadata: requests.metadata,
     async transcribe({ audio_base64, filename, content_type, language_hint }) {
-      const result = await requests.transcription(Buffer.from(audio_base64, 'base64'), filename, content_type, language_hint);
-      if (!nonEmpty(result?.text)) throw new TypeError('INVALID_PROVIDER_RESPONSE');
-      return { transcript: result.text };
+      const audio = Buffer.from(audio_base64, 'base64');
+      const primary = await requests.transcription(audio, filename, content_type, language_hint, { model: transcriptionModel, logprobs: true, prompt: transcriptionPrompt });
+      if (typeof primary?.text !== 'string') throw new TypeError('INVALID_PROVIDER_RESPONSE');
+      if (!primary.text.trim() || !lowConfidence(primary.logprobs, minimumLogprob)) return { transcript: primary.text };
+      const verification = await requests.transcription(audio, filename, content_type, language_hint, { model: verificationModel, prompt: transcriptionPrompt });
+      if (typeof verification?.text !== 'string') throw new TypeError('INVALID_PROVIDER_RESPONSE');
+      if (comparableTranscript(primary.text) === comparableTranscript(verification.text)) return { transcript: primary.text };
+      if (!transcriptionReviewPrompt.trim()) return { transcript: '' };
+      const review = outputText(await requests.response([
+        { role: 'user', content: `${transcriptionReviewPrompt}\n<candidate-a>${primary.text}</candidate-a>\n<candidate-b>${verification.text}</candidate-b>` },
+      ], {
+        type: 'json_schema',
+        name: 'transcription_review',
+        strict: true,
+        schema: {
+          type: 'object', additionalProperties: false, required: ['choice'],
+          properties: { choice: { type: 'string', enum: ['A', 'B', 'UNCLEAR'] } },
+        },
+      }, reviewModel));
+      return { transcript: review.choice === 'A' ? primary.text : review.choice === 'B' ? verification.text : '' };
     },
     async interpretStructureV2({ prompt, transcript, schema }) {
       return outputText(await requests.response([{ role: 'user', content: `${prompt}\n<owner-transcript>${transcript}</owner-transcript>` }], { type: 'json_schema', name: 'structure_v2', strict: true, schema }));

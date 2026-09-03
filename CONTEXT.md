@@ -14,7 +14,8 @@ _Avoid_: final task
 
 **WorkVersion**  
 농장주 확인으로 고정된 WorkSession의 불변 상태. 최초 확인은 `v1`, 명확한 수량 변경 확인은 다음 정수 버전이다.
-_Avoid_: revision (UI 표시는 `v1` 가능)
+내부 계약에서는 정수 version으로 구분한다. 사용자 화면에서는 번호 대신 `최신 작업`, `변경 반영`처럼 현재 의미를 표시한다.
+_Avoid_: revision, 사용자 화면의 `v1`·`v2`
 
 **TaskStep**  
 WorkVersion 안에서 순서가 있는 하나의 실행 단계.

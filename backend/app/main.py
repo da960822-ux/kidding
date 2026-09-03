@@ -699,7 +699,11 @@ async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkSt
     if not state.steps or state.risk_assessment.level != "LOW" or any(item.kind == "SAFETY" for item in output.ambiguities):
         raise ApiError(422, "OVERRIDE_NOT_ALLOWED", "안전 또는 실행 단계 조건을 충족하지 않습니다.")
     ambiguities = [
-        item.model_copy(update={"blocking": False}) if output.location.kind == "DEICTIC" and item.kind == "LOCATION" else item
+        item.model_copy(update={"blocking": False})
+        if output.location.kind == "DEICTIC" and item.kind == "LOCATION"
+        else item.model_copy(update={"blocking": True})
+        if item.kind in {"TASK", "QUANTITY", "SAFETY"}
+        else item
         for item in output.ambiguities
     ]
     return state, ambiguities, output.interpretation
@@ -737,10 +741,9 @@ def draft_summary(state: WorkState) -> str:
     location_text = state.location_display
     if state.location.kind == "DEICTIC":
         location_text = "농장주가 가리킨 곳"
-    if any(step.task_code == "ONION_TRANSPORT" for step in state.steps):
-        return f"{location_text}의 양파 {quantity_text}을 수확해 창고로 옮깁니다."
     crop = "양파" if state.task_family == "ONION" else "딸기"
-    return f"{location_text}의 {crop} {quantity_text}을 작업합니다."
+    task_text = " · ".join(step.title_ko for step in state.steps) or "작업 미지정"
+    return f"{location_text} · {crop} {quantity_text} · {task_text}"
 
 
 def validate_state(
@@ -1165,15 +1168,20 @@ def provider_unavailable() -> None:
 
 
 async def node_transcript(audio: bytes, filename: str, content_type: str, language_hint: str) -> str:
-    result = await bridge_call(
-        "TRANSCRIBE_AUDIO",
-        {
-            "audio_base64": base64.b64encode(audio).decode(),
-            "filename": filename,
-            "content_type": normalized_audio_content_type(content_type),
-            "language_hint": language_hint,
-        },
-    )
+    try:
+        result = await bridge_call(
+            "TRANSCRIBE_AUDIO",
+            {
+                "audio_base64": base64.b64encode(audio).decode(),
+                "filename": filename,
+                "content_type": normalized_audio_content_type(content_type),
+                "language_hint": language_hint,
+            },
+        )
+    except AiProviderError as exc:
+        if exc.code == "AUDIO_UNCLEAR":
+            raise ApiError(422, "AUDIO_UNCLEAR", "음성을 확인하지 못했습니다. 녹음을 재생해 확인하고 다시 녹음해주세요.") from exc
+        raise
     transcript = result.get("transcript")
     if not isinstance(transcript, str) or not transcript.strip():
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "AI 제공자가 준비되지 않았습니다.")

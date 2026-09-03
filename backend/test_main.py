@@ -18,6 +18,7 @@ from app.main import (
     confirm_draft,
     confirm_quantity_change,
     current_assets,
+    draft_summary,
     issue_link,
     node_transcript,
     parse_structure_output,
@@ -30,6 +31,7 @@ from app.main import (
     structure_v2_state_json,
     validate_contract_schema,
 )
+from app.ai import AiProviderError
 from app.p0_runtime import OwnerIdentity
 
 
@@ -92,6 +94,15 @@ class BackendP0Tests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 422)
         self.assertEqual(raised.exception.code, "AUDIO_UNCLEAR")
         self.assertIn("다시 녹음", raised.exception.message)
+
+    def test_empty_stt_result_is_reported_as_unclear_audio(self):
+        with patch("app.main.bridge_call", new=AsyncMock(side_effect=AiProviderError("AUDIO_UNCLEAR"))):
+            with self.assertRaises(ApiError) as raised:
+                asyncio.run(node_transcript(b"audio", "recording.webm", "audio/webm", "ko"))
+
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertEqual(raised.exception.code, "AUDIO_UNCLEAR")
+        self.assertIn("녹음을 재생", raised.exception.message)
 
     def test_initial_instruction_requires_crop_and_supported_action_evidence(self):
         require_initial_instruction("1번 밭에서 양파 스무 망을 수확해")
@@ -204,6 +215,25 @@ class BackendP0Tests(unittest.TestCase):
         self.assertEqual(interpretation, "READY")
         self.assertEqual(state.contract_version, "structure-v2")
         self.assertEqual(state.ontology_version, "ontology-v2")
+
+    def test_task_ambiguity_is_always_blocking(self):
+        raw = structure("ONION_TRANSPORT")
+        raw["interpretation"] = "AMBIGUOUS"
+        raw["ambiguities"] = [{"field": "task_code", "message": "작업 불명확", "blocking": False, "kind": "TASK"}]
+
+        _, ambiguities, _ = asyncio.run(parse_structure_output(raw, "양파를 담아"))
+
+        self.assertTrue(ambiguities[0].blocking)
+
+    def test_draft_summary_never_invents_harvest_or_destination(self):
+        state, _, _ = asyncio.run(parse_structure_output(structure("ONION_TRANSPORT"), "양파를 지정 장소로 옮겨"))
+        state.steps[0].title_ko = "양파 운반"
+
+        summary = draft_summary(state)
+
+        self.assertIn("양파 운반", summary)
+        self.assertNotIn("수확", summary)
+        self.assertNotIn("창고", summary)
 
     def test_confirm_publishes_exact_structure_v2_snapshot(self):
         state, ambiguities, interpretation = asyncio.run(parse_structure_output(structure(), "양파 20망 수확"))

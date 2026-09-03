@@ -1,4 +1,4 @@
-import { ChevronDown, Menu, X } from 'lucide-react';
+import { ChevronDown, Globe2, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import type { LandingContent, Locale } from '../types';
 import { Container } from './ui';
@@ -32,9 +32,9 @@ export function Header({ content, locale, onLocaleChange, appHref }: HeaderProps
     <header className="sticky top-0 z-50 border-b border-deep/10 bg-cream/95 backdrop-blur-md">
       <Container>
         <div className="flex min-h-[76px] items-center justify-between gap-4">
-          <a href="#top" className="group flex shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25" aria-label="밭머리 홈">
+          <a href="/" className="group flex shrink-0 items-center gap-3 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25" aria-label="밭머리 홈">
             <BrandMark className="h-10 w-14 transition group-hover:-rotate-3" />
-            <span className="flex items-baseline gap-3">
+            <span className="hidden items-baseline gap-3 sm:flex">
               <strong className="text-2xl font-black tracking-tight text-ink">밭머리</strong>
               <span className="hidden text-sm font-bold text-primary xl:inline">{content.tagline}</span>
             </span>
@@ -49,17 +49,20 @@ export function Header({ content, locale, onLocaleChange, appHref }: HeaderProps
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <label className="relative block">
-              <span className="sr-only">언어 선택</span>
-              <select
-                value={locale}
-                onChange={(event) => onLocaleChange(event.target.value as Locale)}
-                className="min-h-11 w-[88px] appearance-none rounded-xl border border-deep/15 bg-white py-2 pl-2 pr-7 text-xs font-bold text-ink shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/20 sm:w-auto sm:pl-3 sm:pr-9 sm:text-sm"
-                aria-label="언어 선택"
-              >
-                {Object.entries(localeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" aria-hidden="true" />
+            <label className="block">
+              <span className="mb-1 block text-center text-[11px] font-bold text-muted">언어 / Language</span>
+              <span className="relative block">
+                <Globe2 className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" aria-hidden="true" />
+                <select
+                  value={locale}
+                  onChange={(event) => onLocaleChange(event.target.value as Locale)}
+                  className="min-h-11 w-[104px] appearance-none rounded-xl border border-deep/15 bg-white py-2 pl-7 pr-7 text-xs font-bold text-ink shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/20 sm:w-auto sm:pl-8 sm:pr-9 sm:text-sm"
+                  aria-label="언어 / Language"
+                >
+                  {Object.entries(localeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-primary" aria-hidden="true" />
+              </span>
             </label>
             <a href={appHref} className="hidden min-h-12 items-center rounded-2xl bg-deep px-5 py-3 font-bold text-white shadow-[0_8px_20px_rgba(47,93,53,0.18)] transition hover:-translate-y-0.5 hover:bg-[#244d2b] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/25 md:inline-flex">
               {content.start}

@@ -45,14 +45,15 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 
 ## 현재 로컬 검증 결과
 
-- backend unit test 34개, Node AI test 36개, 브라우저 E2E 7개 통과
+- backend unit test 46개, Node AI test 43개, 브라우저 E2E 10개 통과
 - 8개 asset manifest의 schema/checksum 입력 검증과 frontend contract/production build 통과
+- 실제 `stt-smoke-001`로 STT→publish→REMOTE worker route를 실행하고 검수 영상 2개의 Chrome 재생을 확인했다.
 - confirm은 delivery 방식·언어 없이 공용 `vi`·`ne` package만 publish한다. 프론트 스토리보드에서 `CO_PRESENT` 언어를 고르거나 `REMOTE` 언어별 링크를 별도 발급하며, 재발급은 이전 링크를 폐기한다.
 - `202609030007_expand_onion_strawberry_ontology.sql`의 양파·딸기 8코드와 `task_family` DB constraint를 적용했다. retired code를 가진 기존 immutable version/link/asset은 reset·delete·rewrite·자동 remap 없이 legacy read-only로 보존한다.
 
 ## 배포 환경에서 남은 검증
 
-- Supabase에 010까지 migration을 적용하고 `seed_demo_owner.py`, `import_visual_assets.py`를 실행한다.
+- Supabase에 014까지 migration을 적용한다. 새 환경에서는 이어서 `seed_demo_owner.py`, `import_visual_assets.py`를 실행한다.
 - 두 farm owner로 cross-farm isolation, 실제 Node provider와 audio→draft→confirm→CO_PRESENT/REMOTE/team→수량 변경 E2E를 실행한다.
 
 ## 주의

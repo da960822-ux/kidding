@@ -17,7 +17,7 @@ function providerSchema(value, root = true) {
   return result;
 }
 
-export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', fetchImpl = globalThis.fetch }) {
+export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', transcriptionModel = 'gpt-transcribe', fetchImpl = globalThis.fetch }) {
   if (!apiKey || !fetchImpl) throw new TypeError('OPENAI_CONFIGURATION_REQUIRED');
   async function request(path, body) {
     const response = await fetchImpl(`${API_BASE}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -29,19 +29,21 @@ export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', fetchImp
     if (!response.ok) throw requestFailure(response);
     return Buffer.from(await response.arrayBuffer());
   }
-  async function transcription(audio, filename, contentType, languageHint) {
+  async function transcription(audio, filename, contentType, languageHint, { model: audioModel = transcriptionModel, logprobs = false, prompt } = {}) {
     const body = new FormData();
     body.append('file', new Blob([audio], { type: contentType || 'audio/wav' }), filename || 'audio.wav');
-    body.append('model', 'gpt-4o-transcribe');
+    body.append('model', audioModel);
     body.append('language', languageHint === 'ko' ? languageHint : 'ko');
+    if (typeof prompt === 'string' && prompt.trim()) body.append('prompt', prompt.trim());
+    if (logprobs) { body.append('response_format', 'json'); body.append('include[]', 'logprobs'); }
     const response = await fetchImpl(`${API_BASE}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body });
     if (!response.ok) throw requestFailure(response);
     return response.json();
   }
   return {
-    response: (input, format) => request('/responses', { model, input, text: { format: { ...format, schema: providerSchema(format.schema) } } }),
+    response: (input, format, responseModel = model) => request('/responses', { model: responseModel, input, text: { format: { ...format, schema: providerSchema(format.schema) } } }),
     speech: (input, voice) => requestBytes('/audio/speech', { model: 'gpt-4o-mini-tts', input, voice, response_format: 'mp3' }),
     transcription,
-    metadata: { provider: 'openai', model }
+    metadata: { provider: 'openai', model, transcription_model: transcriptionModel }
   };
 }

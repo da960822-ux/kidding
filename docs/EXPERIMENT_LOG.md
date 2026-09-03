@@ -8,7 +8,7 @@
 
 - 가설: STT 후 사투리 정규화·구조화를 거치면 STT 직후 번역보다 단계와 수량 보존이 높다.
 - 비교: `STT→translation` baseline vs `STT→normalize→structure→guide lookup→translation` pipeline.
-- 데이터: `docs/EVALS.md`의 비식별 양파·딸기 transcript JSONL 30건. 실제 데이터는 수집 후 dataset version을 기록한다.
+- 데이터: `docs/EVALS.md`의 비식별 양파·딸기 transcript JSONL 33건. 실제 데이터는 수집 후 dataset version을 기록한다.
 - 측정: parse success, field exact match, `task_code` accuracy, quantity accuracy, ambiguity preservation, latency P50/P95.
 - 합격 게이트: quantity accuracy 100%, 모호 입력 임의 확정 0건. 나머지 수치는 실행 결과로 채우고 수집 전 수치를 만들지 않는다.
 - 주담당: AI. 인계: `docs/EVALS.md` 결과표와 실패 입력 ID.
@@ -31,11 +31,33 @@
 
 ## E-004 synthetic STT smoke
 
-- 입력: `evals/audio/manifest.jsonl`의 PII 없는 합성 한국어 WAV 3건. 이 tier는 30 transcript 구조화 평가와 분리한다.
+- 입력: `evals/audio/manifest.jsonl`의 PII 없는 합성 한국어 WAV 3건. 이 tier는 33 transcript 구조화 평가와 분리한다.
 - 고정: Windows `Microsoft Heami` `ko-KR` voice, manifest의 text hash와 WAV duration.
 - 측정: 파일 존재·WAV header·duration, STT non-empty, fixture별 expected case assertion.
 - 합격 게이트: 3/3 PASS. 결과는 run artifact의 STT smoke JSONL에 남긴다.
 - 주담당: AI. 인계: manifest hash와 실패 fixture ID.
+
+## E-005 한국어 STT model 비교
+
+- 날짜: 2026-09-04
+- 입력: `stt-smoke-001`, `language=ko`, prompt 없음.
+- `gpt-4o-transcribe`: `창고 아파트에서 양파 스무 망을 수확해서 창고로 옮겨.`
+- `gpt-transcribe`: `창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.`
+- 결정: 문구 치환 없이 `OPENAI_TRANSCRIBE_MODEL=gpt-transcribe`를 사용한다. model은 server-only 환경변수로 유지한다.
+
+## E-006 일반화된 한국어 수량 힌트
+
+- 날짜: 2026-09-04
+- 입력: `stt-smoke-001`, `language=ko`, 특정 숫자·단위 예시가 없는 한국어 농작업 prompt.
+- 결과: transcript `창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.`, 구조 수량 `{value: 20, unit: "망"}`, live E2E PASS.
+- 결정: 운영 prompt에는 특정 수량 표현이나 결과 치환을 넣지 않는다. `스무 망`·`이십 망`·`20망`은 평가 데이터에서만 회귀 검증한다.
+
+## E-007 확신 기반 2단계 한국어 STT
+
+- 날짜: 2026-09-04
+- 입력: `stt-smoke-001`~`003`, `language=ko`, 특정 작물·수량·작업 어휘가 없는 일반 작업 문맥 prompt.
+- 결과: 기준 `gpt-transcribe`는 세 fixture의 원문을 보존했다. `gpt-4o-transcribe` 단독은 `창고 앞 밭`을 높은 확신으로 `창고 아파트`로 오인식하여 기준 모델로 사용하지 않는다.
+- 결정: 기준 모델 token log probability가 `-0.5`보다 낮을 때만 `gpt-4o-transcribe`로 같은 원음을 재검증한다. 결과가 다르면 작은 텍스트 모델이 두 후보 중 문맥상 명백한 하나만 선택하며, 새 문장을 생성하지 못하게 한다. 불명확하면 `AUDIO_UNCLEAR`로 재녹음을 요청한다.
 
 ## 변경·재현 규칙
 

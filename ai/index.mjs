@@ -5,6 +5,8 @@ import { buildWorkerPackagesV2 } from './lib/worker-briefing-v2.mjs';
 import { matchVisualAsset } from './lib/visual-match.mjs';
 
 const prompt = await readFile(new URL('./prompts/prompt-structure-005.md', import.meta.url), 'utf8');
+const transcriptionPrompt = await readFile(new URL('./prompts/prompt-transcription-002.md', import.meta.url), 'utf8');
+const transcriptionReviewPrompt = await readFile(new URL('./prompts/prompt-transcription-review-001.md', import.meta.url), 'utf8');
 const supplementPrompt = await readFile(new URL('./prompts/prompt-structure-supplement-002.md', import.meta.url), 'utf8');
 const quantityPrompt = await readFile(new URL('./prompts/prompt-quantity-change-001.md', import.meta.url), 'utf8');
 const structureSchema = JSON.parse(await readFile(new URL('../docs/schemas/structure-v2.schema.json', import.meta.url), 'utf8'));
@@ -23,7 +25,7 @@ function assertPackageWork(work) {
 }
 
 export function createRuntime({ env = {}, providers = {} }) {
-  const provider = Object.keys(providers).length ? providers : createOpenAiProvider({ env });
+  const provider = Object.keys(providers).length ? providers : createOpenAiProvider({ env, transcriptionPrompt, transcriptionReviewPrompt });
   return {
     async transcribeAudio(payload) {
       return provider.transcribe(payload);

@@ -36,7 +36,10 @@ export async function handleJsonlLine(line, services) {
   const handlers = { TRANSCRIBE_AUDIO: services.transcribeAudio, BUILD_OWNER_DRAFT_V2: services.buildOwnerDraftV2, MERGE_SUPPLEMENT_V2: services.mergeSupplementV2, PARSE_QUANTITY_CHANGE: services.parseQuantityChange, BUILD_WORKER_PACKAGES_V2: services.buildWorkerPackagesV2 };
   try {
     const result = await handlers[request.operation](request.payload);
-    if (request.operation === 'TRANSCRIBE_AUDIO') return typeof result?.transcript === 'string' && result.transcript.trim() ? { ok: true, result: { transcript: result.transcript } } : safeError('INVALID_STT_RESULT');
+    if (request.operation === 'TRANSCRIBE_AUDIO') {
+      if (typeof result?.transcript !== 'string') return safeError('INVALID_STT_RESULT');
+      return result.transcript.trim() ? { ok: true, result: { transcript: result.transcript } } : safeError('AUDIO_UNCLEAR');
+    }
     return containsIdentity(result) ? safeError('IDENTITY_FIELD_FORBIDDEN') : { ok: true, result };
   } catch (error) { return operationError(request.operation, error); }
 }

@@ -2,7 +2,7 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from app.ai import bridge_call, provider_ready
+from app.ai import AiProviderError, bridge_call, provider_ready
 from app.p0_runtime import BridgeError
 
 
@@ -29,6 +29,14 @@ class NodeOnlyAiTests(unittest.TestCase):
         with patch("app.ai.NodeBridge.call", new=AsyncMock(side_effect=BridgeError())):
             with self.assertRaisesRegex(Exception, "Node AI runtime unavailable"):
                 asyncio.run(bridge_call("PARSE_QUANTITY_CHANGE", {"transcript": "15망", "expected_version": 1}))
+
+    def test_unclear_audio_is_preserved_without_retry(self):
+        with patch("app.ai.NodeBridge.call", new=AsyncMock(side_effect=BridgeError("AUDIO_UNCLEAR"))) as call:
+            with self.assertRaises(AiProviderError) as raised:
+                asyncio.run(bridge_call("TRANSCRIBE_AUDIO", {"audio_base64": "YQ==", "content_type": "audio/wav"}))
+
+        self.assertEqual(raised.exception.code, "AUDIO_UNCLEAR")
+        self.assertEqual(call.await_count, 1)
 
     def test_ready_rejects_a_missing_node_binary(self):
         with patch.dict("os.environ", {"NODE_BINARY": "missing-node"}, clear=False), patch(

@@ -8,7 +8,7 @@ const faqContent: Record<Locale, { title: string; items: Array<{ q: string; a: s
     items: [
       { q: '전라도 사투리도 잘 알아듣나요?', a: '네. 자연스러운 사투리 표현을 AI가 작업 맥락에 맞게 정리하며, 애매한 내용은 전달 전에 다시 확인합니다.' },
       { q: '작업자는 앱을 설치해야 하나요?', a: '아니요. 밭머리는 모바일 웹앱으로 제공되어 받은 주소를 브라우저에서 열면 바로 사용할 수 있습니다.' },
-      { q: '어떤 언어를 지원하나요?', a: 'P0에서는 베트남어와 네팔어 작업 안내를 지원합니다.' },
+      { q: '어떤 언어를 지원하나요?', a: '현재 베트남어와 네팔어 작업 안내를 지원합니다.' },
     ],
   },
   vi: {
@@ -16,7 +16,7 @@ const faqContent: Record<Locale, { title: string; items: Array<{ q: string; a: s
     items: [
       { q: 'AI có hiểu tiếng địa phương Jeolla không?', a: 'Có. AI sắp xếp cách nói tự nhiên theo ngữ cảnh công việc và sẽ hỏi lại trước khi gửi nếu có điểm chưa rõ.' },
       { q: 'Người lao động có cần cài ứng dụng không?', a: 'Không. Batmeori là web app di động, chỉ cần mở đường dẫn được gửi bằng trình duyệt.' },
-      { q: 'Dịch vụ hỗ trợ những ngôn ngữ nào?', a: 'Trong P0, hướng dẫn công việc có tiếng Việt và tiếng Nepal.' },
+      { q: 'Dịch vụ hỗ trợ những ngôn ngữ nào?', a: 'Hiện tại, hướng dẫn công việc có tiếng Việt và tiếng Nepal.' },
     ],
   },
   ne: {
@@ -24,7 +24,7 @@ const faqContent: Record<Locale, { title: string; items: Array<{ q: string; a: s
     items: [
       { q: 'AI ले जोल्ला क्षेत्रको बोली बुझ्छ?', a: 'बुझ्छ। AI ले स्वाभाविक बोलीलाई कामको सन्दर्भमा मिलाउँछ र अस्पष्ट कुरा पठाउनुअघि फेरि सोध्छ।' },
       { q: 'कामदारले एप डाउनलोड गर्नुपर्छ?', a: 'पर्दैन। बाटमेओरी मोबाइल वेब एप हो, पठाइएको लिंक ब्राउजरमा खोलेर तुरुन्त प्रयोग गर्न सकिन्छ।' },
-      { q: 'कुन भाषाहरू उपलब्ध छन्?', a: 'P0 मा काम निर्देशन भियतनामी र नेपालीमा उपलब्ध छ।' },
+      { q: 'कुन भाषाहरू उपलब्ध छन्?', a: 'हाल कामका निर्देशन भियतनामी र नेपाली भाषामा उपलब्ध छन्।' },
     ],
   },
 };

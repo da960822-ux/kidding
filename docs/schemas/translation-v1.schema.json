@@ -14,13 +14,13 @@
     "phrase_key": {"type": ["string", "null"]},
     "verified": {"type": "boolean"},
     "source_page": {"type": ["integer", "null"], "minimum": 1},
-    "source_url": {"type": ["string", "null"], "format": "uri"},
+    "source_url": {"type": ["string", "null"], "format": "uri", "pattern": "^https?://"},
     "license": {"type": ["string", "null"]},
     "schema_version": {"const": "1"},
     "contract_version": {"const": "translation-v1"}
   },
   "oneOf": [
-    {"properties": {"source": {"const": "OFFICIAL_GUIDE"}, "guide_lookup": {"const": "HIT"}, "phrase_key": {"type": "string", "minLength": 1}, "verified": {"const": true}, "source_page": {"type": "integer", "minimum": 1}, "source_url": {"type": "string", "format": "uri"}, "license": {"type": "string", "minLength": 1}}},
+    {"properties": {"source": {"const": "OFFICIAL_GUIDE"}, "guide_lookup": {"const": "HIT"}, "phrase_key": {"type": "string", "minLength": 1}, "verified": {"const": true}, "source_page": {"type": "integer", "minimum": 1}, "source_url": {"type": "string", "format": "uri", "pattern": "^https?://"}, "license": {"type": "string", "minLength": 1}}},
     {"properties": {"source": {"const": "AI_TRANSLATION"}, "guide_lookup": {"const": "MISS"}, "phrase_key": {"type": "null"}, "verified": {"const": false}, "source_page": {"type": "null"}, "source_url": {"type": "null"}, "license": {"type": "null"}}},
     {"properties": {"source": {"const": "DETERMINISTIC"}, "guide_lookup": {"const": "NOT_APPLICABLE"}, "phrase_key": {"type": "null"}, "verified": {"const": false}, "source_page": {"type": "null"}, "source_url": {"type": "null"}, "license": {"type": "null"}}}
   ],

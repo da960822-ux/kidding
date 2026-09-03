@@ -2,91 +2,71 @@
 
 PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constraint를 유지한다.
 
-## 핵심 테이블
+## current write와 legacy read
 
-### `work_sessions`
+현재 P0 write 계약은 `structure-v2`/`ontology-v2`다. current two-crop code는 양파 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`와 딸기 `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. 신규 draft와 publish는 이 code만 허용하고 `task_family`와 일치시킨다. `structure-v1`/`ontology-v1` row는 immutable read-only다. migration은 legacy version 또는 asset code를 삭제·reset·rewrite·remap하지 않는다.
 
-| field | type | rule |
-|---|---|---|
-| `id` | UUID | primary key |
-| `location` | JSONB | 원문·종류·정규명; unknown 허용 |
-| `task_family` | text | P0=`ONION` |
-| `status` | enum | P0=`PUBLISHED`; 확인 전 상태는 `work_drafts`에만 존재 |
-| `current_version` | integer | 최초 publish=1, 증가만 허용 |
-| `created_at`, `updated_at` | timestamp | server time |
+## `work_sessions`
 
-owner confirmation은 별도 감사 필드로 기록한다. P0 confirm은 immutable v1을 만들고 즉시 `PUBLISHED`로 전환한다. `current_version`은 최신 published integer를 가리킨다.
+`id` UUID primary key, non-null `farm_id`, `location` JSONB, `task_family`(`ONION|STRAWBERRY`), `status`(`PUBLISHED`), `current_version` integer, immutable `contract_version`, `ontology_version`, `created_at`, `updated_at`를 가진다. 확인 전 데이터는 WorkDraft에만 존재한다.
 
-### `work_drafts`
+## `work_drafts`
 
-`id`, `draft_revision`, `summary_ko`, `transcript`, `interpretation`, `state_json`, `ambiguities`, `risk_assessment_json`, `contract_version`, `created_at`, `updated_at`, `expires_at`를 저장한다. `draft_revision`은 audio supplement마다 증가하고 `expected_draft_revision`과 원자 비교한다. `summary_ko`와 transcript는 owner-only 확인 필드다. confirm transaction에서 최종 transcript와 risk assessment를 WorkVersion으로 복사하고 draft를 제거하며, 미확정 draft도 24시간 뒤 제거한다. raw audio는 저장하지 않는다.
+`id`, non-null `farm_id`, `draft_revision`, `summary_ko`, `transcript`, `interpretation`, `state_json`, `ambiguities`, `contract_version`, `ontology_version`, `confirmed_session_id`, `created_at`, `updated_at`, `expires_at`를 저장한다. supplement마다 revision을 증가시키고 expected revision을 원자 비교한다. raw audio는 저장하지 않는다.
 
-### `work_versions`
+## `work_versions`
 
-| field | type | rule |
-|---|---|---|
-| `id` | UUID | primary key |
-| `work_session_id` | UUID | FK |
-| `version` | integer | session별 unique; 1부터 증가 |
-| `status` | enum | `PUBLISHED`, `SUPERSEDED` |
-| `state_json` | JSONB | `location`, `quantity`, `deadline?`, `safety`, `notes?`, `steps` |
-| `transcript` | text | 감사용; worker public API 반환 금지 |
-| `risk_assessment_json` | JSONB | `safety-policy-v1` immutable gate snapshot |
-| `confirmed_at` | timestamp | owner 확인 시각 |
-| `confirmation_decision` | enum | `CONFIRM` 또는 `PUBLISH_AS_IS` |
-| `override_reason`, `overridden_at` | nullable | non-blocking ambiguity override 감사 |
-| `created_at` | timestamp | server time |
+`id`, `work_session_id`, `version`, `status`(`PUBLISHED|SUPERSEDED`), `state_json`, `transcript`, `confirmed_at`, `confirmation_decision`, `ambiguity_override`, `override_reason`, `overridden_at`, `created_at`를 저장한다. session별 `(work_session_id, version)`은 unique이며 PUBLISHED는 하나만 허용한다. WorkVersion content는 수정하지 않고 새 version을 만든다.
 
-WorkVersion lifecycle의 canonical 값은 `PUBLISHED`, `SUPERSEDED`다. `DRAFT`는 별도 WorkDraft 상태이며 WorkVersion이 아니다. P0 initial confirm은 transaction에서 content-immutable `v1 PUBLISHED`를 만든다. 변경 확인은 현재 `expected_version`을 요구하며 불일치는 `VERSION_CONFLICT`(HTTP 409)다. 새 버전 생성 때 이전 버전 content는 바꾸지 않고 status만 `SUPERSEDED`로 전환한다.
+`state_json`은 `structure-v2` snapshot이다. 새 쓰기의 non-null `task_code`는 8개 current two-crop code만 허용하며 같은 state의 `task_family`와 일치해야 한다. null은 LOW 비안전 미지원 작업을 owner가 승인한 경우에만 허용한다.
 
-모호한 draft는 `ambiguities[]`에 `field`, `message`, `blocking`, `kind`(`SAFETY|TASK|LOCATION|QUANTITY|TIME|OTHER`)를 기록한다. `blocking:false`인 경우 owner가 `PUBLISH_AS_IS` 또는 `SUPPLEMENT`를 선택할 수 있다. 그대로 전달하면 `ambiguity_override`, `override_reason`, `overridden_at`을 version 감사 필드에 기록하고 worker state에 `확인이 필요한 지시`를 표시한다. `SAFETY` ambiguity, HIGH 위험, schema invalid, no executable step은 override할 수 없다. unsupported non-safety task는 `task_code: null` 또는 `UNSUPPORTED` marker와 video null, text+TTS fallback으로 owner가 전달할 수 있다.
+### Ontology migration and immutable history
 
-`state_json.steps[]`는 `{sequence, task_code, title_ko, description_ko, quantity?}`이며 `sequence`는 1부터 연속이다. non-null `task_code`는 P0 allowlist만 허용하고, `null`은 감사된 비안전 `UNSUPPORTED` fallback에만 허용한다. `quantity`는 `{value: positive integer, unit: non-empty string}`이다.
+기존 WorkVersion은 저장된 `state_json`과 retired code를 그대로 보존해 읽는다. migration은 WorkVersion을 reset, delete, rewrite하거나 retired code를 새 code로 remap하지 않는다. legacy v1 version은 read-only이며 신규 publish는 `structure-v2`/`ontology-v2`의 current 8개 two-crop code만 쓴다.
 
-각 step은 `video`(asset id/url/provenance/review_status/safety_level) 또는 null, `audio_url` 또는 null, `delivery_mode`(`VIDEO|TEXT_TTS|TEXT`), `unsupported_reason` 또는 null을 가진다. `task_code:null`은 owner가 override한 non-safety `UNSUPPORTED`에만 허용하고 `delivery_mode`는 `TEXT_TTS` 또는 `TEXT`다. `location`은 `{raw_text, kind, canonical_name}`과 worker 표시용 `location_display`를 보존한다. DEICTIC은 장소를 정규화하지 않는다.
+## `worker_briefing_packages`와 원자 게시
 
-각 step의 `translations[]`는 `segment`, `language_code`, `text`, `source`, `verified`, `guide_lookup`과 nullable source metadata를 가진다. `source`는 `OFFICIAL_GUIDE|AI_TRANSLATION|DETERMINISTIC`이다. `DETERMINISTIC`은 수량·순서 template 전용이며 `guide_lookup: NOT_APPLICABLE`이다.
+각 WorkVersion에는 immutable `worker-briefing-v2` JSON package가 `vi`, `ne` 각각 하나씩 있다. `publish_work_version_with_packages` RPC는 farm/session/draft 및 expected version을 lock하고, v2 state와 두 package를 먼저 insert한 뒤 기존 PUBLISHED를 `SUPERSEDED`로 바꾼다. 어떤 validation, package insert, version conflict가 실패해도 transaction 전체가 rollback된다. 기존 `structure-v1` session/draft는 `legacy_read_only`다.
 
-### 수량 변경 저장 규칙
+## `worker_links`
 
-change-audio preview는 저장하지 않고 `READY|AMBIGUOUS`, quantity/null, ambiguities, `expected_version`만 반환한다. 별도 proposal table은 두지 않는다. direct confirm request의 `quantity`, `expected_version`, `Idempotency-Key`를 검증한 transaction만 새 WorkVersion을 만들며, confirmed version 자체가 변경 감사 기록이다.
+근로자 개인을 저장하지 않는다. 한 row는 `work_session_id`, `language_code`(`vi|ne`), `token_hash`, `issued_at`, `expires_at`, `revoked_at`, `issue_idempotency_key`를 가진 익명 전달 링크다.
 
-### `worker_links`
+같은 session·언어에 대해 재발급하면 기존 활성 링크를 revoke하고 새 24시간 링크를 만든다. raw token은 응답에서 한 번만 반환하고 DB에는 hash만 저장한다. 유효 링크는 매번 해당 session의 최신 PUBLISHED version을 resolve한다.
 
-`id`, `work_session_id`, `language_code`, `token_hash`, `issued_at`, `expires_at`, `revoked_at?`, `issue_idempotency_key`를 저장한다. 익명 language-specific link row가 P0 remote delivery다. `expires_at = issued_at + 24h`; raw token은 DB에 저장하지 않는다. raw URL은 단일 create/reissue 응답에서 한 번만 반환하며 regular owner read에는 반환하지 않는다. 유효 링크 resolve는 매번 최신 `PUBLISHED` version이다. 같은 session/language 재발급은 기존 active link를 revoke하고 새 24h link를 만든다.
+## `today_work_teams` / `today_work_team_members` / `today_work_assignments`
 
-### `guide_phrases` / `guide_translations`
+`today_work_teams`는 `id`, Asia/Seoul `work_date`(unique), `invite_token_hash`, `invite_issue_idempotency_key`, `issued_at`, `expires_at`, `created_at`를 가진다. raw QR token은 응답에서만 URL로 반환하고 DB에는 hash만 둔다. 같은 idempotency key는 같은 QR을 다시 반환한다.
 
-`guide_phrases`: `phrase_key`, `category`(`WORK_TERM|WORK_INSTRUCTION|SAFETY`), `canonical_ko`, `phrase_type`.
+`today_work_team_members`는 `id`, `team_id`, `display_name`, `language_code`(`vi|ne`), `joined_at`, `join_idempotency_key`를 가진다. `(team_id, join_idempotency_key)`는 unique다. 영구 worker profile, 전화번호, 국적, 로그인 credential은 저장하지 않는다.
 
-`guide_translations`: `phrase_key`, `language_code`, `translated_text`, `source_name`, `source_page`, `source_url`, `license`, `verified`. `(phrase_key, language_code)`는 unique다. 출처와 검수 상태는 언어별 PDF가 다르므로 번역 row가 소유한다.
+`today_work_assignments`는 `id`, `team_member_id`, `work_session_id`, `assigned_at`, `revoked_at`를 가진다. 활성 연결은 member/session별 하나이며, worker 읽기는 연결된 WorkSession의 latest `PUBLISHED` version을 resolve한다.
 
-source page/url/license 또는 사람 검수가 없으면 `verified=true` 금지, `OFFICIAL_GUIDE` 금지. 실제 값은 PDF 대조 뒤 data collection gate를 통과한 것만 import한다. 없는 값을 추정하지 않는다.
+## `guide_phrases` / `guide_translations`
 
-농식품부 보도자료는 가이드가 10쪽 포켓북·8개 언어·③ 농작업 실무단어/④ 안전수칙·공공누리 출처표시 조건임을 설명하는 catalog 근거로만 사용한다: https://www.mafra.go.kr/bbs/home/792/577794/artclView.do. 개별 언어 PDF URL/page/번역 문구는 확보·대조 전까지 row에 넣지 않으며, 보도자료 URL을 번역 source로 가장하지 않는다.
+`guide_phrases`: `phrase_key`, `category`(`WORK_TERM|WORK_INSTRUCTION|SAFETY`), `canonical_ko`, `phrase_type`, `source_name`, `source_page`, `source_url`, `license`, `verified`.
 
-### `visual_assets`
+`guide_translations`: `phrase_key`, `language_code`, `translated_text`, `verified`. source/page/license와 사람 검수가 없으면 공식 번역으로 부르지 않는다. 실제 PDF 대조 전에는 data collection gate 상태다.
 
-`id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider?`, `prompt_version`, `generated_at`, `reviewer?`, `review_status`, `safety_level`, `purpose`, `captions_text`. API는 `public_path`를 배포 origin과 결합해 `video_url`로 반환한다.
+## `visual_assets`
 
-P0 허용 provenance는 `AI_GENERATED_PREGENERATED`; 6개 task_code 모두 사람 검수 `APPROVED`가 필요하다. 기계 정지 상태 수작업만 LOW로 허용한다. 운전·회전날·농약·고소작업은 HIGH로 기록하고 게시하지 않는다. `LOADING`·`WAREHOUSE_TRANSPORT` 자산은 차량 운전 장면을 포함하지 않는다.
+`id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`를 가진다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`만 게시한다. DB constraint는 historical asset code를 남겨 existing version 참조를 보존하고, 새 `structure-v2` publish는 current 8개 code만 사용한다. legacy asset code는 reset·삭제·자동 변환하지 않는다.
 
-영상은 FE `public/videos`에 둔 정적 `video/*` 자산이며 배포 플랫폼 CDN으로 제공한다. 모바일 재생 가능한 크기와 `captions_text`를 가져야 하고 runtime 생성·별도 object storage는 P0에 두지 않는다.
+## `tts_assets`
 
-### owner PIN session
+게시된 step의 언어별 텍스트를 SHA-256 `text_hash`로 cache한다. `text_hash`, `language_code`(`vi|ne`), `audio_bytes`, `content_type`, `created_at`를 가지며 `(text_hash, language_code)`는 unique다. TTS는 이 cache를 먼저 조회하고, 성공한 audio만 `audio_url`로 노출한다. 생성 실패는 row를 만들지 않고 해당 언어 step을 `audio_url:null`, `delivery_mode:TEXT`로 전달한다. audio는 cache일 뿐 text가 source of truth다.
 
-P0는 별도 session table 없이 서버 secret으로 서명한 짧은 만료 cookie를 쓴다. cookie는 `HttpOnly`, `Secure`, `SameSite=None`이며 모든 owner mutation은 exact Origin/credentials를 요구한다. CSRF는 exact `Origin` 검증으로 막고 별도 CSRF header는 두지 않는다. PIN 원문과 cookie는 DB·로그에 저장하지 않는다. P1 회원가입/계정관리는 이 모델 범위 밖이다.
+## owner PIN session과 공개 경계
 
-## 보존·공개 경계
+P0는 별도 owner session table 없이 service-role 전용 `authenticate_demo_owner(p_pin)`이 active `demo_owners` hash를 검증해 반환한 `owner_id`, `farm_id`, expiry를 담아 server secret으로 서명한 짧은 cookie를 사용한다. `pin_hash`는 Python·client response에 노출하지 않는다. `seed_demo_owner(farm_slug, p_pin)`은 deployment secret input만 받아 salted `pgcrypto` hash를 upsert한다. `HttpOnly`, `Secure`, `SameSite=None`, exact Origin 검증을 유지하며 static CSRF header는 없다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 24시간 임시 roster용으로만 저장한다.
 
-raw audio는 STT 처리 중 임시 저장만 하고 성공·실패 무관 즉시 삭제한다. transcript는 work version 감사용으로 보관한다. worker public API는 transcript, risk assessment, token hash를 반환하지 않는다.
+raw audio는 즉시 삭제하고 transcript는 owner 감사용 version에만 남긴다. remote worker 응답에는 transcript, token hash, secret을 반환하지 않는다. 모든 timestamp는 UTC다.
 
-모든 저장 timestamp는 UTC다. 업무일 계산만 Asia/Seoul을 사용한다. session별 version unique와 current-version 증가를 transaction으로 보장한다. TTS cache key는 text content hash이며 text가 source of truth다. worker link token은 128-bit 이상 random을 hash-at-rest로 보관하고 로그에 남기지 않는다.
+## 관계
 
-## 관계와 소유권
-
-- `work_sessions 1—N work_versions`; session별 `(work_session_id, version)` unique.
-- `work_sessions 1—N worker_links`; link는 하나의 `language_code`를 가지며 재발급 시 같은 language의 기존 row를 revoke한다.
-- `guide_phrases 1—N guide_translations`; `(phrase_key, language_code)` unique.
-- `visual_assets.task_code`는 6개 ontology code만 참조한다.
-- BE가 schema·migration·transaction을 소유하고, AI는 검수된 guide/asset manifest만 제공한다. FE는 DB에 직접 접근하지 않고 `openapi.yaml`만 사용한다.
+- `work_sessions 1—N work_versions`
+- `work_sessions 1—N worker_links`
+- `today_work_teams 1—N today_work_team_members 1—N today_work_assignments`
+- `today_work_assignments N—1 work_sessions`
+- `guide_phrases 1—N guide_translations`
+- `visual_assets.task_code`는 historical code와 current 8개 two-crop code를 모두 보존; 새 `structure-v2` write는 current code만 사용

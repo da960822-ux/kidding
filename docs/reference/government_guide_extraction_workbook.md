@@ -4,7 +4,7 @@ P0는 베트남어(`vi`)·네팔어(`ne`)의 농작업 표현과 안전수칙만
 
 ## CSV
 
-`guide_phrases.csv`
+`ai/manifests/guide_phrases.csv`
 
 ```csv
 phrase_key,category,canonical_ko,phrase_type
@@ -12,7 +12,7 @@ WORK_001,WORK_TERM,수확하다,TERM
 SAFE_001,SAFETY,장갑을 착용하세요,INSTRUCTION
 ```
 
-`guide_translations.csv`
+`ai/manifests/guide_translations.csv`
 
 ```csv
 phrase_key,language_code,translated_text,source_name,source_page,source_url,license,verified

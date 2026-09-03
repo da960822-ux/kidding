@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batmeori.example.invalid/schemas/worker-briefing-v2.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["session_id", "version", "contract_version", "ontology_version", "language_code", "context", "badges", "steps", "source_detail", "tts", "video"],
+  "properties": {
+    "session_id": {"type": "string", "minLength": 1}, "version": {"type": "integer", "minimum": 1}, "contract_version": {"const": "worker-briefing-v2"}, "ontology_version": {"const": "ontology-v2"}, "language_code": {"enum": ["vi", "ne"]},
+    "context": {"type": "object", "additionalProperties": false, "required": ["task_family", "location_display", "quantity", "deadline", "notes"], "properties": {"task_family": {"enum": ["ONION", "STRAWBERRY"]}, "location_display": {"type": "string"}, "quantity": {"type": ["object", "string", "null"]}, "deadline": {"type": ["string", "null"]}, "notes": {"type": ["string", "null"]}}},
+    "badges": {"type": "array", "items": {"type": "string"}},
+    "steps": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["sequence", "task_code", "title", "description", "delivery_mode"], "properties": {"sequence": {"type": "integer", "minimum": 1}, "task_code": {"type": ["string", "null"]}, "title": {"type": "string"}, "description": {"type": "string"}, "delivery_mode": {"enum": ["VIDEO", "TEXT_TTS", "TEXT"]}}}},
+    "source_detail": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["step_sequence", "segment", "source", "guide_lookup", "verified", "source_page", "source_url", "license"], "properties": {"step_sequence": {"type": "integer", "minimum": 1}, "segment": {"type": "string"}, "source": {"enum": ["OFFICIAL_GUIDE", "AI_TRANSLATION", "DETERMINISTIC"]}, "guide_lookup": {"enum": ["HIT", "MISS", "NOT_APPLICABLE"]}, "verified": {"type": "boolean"}, "source_page": {"type": ["integer", "null"]}, "source_url": {"type": ["string", "null"]}, "license": {"type": ["string", "null"]}}}},
+    "tts": {"type": "object", "additionalProperties": false, "required": ["status", "text_hash", "audio_url"], "properties": {"status": {"enum": ["READY", "FALLBACK"]}, "text_hash": {"type": "string", "minLength": 1}, "audio_url": {"type": ["string", "null"]}}},
+    "video": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["step_sequence", "asset_id", "task_code", "video_url", "provenance", "review_status", "safety_level", "captions_text"], "properties": {"step_sequence": {"type": "integer", "minimum": 1}, "asset_id": {"type": "string"}, "task_code": {"type": "string"}, "video_url": {"type": "string"}, "provenance": {"const": "AI_GENERATED_PREGENERATED"}, "review_status": {"const": "APPROVED"}, "safety_level": {"const": "LOW"}, "captions_text": {"type": "string"}}}}
+  }
+}

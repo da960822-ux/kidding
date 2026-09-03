@@ -1,0 +1,42 @@
+{
+  "reference_version": "jeolla-structure-v1",
+  "scope": {"crop": "ONION", "task_codes": ["ONION_HARVEST", "ONION_COLLECT", "BAGGING", "LOADING", "WAREHOUSE_TRANSPORT", "STACKING"]},
+  "dialect_forms": [
+    {"form": "나뚸", "normalized": "놓아두다", "role": "RESULT_STATE", "creates_step": false},
+    {"form": "뿔고", "normalized": "완료 보조용언", "role": "COMPLETION_AUXILIARY", "creates_step": false},
+    {"form": "잉", "normalized": "담화 표지", "role": "DISCOURSE_MARKER", "creates_field": false},
+    {"form": "카만 나뚸", "normalized": "가만히 놓아두다", "role": "RESULT_STATE", "creates_step": false},
+    {"form": "차말로", "normalized": "참말로", "role": "DISCOURSE_MARKER", "creates_field": false},
+    {"form": "머시기", "normalized": "미지시 placeholder", "role": "UNRESOLVED", "requires_ambiguity": true},
+    {"form": "여그", "normalized": "여기", "role": "DEICTIC_LOCATION", "requires_ambiguity": true},
+    {"form": "써", "normalized": "필요·당위 보조용언", "role": "MODAL_AUXILIARY", "creates_step": false}
+  ],
+  "task_semantics": [
+    {"task_code": "ONION_HARVEST", "evidence_verbs": ["캐다"], "evidence_stems": ["캐"], "requires_explicit_destination": false},
+    {"task_code": "ONION_COLLECT", "evidence_verbs": ["줍다", "모으다"], "evidence_stems": ["줍", "주워", "모아", "모으"], "requires_explicit_destination": false, "merge_surface_verbs": true},
+    {"task_code": "BAGGING", "evidence_verbs": ["담다"], "evidence_stems": ["담"], "requires_explicit_destination": false},
+    {"task_code": "LOADING", "evidence_verbs": ["싣다"], "evidence_stems": ["싣", "실어"], "requires_explicit_destination": false},
+    {"task_code": "WAREHOUSE_TRANSPORT", "evidence_verbs": ["옮기다"], "evidence_stems": ["옮"], "requires_explicit_destination": true},
+    {"task_code": "STACKING", "evidence_verbs": ["쌓다"], "evidence_stems": ["쌓"], "requires_explicit_destination": false}
+  ],
+  "field_rules": {
+    "quantity": "Set only for one explicit positive integer and its immediate unit. Otherwise preserve unknown and add QUANTITY ambiguity.",
+    "location": {"deictic_forms": ["저짝", "저쪽", "저기", "여그", "한쪽"], "trailing_particles": ["에서", "에게", "으로", "에", "로"], "deictic_interpretation": "AMBIGUOUS", "embedded_deictic_is_named": true, "named_head_terms": ["밭", "창고"], "named_terms": ["밭가"], "output_without_trailing_particle": true},
+    "notes": {"allowed_roles": ["CROP_CONDITION", "WORK_METHOD"], "excluded_roles": ["ACTION", "RESULT_STATE", "COMPLETION_AUXILIARY", "DISCOURSE_MARKER", "MODAL_AUXILIARY", "DESTINATION_OR_ACTION_COMPLEMENT"]},
+    "recalled_context": {"markers": ["어제", "이전", "지난"], "requires_task_and_location_ambiguity": true, "creates_step": false},
+    "action_complements": ["한데"],
+    "quantity_units": ["망"]
+  },
+  "invariants": [
+    "Every step has an explicit action-verb evidence span and appears in transcript order.",
+    "Result states and auxiliaries never create a step or a note.",
+    "WAREHOUSE_TRANSPORT requires an explicit destination; do not infer one from loading.",
+    "A DEICTIC token embedded in an explicit named-place noun phrase is NAMED; otherwise it has canonical_name null, interpretation AMBIGUOUS, and one non-blocking LOCATION ambiguity.",
+    "A named location uses the particle-stripped phrase for both raw_text and canonical_name.",
+    "Surface verbs in one coordinated ONION_COLLECT action merge into one step.",
+    "A recalled-context reference without a current task or location creates blocking TASK and LOCATION ambiguities and no step.",
+    "UNSUPPORTED is only for an explicit non-safety task outside the allowed task codes; unresolved work is AMBIGUOUS.",
+    "No field is created from a discourse marker, an auxiliary, or unsupported inference."
+  ],
+  "source": {"publisher": "국립국어원", "report": "2024년 세대별·성별 지역어 변이 조사", "printed_pages": "100-102", "pdf_pages": "110-112", "synthetic_eval_only": true}
+}

@@ -18,7 +18,7 @@
         "canonical_name": {"type": ["string", "null"]}
       }
     },
-    "task_family": {"const": "ONION"},
+    "task_family": {"enum": ["ONION", "STRAWBERRY"]},
     "quantity": {
       "oneOf": [
         {"type": "object", "additionalProperties": false, "required": ["value", "unit"], "properties": {"value": {"type": "integer", "minimum": 1}, "unit": {"type": "string", "minLength": 1}}},
@@ -38,7 +38,7 @@
         "required": ["sequence", "task_code", "title_ko", "description_ko", "unsupported_reason"],
         "properties": {
           "sequence": {"type": "integer", "minimum": 1},
-          "task_code": {"enum": ["ONION_HARVEST", "ONION_COLLECT", "BAGGING", "LOADING", "WAREHOUSE_TRANSPORT", "STACKING", null]},
+          "task_code": {"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT", "STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING", null]},
           "title_ko": {"type": "string", "minLength": 1},
           "description_ko": {"type": "string", "minLength": 1},
           "unsupported_reason": {"type": ["string", "null"]}
@@ -90,6 +90,34 @@
               "properties": {"blocking": {"const": true}, "kind": {"const": "TASK"}}
             },
             "minContains": 1
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"task_family": {"const": "ONION"}}, "required": ["task_family"]},
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "task_code": {"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT", null]}
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {"properties": {"task_family": {"const": "STRAWBERRY"}}, "required": ["task_family"]},
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "task_code": {"enum": ["STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING", null]}
+              }
+            }
           }
         }
       }

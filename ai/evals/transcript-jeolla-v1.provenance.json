@@ -1,0 +1,608 @@
+{
+  "dataset_version": "transcript-jeolla-v1",
+  "region": "JEOLLA",
+  "synthetic": true,
+  "review_status": "PENDING",
+  "reviewer": null,
+  "reviewed_at": null,
+  "limitations": [
+    "Synthetic recombination of forms printed in the cited guide, not transcripts from native Jeolla speakers.",
+    "Jeolla subregion, generation, and individual variation are not represented.",
+    "Experiment-only until a native speaker reviews every case."
+  ],
+  "sources": [
+    {
+      "id": "nikl-2024-regional-variation",
+      "title": "2024년 세대별·성별 지역어 변이 조사",
+      "url": "https://www.korean.go.kr/front/reportData/reportDataView.do?mn_id=207&report_seq=1181",
+      "pages": "99-103 (printed); 109-113 (PDF)",
+      "publisher": "국립국어원",
+      "license": "공공누리 제4유형(출처표시·상업적 이용금지·변경금지)",
+      "usage_note": "The report is used only to identify exact dialect forms. Dataset sentences are newly written and do not reproduce report passages."
+    }
+  ],
+  "guide_forms": [
+    {
+      "form": "나뚸",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 100,
+      "pdf_page": 110,
+      "standard_meaning": "놓아두다",
+      "dataset_rule": "Recognize as leaving the result in place; do not invent another task."
+    },
+    {
+      "form": "뿔고",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 100,
+      "pdf_page": 110,
+      "standard_meaning": "버리고(완료 보조용언)",
+      "dataset_rule": "Treat as a completion auxiliary joined to the preceding task, not a separate task."
+    },
+    {
+      "form": "잉",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 100,
+      "pdf_page": 110,
+      "standard_meaning": "담화 표지",
+      "dataset_rule": "Ignore for task, quantity, location, deadline, and safety extraction."
+    },
+    {
+      "form": "카만 나뚸",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 100,
+      "pdf_page": 110,
+      "standard_meaning": "가만히 놔둬",
+      "dataset_rule": "Recognize as leaving the completed result in place; do not add an unsupported step."
+    },
+    {
+      "form": "차말로",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 101,
+      "pdf_page": 111,
+      "standard_meaning": "참말로",
+      "dataset_rule": "Treat as an adverbial discourse expression; do not create a task field."
+    },
+    {
+      "form": "머시기",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 101,
+      "pdf_page": 111,
+      "standard_meaning": "무엇(사물) 또는 아무개(사람)",
+      "dataset_rule": "Preserve the affected field as unknown and add an ambiguity."
+    },
+    {
+      "form": "여그",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 102,
+      "pdf_page": 112,
+      "standard_meaning": "여기",
+      "dataset_rule": "Treat as a deictic location with canonical_name null and a non-blocking LOCATION ambiguity."
+    },
+    {
+      "form": "써",
+      "source_id": "nikl-2024-regional-variation",
+      "printed_page": 102,
+      "pdf_page": 112,
+      "standard_meaning": "되다(필요·당위 보조용언)",
+      "dataset_rule": "Treat as necessity attached to the task, not as a deadline or another task."
+    }
+  ],
+  "cases": [
+    {
+      "id": "structure-001",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "차말로",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 101,
+          "pdf_page": 111
+        }
+      ]
+    },
+    {
+      "id": "structure-002",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "여그",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "structure-003",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-004",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "차말로",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 101,
+          "pdf_page": 111
+        }
+      ]
+    },
+    {
+      "id": "structure-005",
+      "markers": [
+        {
+          "form": "카만 나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-006",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-007",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "써",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "structure-008",
+      "markers": [
+        {
+          "form": "카만 나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-009",
+      "markers": [
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "여그",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "structure-010",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "차말로",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 101,
+          "pdf_page": 111
+        }
+      ]
+    },
+    {
+      "id": "structure-011",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-012",
+      "markers": [
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-013",
+      "markers": [
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-014",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-015",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "차말로",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 101,
+          "pdf_page": 111
+        }
+      ]
+    },
+    {
+      "id": "structure-016",
+      "markers": [
+        {
+          "form": "카만 나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-017",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "써",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "structure-018",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "써",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "structure-019",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "structure-020",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "써",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-001",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "머시기",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 101,
+          "pdf_page": 111
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-002",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "여그",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-003",
+      "markers": [
+        {
+          "form": "뿔고",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-004",
+      "markers": [
+        {
+          "form": "나뚸",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "여그",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 102,
+          "pdf_page": 112
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-005",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "quantity-change-001",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "quantity-change-002",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "quantity-change-003",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    },
+    {
+      "id": "quantity-change-004",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        },
+        {
+          "form": "차말로",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 101,
+          "pdf_page": 111
+        }
+      ]
+    },
+    {
+      "id": "quantity-change-005",
+      "markers": [
+        {
+          "form": "잉",
+          "source_id": "nikl-2024-regional-variation",
+          "printed_page": 100,
+          "pdf_page": 110
+        }
+      ]
+    }
+  ]
+}

@@ -21,9 +21,12 @@ WorkVersion 안에서 순서가 있는 하나의 실행 단계.
 _Avoid_: action, instruction (일반 문장)
 
 **task_code**  
-TaskStep의 정규 행위를 식별하는 대문자 snake case 코드. P0 허용값은 `ONION_HARVEST`, `ONION_COLLECT`, `BAGGING`, `LOADING`, `WAREHOUSE_TRANSPORT`, `STACKING`이다.
+TaskStep의 정규 행위를 식별하는 대문자 snake case 코드. P0 허용값은 양파의 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`와 딸기의 `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. non-null 코드는 같은 WorkState의 `task_family`와 반드시 일치한다.
 `task_code:null`은 새 코드가 아니라, 농장주가 전달을 선택한 비안전 미지원 작업을 뜻한다.
 _Avoid_: crop code, free-text action
+
+**task_family**
+P0 작업 대상 작물. `ONION` 또는 `STRAWBERRY`만 허용한다. 새 작물은 free-text나 별칭으로 추가하지 않고, ontology·schema·BE allowlist·영상 manifest·평가를 함께 통과해야 한다.
 
 **quantity**  
 작업 대상의 수치와 단위 묶음. P0 예시는 `20`과 `망`이다.
@@ -82,7 +85,17 @@ GuidePhrase에 연결된 언어별 공식 번역. source page/url/license와 사
 ## 전달
 
 **WorkerLink**  
-WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 링크. 로그인 없이 열며 고정 버전이 아니라 Latest Published를 보여준다.
+WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 browser 링크. 공개 URL은 `/w/{token}`이며 로그인 없이 열고 JSON assignment를 통해 고정 버전이 아닌 Latest Published를 보여준다.
+
+**TodayWorkTeam**
+Asia/Seoul의 오늘 날짜에만 유효한 익명 작업팀. 농장주가 QR 하나를 열고, 참가자는 같은 QR에서 별명과 `vi|ne`만 제출한다. 영구 근로자 명부나 계정이 아니다.
+
+**TeamMember**
+TodayWorkTeam에 속한 임시 참가자. 별명·선택 언어·참가 시각만 가지며, 해당 브라우저의 서명 cookie로만 자기 배정을 읽는다.
+_Avoid_: Worker (영구 고용인·계정을 뜻함)
+
+**TeamAssignment**
+TeamMember와 WorkSession의 연결. 근로자 화면은 연결된 WorkSession의 Latest Published를 읽으므로 수량 버전은 고정하지 않는다.
 
 **Delivery mode**  
 P0 owner의 전달 선택. `CO_PRESENT`는 owner cookie briefing에서 언어를 고르고 같이 본다. `REMOTE`는 언어 하나로 익명 WorkerLink를 발급한다.
@@ -104,3 +117,9 @@ non-blocking ambiguity를 그대로 전달할 때 owner가 고르는 `EXPERIENCE
 
 **Demo Fallback**  
 네트워크·provider 장애 때 쓰는 고정 fixture. 화면에 `DEMO FALLBACK` badge를 표시하며 live AI 결과로 가장하지 않는다.
+
+**legacy task code**
+현재 two-crop allowlist에서 retired된 stored TaskStep code. immutable WorkVersion에서만 저장된 값 그대로 읽으며, 새 WorkDraft·publish·quantity-confirm에는 쓸 수 없다. reset·rewrite·자동 remap하지 않는다.
+
+**WorkerBriefing**
+CO_PRESENT, remote, TodayWorkTeam assignment가 같은 immutable WorkVersion에서 읽는 언어별 DTO. transcript, raw audio, risk assessment, token hash, owner/farm/member identity는 포함하지 않는다.

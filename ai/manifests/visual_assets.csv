@@ -1,0 +1,7 @@
+id,task_code,asset_type,public_path,provenance,generator_provider,prompt_version,generated_at,reviewer,review_status,safety_level,purpose,captions_text
+visual-plan-onion-harvest,ONION_HARVEST,,,,,,,,PENDING,,,
+visual-plan-onion-collect,ONION_COLLECT,,,,,,,,PENDING,,,
+visual-plan-bagging,BAGGING,,,,,,,,PENDING,,,
+visual-plan-loading,LOADING,,,,,,,,PENDING,,,
+visual-plan-warehouse-transport,WAREHOUSE_TRANSPORT,,,,,,,,PENDING,,,
+visual-plan-stacking,STACKING,,,,,,,,PENDING,,,

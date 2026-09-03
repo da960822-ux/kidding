@@ -2,6 +2,10 @@
 
 이 정책은 AI가 위험을 추측해 낮추지 못하게 하는 publish gate다. BE는 AI extraction과 deterministic rule을 합친다. 하나라도 HIGH면 HIGH, HIGH 없이 하나라도 UNKNOWN이면 UNKNOWN, 모두 LOW일 때만 LOW다.
 
+## current contract guard
+
+`structure-v2`/`ontology-v2` current-code family/task-code mismatch, retired 또는 unknown code를 새 write에 쓰는 경우, schema invalidity, HIGH/UNKNOWN risk, no executable step은 publish blocker다. `structure-v1`은 read-only다. Worker response에는 risk assessment를 포함하지 않으며 video metadata는 APPROVED/LOW만 허용한다.
+
 ## `risk_assessment`
 
 | field | type | rule |
@@ -22,7 +26,6 @@
 | 차량 운전·차량 이동 작업 | HIGH | BLOCKED |
 | 회전날·동력 기계·농약/화학물질·고소 작업 | HIGH | BLOCKED |
 | 안전 맥락 부족 또는 safety ambiguity | UNKNOWN | BLOCKED |
-| `ONION_TRANSPORT`의 사람 손 운반 | LOW | 차량·동력 장비 이동이 없고 다른 blocking gate가 없을 때만 가능 |
-| `ONION_TRANSPORT`에서 차량·동력 장비 운전 또는 이동 | HIGH | BLOCKED |
+| `ONION_TRANSPORT`의 수작업, 차량·동력 장비를 작동하거나 이동시키지 않는 경우만 | LOW | 다른 blocking gate가 없을 때만 가능 |
 
 BE가 이 행렬과 interpretation으로 게시 결과를 계산한다. HIGH/UNKNOWN, safety ambiguity, invalid schema, 또는 executable step 없음은 override할 수 없다. HIGH asset은 기록할 수 있지만 publish하지 않는다. 안전표현은 verified `OFFICIAL_GUIDE` provenance가 없으면 publish하지 않는다.

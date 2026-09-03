@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://batmeori.invalid/schemas/safety-policy-v1.schema.json",
+  "title": "Batmeori safety-policy-v1 assessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["level", "reasons", "schema_version", "contract_version"],
+  "properties": {
+    "level": {"enum": ["LOW", "HIGH", "UNKNOWN"]},
+    "reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["VEHICLE_OPERATION", "ROTATING_BLADE", "PESTICIDE_OR_CHEMICAL", "WORK_AT_HEIGHT", "POWERED_MACHINERY", "INSUFFICIENT_CONTEXT", "OTHER_HIGH_RISK"]}
+    },
+    "schema_version": {"const": "1"},
+    "contract_version": {"const": "safety-policy-v1"}
+  },
+  "allOf": [
+    {"if": {"properties": {"level": {"const": "LOW"}}}, "then": {"properties": {"reasons": {"maxItems": 0}}}},
+    {"if": {"properties": {"level": {"enum": ["HIGH", "UNKNOWN"]}}}, "then": {"properties": {"reasons": {"minItems": 1}}}}
+  ]
+}

@@ -15,7 +15,6 @@ const localeLabels: Record<Locale, string> = {
   ko: '한국어',
   vi: 'Tiếng Việt',
   ne: 'नेपाली',
-  km: 'ភាសាខ្មែរ',
 };
 
 export function Header({ content, locale, onLocaleChange, appHref }: HeaderProps) {

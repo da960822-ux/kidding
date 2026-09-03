@@ -1,0 +1,8 @@
+{"id":"jeolla-v2-01","dataset_version":"transcript-jeolla-v2","transcript":"양파 캐부러","expected":{"task_family":"ONION","task_code":"ONION_HARVEST"}}
+{"id":"jeolla-v2-02","dataset_version":"transcript-jeolla-v2","transcript":"양파 다듬어부러","expected":{"task_family":"ONION","task_code":"ONION_TRIMMING"}}
+{"id":"jeolla-v2-03","dataset_version":"transcript-jeolla-v2","transcript":"양파 갈라 놔부러","expected":{"task_family":"ONION","task_code":"ONION_SORTING"}}
+{"id":"jeolla-v2-04","dataset_version":"transcript-jeolla-v2","transcript":"양파 창고로 날러부러","expected":{"task_family":"ONION","task_code":"ONION_TRANSPORT"}}
+{"id":"jeolla-v2-05","dataset_version":"transcript-jeolla-v2","transcript":"딸기 따부러","expected":{"task_family":"STRAWBERRY","task_code":"STRAWBERRY_HARVEST"}}
+{"id":"jeolla-v2-06","dataset_version":"transcript-jeolla-v2","transcript":"딸기 갈라 놔부러","expected":{"task_family":"STRAWBERRY","task_code":"STRAWBERRY_SORTING"}}
+{"id":"jeolla-v2-07","dataset_version":"transcript-jeolla-v2","transcript":"딸기 상한지 봐부러","expected":{"task_family":"STRAWBERRY","task_code":"STRAWBERRY_INSPECTION"}}
+{"id":"jeolla-v2-08","dataset_version":"transcript-jeolla-v2","transcript":"딸기 담아부러","expected":{"task_family":"STRAWBERRY","task_code":"STRAWBERRY_PACKING"}}

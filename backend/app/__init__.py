@@ -1,0 +1,1 @@
+"""Batmeori FastAPI application."""

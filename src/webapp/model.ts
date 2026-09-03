@@ -1,5 +1,5 @@
 export type AppRole = 'owner' | 'worker';
-export type WorkerLocale = 'vi' | 'ne' | 'km';
+export type WorkerLocale = 'vi' | 'ne';
 
 export type AppScreen =
   | 'role'

@@ -1,0 +1,2 @@
+{"id":"tts-smoke-vi-pending","language_code":"vi","text":null,"text_sha256":null,"model":"gpt-4o-mini-tts","voice":"alloy","response_format":"mp3","status":"PENDING","audio_sha256":null,"recorded_at":null,"contract_version":"tts-v1"}
+{"id":"tts-smoke-ne-pending","language_code":"ne","text":null,"text_sha256":null,"model":"gpt-4o-mini-tts","voice":"alloy","response_format":"mp3","status":"PENDING","audio_sha256":null,"recorded_at":null,"contract_version":"tts-v1"}

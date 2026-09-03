@@ -96,11 +96,31 @@
     },
     {
       "if": {"properties": {"task_family": {"const": "ONION"}}, "required": ["task_family"]},
-      "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT", null]}}}}}}
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "task_code": {"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT", null]}
+              }
+            }
+          }
+        }
+      }
     },
     {
       "if": {"properties": {"task_family": {"const": "STRAWBERRY"}}, "required": ["task_family"]},
-      "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"enum": ["STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING", null]}}}}}}
+      "then": {
+        "properties": {
+          "steps": {
+            "items": {
+              "properties": {
+                "task_code": {"enum": ["STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING", null]}
+              }
+            }
+          }
+        }
+      }
     }
   ]
 }

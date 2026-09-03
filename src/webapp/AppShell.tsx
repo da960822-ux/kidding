@@ -6,13 +6,14 @@ import {
   LockKeyhole,
   LogOut,
   Menu,
+  Sprout,
   UserRound,
   UsersRound,
   X,
 } from 'lucide-react';
 import { useState, type PropsWithChildren } from 'react';
 import type { AppRole, AppScreen, WorkerLocale } from './model';
-import { BrandMark } from '../components/BrandMark';
+import { isMockApi } from './api';
 
 interface AppShellProps extends PropsWithChildren {
   role: AppRole;
@@ -21,7 +22,6 @@ interface AppShellProps extends PropsWithChildren {
   go: (screen: AppScreen) => void;
   setWorkerLocale: (locale: WorkerLocale) => void;
   hideNavigation?: boolean;
-  hideHeader?: boolean;
 }
 
 const ownerNav: Array<{ screen: AppScreen; label: string; icon: typeof Home }> = [
@@ -30,15 +30,11 @@ const ownerNav: Array<{ screen: AppScreen; label: string; icon: typeof Home }> =
   { screen: 'owner-current', label: '진행 중 작업', icon: ClipboardList },
 ];
 
-const workerCopy: Record<WorkerLocale, { menu: string; today: string; landing: string; language: string; alert: string; role: string }> = {
-  vi: { menu: 'Menu công việc', today: 'Công việc', landing: 'Trang giới thiệu', language: 'Tiếng Việt', alert: 'Thông báo', role: 'Người lao động' },
-  ne: { menu: 'काम मेनु', today: 'आजको काम', landing: 'परिचय पृष्ठ', language: 'नेपाली', alert: 'सूचना', role: 'कामदार' },
-  km: { menu: 'ម៉ឺនុយការងារ', today: 'ការងារថ្ងៃនេះ', landing: 'ទំព័រណែនាំ', language: 'ភាសាខ្មែរ', alert: 'ការជូនដំណឹង', role: 'កម្មករ' },
-};
-
-export function AppShell({ children, role, active, workerLocale, go, setWorkerLocale, hideNavigation = false, hideHeader = false }: AppShellProps) {
+export function AppShell({ children, role, active, workerLocale, go, setWorkerLocale, hideNavigation = false }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const workerLabels = workerCopy[workerLocale];
+  const workerLabels = workerLocale === 'vi'
+    ? { menu: 'Menu công việc', today: 'Công việc', landing: 'Trang giới thiệu' }
+    : { menu: 'काम मेनु', today: 'आजको काम', landing: 'परिचय पृष्ठ' };
   const workerNav: Array<{ screen: AppScreen; label: string; icon: typeof Home }> = [
     { screen: 'worker-latest', label: workerLabels.today, icon: ClipboardCheck },
   ];
@@ -52,32 +48,33 @@ export function AppShell({ children, role, active, workerLocale, go, setWorkerLo
 
   return (
     <div className="batmeori-webapp min-h-screen bg-[#F5F7F3] text-ink">
-      {!hideHeader && <header className="sticky top-0 z-40 border-b border-deep/10 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-deep/10 bg-white/95 backdrop-blur">
         <div className="mx-auto flex min-h-[72px] max-w-[1500px] items-center justify-between gap-4 px-4 sm:px-6">
           <a href="/" className="flex shrink-0 items-center gap-2 rounded-xl focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary/20 sm:gap-3" aria-label="밭머리 랜딩페이지">
-            <BrandMark className="h-10 w-14" />
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-deep text-white"><Sprout className="h-6 w-6" aria-hidden="true" /></span>
             <span className="whitespace-nowrap text-xl font-black tracking-tight sm:text-2xl">밭머리</span>
           </a>
 
           {!hideNavigation && <div className="flex items-center gap-2 sm:gap-3">
+            {isMockApi && <span className="inline-flex rounded-full bg-[#FFF0BF] px-3 py-2 text-sm font-black text-[#654B16]">{role === 'worker' ? (workerLocale === 'vi' ? 'NỘI DUNG DEMO' : 'डेमो सामग्री') : '데모 내용'}</span>}
             {role === 'worker' ? (
               <span className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-sage/60 px-3 text-sm font-extrabold text-deep">
-                <LockKeyhole className="h-4 w-4" aria-hidden="true" />{workerLabels.language}
+                <LockKeyhole className="h-4 w-4" aria-hidden="true" />{workerLocale === 'vi' ? 'Tiếng Việt' : 'नेपाली'}
               </span>
             ) : (
               <span className="hidden rounded-full bg-sage/60 px-4 py-2 text-sm font-extrabold text-deep sm:inline-flex">지시자</span>
             )}
-            <button type="button" className="hidden h-11 w-11 items-center justify-center rounded-xl border border-deep/10 bg-white text-deep sm:flex" aria-label={role === 'worker' ? workerLabels.alert : '알림'}><Bell className="h-5 w-5" aria-hidden="true" /></button>
+            <button type="button" className="hidden h-11 w-11 items-center justify-center rounded-xl border border-deep/10 bg-white text-deep sm:flex" aria-label={role === 'worker' ? (workerLocale === 'vi' ? 'Thông báo' : 'सूचना') : '알림'}><Bell className="h-5 w-5" aria-hidden="true" /></button>
             <div className="hidden items-center gap-2 rounded-full bg-[#EFF3ED] py-1.5 pl-1.5 pr-3 sm:flex">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-white"><UserRound className="h-4 w-4" aria-hidden="true" /></span>
-              <strong className="text-sm">{role === 'owner' ? '농장주' : workerLabels.role}</strong>
+              <strong className="text-sm">{role === 'owner' ? '농장주' : workerLocale === 'vi' ? 'Người lao động' : 'कामदार'}</strong>
             </div>
             <button type="button" onClick={() => setMobileMenuOpen((open) => !open)} className="flex h-11 w-11 items-center justify-center rounded-xl border border-deep/10 lg:hidden" aria-expanded={mobileMenuOpen} aria-label={mobileMenuOpen ? '메뉴 닫기' : '메뉴 열기'}>
               {mobileMenuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
             </button>
           </div>}
         </div>
-      </header>}
+      </header>
 
       <div className={`mx-auto grid max-w-[1500px] ${hideNavigation ? '' : 'lg:grid-cols-[240px_minmax(0,1fr)]'}`}>
         {!hideNavigation && <aside className={`${mobileMenuOpen ? 'block' : 'hidden'} border-b border-deep/10 bg-[#EEF3EC] p-4 lg:block lg:min-h-[calc(100vh-72px)] lg:border-b-0 lg:border-r lg:p-5`}>

@@ -1,27 +1,28 @@
 # 밭머리 P0 백로그
 
-이 문서의 P0/P1만 현재 실행 순서의 권위다.
+원본 상세 백로그는 legacy reference다. ZIP 기준 P0는 아래 vertical slice만 완료한다.
 
 | 코드 | 우선순위 | 항목 | DoD | 선행조건 | 주담당 |
 |---|---|---|---|---|---|
-| P0-01 | P0 | AI 계약·양파·딸기 ontology | 8개 task code, family/code 일치 규칙과 3개 JSON Schema가 예제·안전정책과 일치 | 없음 | AI |
-| P0-02 | P0 | AI 사전생성 영상 | 8개 영상, AI 생성 provenance, 사람 검수 APPROVED·LOW manifest, captions, FE 전달 | P0-01 | AI |
-| P0-03 | P0 | AI 처리 pipeline | STT→구조화→vi/ne/km 번역 source→TTS/영상 match; unknown·안전문구 추가 없음 | P0-01 | AI |
-| P0-04 | P0 | demo owner session·audio 입력 | 역할 선택 시 자동 session cookie, exact CORS/Origin, rate limit, 10MiB/60초, raw audio 즉시 삭제 | 없음 | BE |
-| P0-05 | P0 | draft·보완·확정 | audio-only supplement, schema/Safety gate, override audit, link 없는 v1 confirm | P0-03,P0-04 | BE |
-| P0-06 | P0 | version·수량 변경 | 비영속 parse, direct confirm, idempotency·409, v2/latest PUBLISHED | P0-03,P0-05 | BE |
-| P0-07 | P0 | 두 전달 API | demo owner session `CO_PRESENT` brief와 `REMOTE` 24h create/reissue/latest; 선택 언어 전용 응답·transcript 비공개 | P0-05 | BE |
-| P0-08 | P0 | owner 모바일 UI | 녹음·요약·ambiguity·source·confirm·수량 변경·fallback 표시 | P0-05,P0-06 | FE |
-| P0-09 | P0 | 전달 모바일 UI | confirm 뒤 같이 보기/링크로 보내기, vi/ne/km, video/TTS/text, polling/focus refresh | P0-02,P0-07,P0-08 | FE |
-| P0-09A | P0 | 오늘 작업팀 API·저장 | 당일 active team 1개, invite hash/암호화·만료, 8개 국적·vi/ne/km validation, idempotent join | P0-04 | BE |
-| P0-09B | P0 | 오늘 작업팀 UI | owner URL 기반 QR 생성·팀원 목록, worker QR/링크 → 국적 → 별명 참여, 지원 국적 선택 시 안내 언어 전환, 카메라/수동 fallback | P0-09A | FE |
-| P0-10 | P0 | 계약 negative checks | 401/409/422, HIGH/UNKNOWN, empty steps, expiry/reissue, transcript 차단 모두 PASS | P0-05–P0-09 | BE |
-| P0-11 | P0 | AI 평가 실행 | 30 transcript와 3 synthetic WAV; dataset/prompt/manifest hash·metrics·failures 저장 | P0-03,P0-06 | AI |
-| P0-12 | P0 | T-6h feature freeze | canonical 계약 snapshot, 범위 동결, negative check PASS | P0-10 | BE |
-| P0-13 | P0 | T-4h 통합 배포 | Railway API `/ready`, Vercel UI, production env 연결 증거 | P0-12 | FE |
-| P0-14 | P0 | T-2h 모바일 E2E·데모 lock | 두 branch·두 폰 3회, 20→15망, video/TTS/API fallback 증거 | P0-02,P0-11,P0-13 | FE |
-| P1-01 | P1 | 농장주 계정관리 | 자동 데모 세션을 개인 계정으로 대체 | P0 완료 | BE |
+| P0-01 | P0 | 양파·딸기 ontology 8코드 | family 일치 allowlist·JSON Schema·BE semantic validation 일치 | 없음 | AI |
+| P0-01a | P0 | current contract/legacy preservation | `structure-v2`/`ontology-v2` current 8-code family validation; immutable `structure-v1` legacy version read; never reset·rewrite·remap | P0-01 | BE |
+| P0-02 | P0 | AI 사전생성 LOW 영상 8개 | 8개 후보의 provenance·사람 검수 `APPROVED` manifest, worker-delivery URL | P0-01 | AI |
+| P0-03 | P0 | PIN session/CORS/CSRF | Secure cookie, exact Origin, rate limit; static CSRF header 없음 | 없음 | BE |
+| P0-04 | P0 | audio→WorkDraft sync | 10MiB/60초, schema/risk reject | P0-01,P0-03 | BE |
+| P0-05 | P0 | structure/translation | unknown 보존, source, vi/ne | P0-01 | AI |
+| P0-06 | P0 | owner confirm | v2 immutable version + vi/ne package atomically publish; delivery is separate, override, safety gate | P0-04,P0-05 | BE |
+| P0-07 | P0 | owner storyboard | summary·ambiguity·source·delivery branch 표시 | P0-06 | FE |
+| P0-08 | P0 | 정적 영상·TTS 표시 | video 또는 text+TTS, captions | P0-02,P0-05 | FE |
+| P0-09 | P0 | CO_PRESENT briefing | PIN cookie, vi/ne, 최신 version | P0-06,P0-08 | BE |
+| P0-10 | P0 | REMOTE anonymous link | 언어별 24h hash browser `${PUBLIC_WEB_BASE_URL}/w/{token}`, JSON assignment로 최신 PUBLISHED | P0-06 | BE |
+| P0-11 | P0 | remote mobile | `/w/{token}` 링크 접근, vi/ne, polling/focus refresh; mock은 명시적 opt-in만 허용 | P0-10 | FE |
+| P0-12 | P0 | quantity audio parse | 비영속 READY/AMBIGUOUS | P0-03,P0-05 | AI |
+| P0-13 | P0 | direct quantity confirm | version+idempotency, current-code validation | P0-12 | BE |
+| P0-14 | P0 | contract negative checks | 401/409/422/HIGH/UNKNOWN/expiry, public web readiness, `/w` assignment, legacy read-only PASS | P0-03..P0-13 | BE |
+| P0-15 | P0 | two-branch mobile E2E | CO_PRESENT·REMOTE 각 3회, 20망→15망 | P0-07..P0-14 | FE |
+| P0-16 | P0 | 오늘 작업팀 QR·개별 배정 | 24시간 익명 QR join, 별명·vi/ne, owner roster, 최신 WorkSession 배정 | P0-03,P0-06 | BE |
+| P0-17 | P0 | 오늘 작업팀 mobile E2E | 두 근로자 QR join·언어별 개인 최신 지시 확인 | P0-16 | FE |
+| P1-01 | P1 | 농장주 계정관리 | 공유 PIN을 개인 계정으로 대체 | P0 완료 | BE |
 | P1-02 | P1 | SMS link 전송 | consent·실패 처리 포함 | P1-01 | BE |
-| P1-03 | P1 | 추가 작물·언어 | ontology·dataset·eval 별도 통과 | P0 완료 | AI |
-| P1-04 | P1 | async queue | sync latency 측정 후 도입 | P0 완료 | BE |
-| P1-05 | P1 | offline cache | 최신 버전·만료 정책 정의 후 | P0 완료 | FE |
+| P1-03 | P1 | 기관 매칭/다중 테넌트 | 기관·농장·권한·RLS 별도 설계 | P0 완료 | BE |
+| P1-04 | P1 | 양파·딸기 이외 작물·추가 언어 | ontology·dataset·eval 별도 통과 | P0 완료 | AI |

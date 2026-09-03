@@ -1,25 +1,183 @@
-# 밭머리 (Batmeori)
+# 밭머리 — 말이 닿아야 일이 닿습니다
 
-농장주의 전라도 사투리 작업지시를 양파·딸기 작업 스토리보드로 바꿔 외국인 근로자에게 전달하는 해커톤 P0 제품.
+> 농장주의 전라도 사투리 작업 지시를, 외국인 근로자가 **자기 언어로 바로 이해하는 오늘의 작업**으로 바꿉니다.
 
-## P0 범위
+**밭머리(Batmeori)**는 음성 작업 지시를 양파·딸기 작업 단계로 구조화하고, 검수된 표현·영상·음성을 조립해 베트남어와 네팔어로 전달하는 현장 커뮤니케이션 서비스입니다. AI가 모르는 내용을 채우지 않고, 불확실한 결정은 항상 농장주에게 남깁니다.
 
-농장주는 계정 등록 없이 당일 임시 `오늘 작업팀`을 열고 QR 하나로 근로자를 초대할 수 있다. 근로자는 별명, 8개 국적(VN·PH·LA·KH·TH·NP·MM·MN), P0 안내 언어(`vi|ne|km`)를 직접 선택한다. 이 참여 정보는 로그인이나 상시 근로자 등록이 아니다.
+2026 [전남광주 청년(YOUTH) AI 솔버톤](https://gsolverthon.kr/) 참여 프로젝트입니다.
 
-양파와 딸기만 지원한다. 전달 언어는 베트남어(`vi`)·네팔어(`ne`)·캄보디아어(`km`), 변경은 수량 변경만 지원한다. 랜딩 다음 역할 선택은 인증이 아니며, 농장주는 자동 데모 세션으로 시작하고 근로자는 전달받은 익명 링크로 들어간다. confirm 뒤 농장주는 `CO_PRESENT` 같이 보기 또는 `REMOTE` 링크로 보내기를 고르고 언어를 선택한다. 전자는 demo owner session으로 여는 owner 폰 video+TTS briefing, 후자는 언어를 고른 익명 24시간 latest-`PUBLISHED` 링크다. 전화번호·SMS·개인 로그인은 제외한다. `AI는 추측하지 않는다. 결정은 농장주가 한다.` unknown은 `UNSPECIFIED`/`null`로 유지한다. [Safety Policy](docs/SAFETY_POLICY.md)에 따라 LOW 비안전 미지원 작업만 reason을 남겨 전달할 수 있으며, safety ambiguity·HIGH·UNKNOWN 위험·schema invalid·실행 단계 없음은 override 불가다. 영상은 8개 정규 작업 코드별 AI 사전 생성 후 사람 검수한 자산만 사용하며 `safety_level: HIGH` 자산은 게시하지 않는다. 일반 작업표현은 정부 가이드 HIT를 우선하고 MISS 시 `AI_TRANSLATION` 출처를 표시한다. 안전표현은 검수 출처가 없으면 자동 게시하지 않는다.
+---
 
-## 실행 전제
+## 현장의 문제를, 한 번의 작업 흐름으로
 
-- FE: React/Vite/Tailwind, Vercel
-- BE: FastAPI, PostgreSQL(Supabase 가능), Railway
-- AI: STT/구조화/번역/TTS provider-neutral 계약. provider/model은 서버 환경변수.
+농장 현장에서는 말로 전달한 지시가 언어와 상황에 따라 달라집니다. 특히 작업 위치, 수량, 순서, 안전 표현이 짧은 말 안에 함께 들어가면 근로자는 다시 묻기 어렵고 농장주는 같은 설명을 반복하게 됩니다.
 
-상세 제품 흐름은 [제품 명세](docs/PRODUCT_SPEC.md), API·경계는 [아키텍처](docs/ARCHITECTURE.md), API schema는 [openapi.yaml](docs/openapi.yaml), 위험 판정은 [Safety Policy](docs/SAFETY_POLICY.md), 데이터·용어는 [CONTEXT.md](CONTEXT.md)와 [DATA_MODEL](docs/DATA_MODEL.md) 참조.
+| 현장 | 밭머리 |
+|---|---|
+| 농장주가 사투리로 작업을 말한다 | 음성을 작업 구조로 정리한다 |
+| 근로자마다 이해할 언어가 다르다 | 베트남어·네팔어 briefing을 각각 만든다 |
+| 인원별 작업이 다르다 | 오늘 작업팀 QR 하나로 여러 작업을 배정한다 |
+| `20망`이 `15망`으로 바뀐다 | 새 immutable version, 번역, TTS, 영상 snapshot을 함께 재생성한다 |
+| AI가 애매한 말을 단정할 위험이 있다 | `UNSPECIFIED`로 남기고 농장주가 결정한다 |
+
+## 세 가지 전달 방식, 하나의 최신 작업
+
+같은 `PUBLISHED` WorkSession을 세 방식이 공유합니다. 어느 경로로 보더라도 최신 version의 동일한 worker briefing을 받습니다.
+
+1. **함께 보기 `CO_PRESENT`** — 농장주가 `vi` 또는 `ne`를 골라 자신의 폰에서 근로자와 함께 briefing을 확인합니다.
+2. **원격 링크 `REMOTE`** — 언어별 24시간 익명 링크 `/w/{token}`을 발급합니다. 로그인·전화번호·앱 설치가 필요 없습니다.
+3. **오늘 작업팀 `TodayWorkTeam`** — 농장주가 QR 하나를 열고, 근로자가 별명과 언어를 직접 고릅니다. 한 사람에게 여러 작업을 배정할 수 있습니다.
+
+```text
+농장주 음성
+  └─ STT
+      └─ structure-v2 WorkDraft
+          └─ 농장주 확인
+              └─ PUBLISHED WorkVersion + vi/ne WorkerBriefing
+                  ├─ CO_PRESENT
+                  ├─ REMOTE /w/{token}
+                  └─ TodayWorkTeam QR assignment
+```
+
+## 작지만 닫힌 P0 범위
+
+해커톤 데모에서 신뢰할 수 있는 흐름을 보여주기 위해 범위를 명확히 제한했습니다.
+
+| 지원 | 이번 P0에서 제외 |
+|---|---|
+| 양파·딸기 | 다른 작물 |
+| 베트남어 `vi`, 네팔어 `ne` | 추가 언어 |
+| 수량 변경 | 위치·작업·안전 정보 자동 변경 |
+| 24시간 임시 팀원 | 영구 근로자 프로필·로그인·전화번호·SMS |
+| 검수된 LOW 영상, text+TTS fallback | runtime 영상 생성 |
+
+### 작업 ontology
+
+| 작물 | 지원 task code |
+|---|---|
+| 양파 | `ONION_HARVEST` · `ONION_TRIMMING` · `ONION_SORTING` · `ONION_TRANSPORT` |
+| 딸기 | `STRAWBERRY_HARVEST` · `STRAWBERRY_SORTING` · `STRAWBERRY_INSPECTION` · `STRAWBERRY_PACKING` |
+
+기존 `structure-v1` WorkVersion과 기존 asset은 **읽기 전용 legacy**로 남깁니다. 신규 publish는 `structure-v2`와 `ontology-v2`, 위 8개 code만 사용합니다.
+
+## AI는 추측하지 않는다. 결정은 농장주가 한다.
+
+밭머리의 핵심 원칙입니다.
+
+- location·quantity·task가 음성에 없으면 `UNSPECIFIED` 또는 `null`로 보존합니다.
+- 안전 ambiguity, HIGH/UNKNOWN 위험, schema invalid, 실행 단계 없음은 override할 수 없습니다.
+- 일반 작업 표현은 검증된 정부 가이드 번역을 우선하고, 없으면 `AI_TRANSLATION` 출처를 화면에 표시합니다.
+- worker DTO에는 transcript, raw audio, risk assessment, token hash, 다른 팀원의 정보가 포함되지 않습니다.
+- worker 별명·ID는 AI input, output, provider metadata, cache key에 넣지 않습니다.
+
+## 신뢰할 수 있는 재생성
+
+수량이 바뀌면 기존 row의 숫자만 고치지 않습니다. 이전 version을 기반으로 새 수량을 검증하고, briefing·번역 segment·TTS text/hash/status·visual snapshot을 모두 다시 만든 뒤, 성공했을 때만 새 immutable WorkVersion을 publish합니다.
+
+따라서 `CO_PRESENT`, 원격 링크, 오늘 작업팀은 항상 같은 최신 package를 봅니다. version conflict 또는 재생성 실패 시 불완전한 version은 저장하지 않습니다.
+
+## 구조
+
+```text
+React + Vite + Tailwind
+        │ HTTPS / owner cookie / worker token
+        ▼
+FastAPI
+  ├─ authentication, version transaction, delivery API
+  ├─ asset·guide read, publish safety gate, TTS storage
+  └─ private JSONL/stdio bridge only
+        │
+        ▼
+Node AI runtime
+  └─ STT · structure · quantity parse · guide lookup
+     translation · visual match · TTS
+        │
+        ▼
+Supabase / PostgreSQL + Storage
+  └─ farm-scoped data · immutable versions · 24h links · asset manifest
+```
+
+FastAPI는 AI provider를 중복 구현하지 않습니다. Node `ai/` runtime 하나가 AI 작업을 소유하고, FastAPI는 private transport·인증·저장·원자적 publish를 담당합니다.
+
+## 솔버톤 심사 관점에 맞춘 구현 증거
+
+솔버톤 공식 안내는 본선 후보 선발에서 **문제 현안 분석, 아이디어 기획, 해결 방안의 구체성, 참여 의지**를 중점적으로 본다고 밝힙니다. 1차 AI 전문 멘토단과 2차 주최·협력기관 심사단은 각각 50%를 맡으며, 세부 배점과 개별 점수는 공개하지 않습니다. 아래는 공개 기준을 밭머리 데모에서 확인할 수 있는 증거로 바꾼 것입니다. 이는 공식 배점표가 아닙니다.
+
+| 공개 심사 관점 | 밭머리에서 보여줄 증거 |
+|---|---|
+| 문제 현안 분석 | 언어 장벽, 반복 설명, 수량 변경, 안전 ambiguity를 하나의 현장 흐름으로 정의 |
+| 아이디어 기획 | 음성 지시를 단순 번역이 아닌 작업 package와 세 가지 전달 방식으로 전환 |
+| 해결 방안의 구체성 | 2작물·8 task code·2언어·24시간 QR·farm scope·immutable version으로 범위를 닫음 |
+| 실전성 | QR join, 언어 직접 선택, 실제 `/w/{token}` browser route, 최신 version 재생성 흐름 |
+| AI 활용의 책임성 | Node 단일 runtime, schema 검증, source detail, human-reviewed asset, fallback과 안전 gate |
+
+공식 안내: [2026 전남광주 청년(YOUTH) AI 솔버톤](https://gsolverthon.kr/)
 
 ## 검증
 
-배포 URL과 휴대폰 2대로 음성→스토리보드→`CO_PRESENT` owner 폰 briefing과 `REMOTE` 익명 링크의 `vi`/`ne` 전달→변경 음성 parse→`20망`에서 `15망` 직접 확인→각 최신 화면을 3회 연속 성공해야 한다. remote link는 24시간 latest `PUBLISHED` resolve이며, 만료 시 owner에게 단일 링크 생성 API를 안내한다. 실패·fallback 기준은 [FAILURE_MODES](docs/FAILURE_MODES.md), 30 transcript 평가와 별도 synthetic STT smoke 기준은 [EVALS](docs/EVALS.md) 참조.
+| 검증 영역 | 현재 자동 검증 |
+|---|---|
+| AI contract | Node test 36개 — 8 task code, identity exclusion, asset match, vi/ne package, quantity regeneration |
+| Backend contract | Python test 34개 — farm scope, owner cookie, atomic publish, legacy read, Node-only boundary |
+| Frontend | API contract check, 브라우저 E2E — QR 언어 선택, `/w/{token}`, 복수 assignment, 최신 version 표시 |
+| Asset | `assets/asset_manifest.csv` 8개 row 검증, checksum mismatch 시 transaction 차단 |
 
-## 책임
+P0 release gate는 30건 transcript evaluation, 별도 STT smoke, contract negative case, 실제 모바일 E2E를 모두 요구합니다. 상세 기준은 [EVALS](docs/EVALS.md)를 확인하세요.
 
-FE는 입력·두 delivery branch 표시·Vercel·모바일 리허설, BE는 상태/인증/DB/API/Railway/게시 gate, AI는 계약 준수 출력·언어별 번역 source snapshot·영상 provenance·평가·E2E 증거를 맡는다. 모든 인계물은 문서의 canonical field/status를 따른다.
+## 빠른 실행
+
+### 1. 프론트 UI 데모
+
+실제 API 없이 화면 흐름을 보려면 mock을 명시적으로 켭니다. mock은 production fallback이 아닙니다.
+
+```powershell
+pnpm install
+$env:VITE_USE_MOCK_API = 'true'
+pnpm dev
+```
+
+브라우저에서 `/start`, `/owner/home`, `/worker`, `/w/demo-vi-preview`을 열어 흐름을 확인할 수 있습니다.
+
+### 2. 백엔드와 Node AI runtime
+
+```powershell
+cd backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+`backend/.env`에는 server-only `OPENAI_API_KEY`, 선택적 `OPENAI_MODEL`, `OPENAI_TTS_VOICE`, Supabase와 owner session 설정이 필요합니다. `/ready`는 DB·provider·public web 설정이 충족될 때만 성공합니다. 값 자체는 저장소에 넣지 않습니다.
+
+### 3. 테스트
+
+```powershell
+node --test ai/tests/*.test.mjs
+$env:PYTHONPATH = 'backend'
+python -m unittest discover -s backend -p 'test_*.py' -v
+pnpm run check:contracts
+pnpm run test:web
+```
+
+## 팀
+
+| 이름 | 역할 | 담당 |
+|---|---|---|
+| 김서영 | Frontend | React 화면, 농장주·근로자 flow, 다국어 UI, QR/worker experience |
+| 한창수 | Backend | FastAPI, Supabase, farm scope, owner cookie, version transaction, delivery API |
+| 정연석 | Logic | P0 domain logic, Node AI runtime, ontology, translation/TTS·asset contract, 안전·평가 기준 |
+
+## 문서 지도
+
+- [제품 명세](docs/PRODUCT_SPEC.md) — P0 사용자 흐름과 범위
+- [아키텍처](docs/ARCHITECTURE.md) — 런타임·데이터·보안 경계
+- [OpenAPI](docs/openapi.yaml) — HTTP 계약
+- [AI 계약](docs/AI_CONTRACTS.md) — Node runtime 입출력과 provider-neutral 원칙
+- [데이터 모델](docs/DATA_MODEL.md) — version, team, asset, farm scope
+- [안전 정책](docs/SAFETY_POLICY.md) · [실패 모드](docs/FAILURE_MODES.md) · [평가](docs/EVALS.md)
+
+---
+
+밭머리는 번역기를 만드는 프로젝트가 아닙니다. **농장주의 결정이 근로자의 오늘 작업까지 안전하게 도착하도록 만드는 프로젝트**입니다.

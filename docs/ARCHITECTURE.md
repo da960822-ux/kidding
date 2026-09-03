@@ -1,67 +1,64 @@
 # 밭머리 아키텍처
 
+## current P0 ownership and briefing boundary
+
+farm-scoped demo-owner PIN cookie가 owner mutation을 보호하며 client는 owner/farm selector를 보내지 않는다. WorkDraft, WorkSession, WorkerLink, TodayWorkTeam, TeamAssignment는 current P0 state를 사용한다. CO_PRESENT, remote, assignment는 같은 최신 `PUBLISHED` WorkVersion의 저장된 언어별 `worker-briefing-v2` package를 그대로 반환한다.
+
 ## 경계
 
 ```text
 React/Vite/Tailwind (Vercel)
-  │ HTTPS REST, automatic demo-owner session cookie / anonymous link token
+  │ HTTPS REST, owner session cookie / anonymous worker token
 FastAPI (Railway)
-  ├─ WorkSession + version + link service
-  ├─ today work team + expiring invite service
-  ├─ guide lookup + visual safety gate
-  └─ provider-neutral AI adapters
+  ├─ WorkDraft → WorkSession + immutable version service
+  ├─ CO_PRESENT briefing + REMOTE link + today-team service
+  ├─ DB asset/verified-guide read + safety/publish gate
+  └─ private JSONL/stdio transport only
+Node `ai/`
+  └─ STT, structure, quantity parse, guide lookup, translation, visual match, TTS
 PostgreSQL (Supabase 가능)
-  ├─ sessions, steps, versions, anonymous links
+  ├─ sessions, drafts, versions, anonymous language links, temporary team roster/assignments
   ├─ guide phrases/translations
-  └─ visual asset manifest
-FE public/videos (Vercel static CDN)
+  ├─ visual asset manifest
+  └─ TTS audio cache (published vi/ne text hash)
+Supabase Storage public `visual-assets` bucket (worker video CDN)
 ```
-
-`AI는 추측하지 않는다. 결정은 농장주가 한다.` AI 판정(`READY`, `AMBIGUOUS`, `UNSUPPORTED`), 확인 전 `WorkDraft`, WorkVersion lifecycle(`PUBLISHED`, `SUPERSEDED`)을 분리한다. FE는 owner choice를 표시하고, BE가 override·version·게시 gate를 검증하며 최신 버전을 resolve한다. ambiguity는 owner decision state다.
 
 ## 주요 데이터 흐름
 
-`audio`→`transcript`→`WorkDraft`→owner confirm→guide lookup/언어별 translation source snapshot + approved visual match→`WorkSession v1 PUBLISHED`→delivery branch 선택. `CO_PRESENT`는 owner cookie briefing을, `REMOTE`는 선택 언어의 익명 link를 연다. 수량 변경은 change-audio preview(저장 없음)→owner direct confirm(`quantity`, `expected_version`)으로만 `v2`를 만들고 기존 `v1`을 `SUPERSEDED`로 바꾼다. 두 branch는 5초 polling하고 visibility/focus 복귀 때 즉시 조회한다. 응답 version이 증가하면 FE가 화면과 TTS를 교체한다.
+`audio → transcript → structure-v2 WorkDraft → owner confirm → WorkSession v1 PUBLISHED + vi/ne packages → CO_PRESENT briefing, REMOTE link issue/resolve, 또는 TodayWorkTeam member assignment`.
 
-## 세션·링크
+수량 변경은 저장 없는 preview → owner direct confirm(`quantity`, `expected_version`)으로만 다음 immutable version을 만든다. 새 state와 두 package 삽입이 성공한 뒤에만 이전 `PUBLISHED`를 `SUPERSEDED`로 바꾸며, remote 링크는 같은 토큰으로 최신 `PUBLISHED` 버전을 읽는다.
 
-P0에는 로그인 화면과 PIN 입력이 없다. 농장주 역할 선택 시 서버가 짧은 `HttpOnly; Secure; SameSite=None` demo owner session cookie를 자동 발급한다. 별도 owner/session table은 두지 않는다. 모든 owner mutation은 쿠키와 허용된 `Origin`을 요구한다. Supabase 회원가입/계정관리는 P1.
+## Atomic v2 publish RPC
 
-`REMOTE` token은 추측 불가능한 랜덤 값으로 저장 시 해시하고 발급 후 24시간 만료한다. 유효 token은 항상 해당 WorkSession의 최신 `PUBLISHED` 버전을 반환한다. 만료·잘못된 token 모두 외부에는 일반화된 접근 불가 응답으로 처리하되, 만료 상태에는 재발급 안내를 제공한다.
+BE는 `public.publish_work_version_with_packages(p_farm_id uuid, p_draft_id uuid|null, p_session_id uuid, p_expected_version integer, p_state_json jsonb, p_packages jsonb, p_decision text, p_ambiguity_override boolean, p_override_reason text) -> (session_id uuid, version integer)`만 호출한다. 초기 confirm은 `p_draft_id`와 `expected_version:0`을, 수량 재생성은 `p_draft_id:null`과 현재 version을 사용한다. `p_state_json`은 이미 검증된 `structure-v2`/`ontology-v2`이고 `p_packages`는 완성된 `worker-briefing-v2` `vi`·`ne` 정확히 두 개다. RPC는 version과 packages를 먼저 insert하고 그 뒤 이전 PUBLISHED를 supersede하므로 실패·conflict에는 새 row가 남지 않는다. legacy v1은 `legacy_read_only`로 거부한다.
 
-Today work team invite token도 추측 불가능한 랜덤 값으로 검증용 hash와 서버 키로 암호화한 ciphertext만 저장하며, 평문은 DB·로그에 남기지 않는다. ciphertext는 owner-authenticated 오늘 팀 조회에서 QR URL을 복원할 때만 사용한다. 팀의 업무일 종료 또는 발급 24시간 중 먼저 도래하는 시점에 만료한다. 익명 참여 API는 별명 길이, 국적 allowlist, 안내 언어 allowlist를 검증하고 전화번호·계정·실명을 요구하지 않는다.
+REMOTE 발급은 별도 `public.issue_worker_link_v2(p_farm_id uuid, p_session_id uuid, p_language_code text, p_link jsonb) -> void`를 호출한다. RPC는 cookie farm 안의 v2 PUBLISHED session을 lock하고 해당 최신 version의 언어 package 존재를 확인한 뒤 기존 같은 언어 link를 revoke하고 새 hash row를 insert한다. v1과 cross-farm 요청은 legacy/read-only 또는 not-found로 처리하며 legacy `issue_worker_link`를 fallback으로 호출하지 않는다.
 
-BE는 owner-authenticated 오늘 팀 응답에 `join_url`을 반환하고 QR 이미지·SVG·Base64는 생성하지 않는다. FE가 `join_url`을 QR로 렌더링하며, 카메라 스캔을 지원하지 않는 기기에서도 같은 URL을 직접 입력할 수 있게 유지한다. 업무일과 만료 경계는 `Asia/Seoul`로 계산하고 timestamp는 UTC ISO 8601로 반환한다.
+## 전달 모델
 
-confirm은 link를 발급하지 않는다. owner의 language-specific create/reissue만 raw remote URL을 한 번 반환한다. `CO_PRESENT` briefing은 owner cookie를 요구하며 public session-id 조회는 제공하지 않는다.
+- `CO_PRESENT`: owner PIN cookie가 있는 owner 폰에서 `vi|ne`를 선택해 최신 briefing을 본다.
+- `REMOTE`: `vi|ne` 중 하나를 고른 뒤 언어별 익명 링크를 발급한다. 사람 등록·로그인·전화번호 없이 링크 보유자가 본다.
+- 링크는 발급 후 24시간 유효하고, 재발급 시 같은 session·언어의 기존 활성 링크를 폐기한다.
+- 링크는 공개 검색·채팅·답장 채널이 아니다. 외부 오류는 일반화하고 만료만 재발급 안내를 준다.
+- TodayWorkTeam: owner PIN으로 오늘 QR URL을 열고, 참가자는 그 URL에서 별명·`vi|ne`만 제출한다. 서버는 임시 TeamMember browser cookie를 발급하며, cookie는 team 만료와 함께 끝난다. 농장주는 TeamAssignment로 하나 이상 WorkSession을 연결한다. 근로자는 ID를 입력하지 않고 자기 cookie로만 연결된 최신 `PUBLISHED` state를 읽는다.
 
-## 게시 gate
+## 인증·게시 gate
 
-BE는 다음을 모두 만족할 때만 `PUBLISHED`를 허용한다.
+P0 농장주 인증은 service-role 전용 `authenticate_demo_owner(p_pin)` RPC가 active `demo_owners` PIN hash를 검증해 반환한 `owner_id`, `farm_id`만 cookie claim으로 쓴다. Python은 PIN hash를 읽지 않는다. 배포 시 service-role 전용 `seed_demo_owner(farm_slug, pin)`에 secret-store PIN을 전달해 salted hash를 upsert하며 migration·로그·응답에 raw PIN을 두지 않는다. shared global PIN claim이나 client-supplied owner/farm selector는 없다. owner mutation은 cookie의 farm claim과 `FRONTEND_ORIGINS` exact Origin을 요구한다. 정적 CSRF header는 사용하지 않는다.
 
-- WorkSession draft가 owner confirmation을 받음
-- 빈 `steps`는 blocking `TASK` ambiguity로 남아 게시 대상이 아님
-- 모든 non-null `task_code`가 양파·딸기 8개 ontology에 존재하고 `task_family`와 일치. 불일치는 `422 SCHEMA_INVALID`; `null`은 감사된 비안전 미지원 fallback에만 허용
-- 안전표현과 `OFFICIAL_GUIDE` 번역은 언어별 source snapshot을 가짐. `source_page`, `source_url`, `license`, 사람 검수 `verified`가 없으면 `OFFICIAL_GUIDE` 표기 금지
-- 매칭 영상은 `review_status: APPROVED`, `safety_level: LOW`, `provenance: AI_GENERATED_PREGENERATED`, [Safety Policy](SAFETY_POLICY.md) assessment를 만족
-- 영상이 없으면 텍스트+TTS fallback이 명시됨
+BE는 schema·ontology·risk assessment·번역 source·영상 provenance/review를 재검증한다. HIGH/UNKNOWN 위험, safety ambiguity, schema invalid, no executable step은 게시하지 않는다. 안전표현은 verified `OFFICIAL_GUIDE` source가 없으면 자동 게시하지 않는다.
 
-HIGH/UNKNOWN risk assessment, 검수되지 않은 안전 번역, invalid JSON, schema invalid, auth/version conflict, 또는 blocking ambiguity는 자동 게시·자동 변경 금지다. LOW 비안전 미지원 작업만 owner가 허용된 reason으로 `PUBLISH_AS_IS`할 수 있다. P0 영상은 검수된 LOW 작업만 다룬다. 운전·차량 또는 동력 장비 이동·회전날·농약·고소작업은 HIGH risk로 분류하며, `ONION_TRANSPORT`도 차량·동력 장비를 운전하거나 이동시키면 게시하지 않는다.
+P0 ontology는 `ONION|STRAWBERRY` 두 family와 8개 canonical task code로 닫혀 있다. non-null step code는 state의 family와 일치해야 하며, FE 입력·LLM output·DB 저장 어느 경로에서도 이 검증을 우회하지 않는다.
 
-## 책임·인계
+## 보안·운영 불변조건
 
-- FE→BE: `openapi.yaml`의 field/status만 전송하고 gate 실패를 사용자에게 표시.
-- BE→FE: canonical 상태, version, language별 translation source snapshot, `review_status`, generalized access error를 반환.
-- AI→BE: `AI_CONTRACTS.md` JSON만 반환; provider/model은 환경변수와 로그에만 존재.
-- AI→BE: 검수 완료 guide rows와 asset manifest, 평가 결과만 import·게시 승인 요청.
-- BE→FE: anonymous remote response에는 transcript/raw audio를 절대 포함하지 않는다. raw audio는 STT 요청 중 임시 저장만 하고 성공·실패와 무관하게 즉시 삭제한다.
-
-## 운영·보안 불변조건
-
-- Vercel↔Railway cross-origin 호출은 exact frontend Origin allowlist + credentials만 허용한다. cross-site cookie는 `SameSite=None; Secure`로 설정하고 모든 owner mutation의 exact `Origin` 검증으로 CSRF를 막는다. 별도 CSRF header는 P0 계약에 없다. CORS wildcard는 금지한다.
-- demo owner session 발급과 owner API에는 rate limit을 적용하고 session TTL을 짧게 둔다. AI 요청도 비용 rate limit을 둔다.
-- `REMOTE` token은 128-bit 이상 random, at-rest hash, 로그·URL referrer 미노출이다. 응답은 `Referrer-Policy: no-referrer`를 사용한다.
-- audio MIME/10 MiB/60초 제한, sync request timeout/retry와 `Idempotency-Key`를 적용한다. API 버전은 `/api/v1`로 유지하고 backward-compatible field 추가만 허용한다.
-- timestamp는 UTC 저장, 농장 업무일만 Asia/Seoul로 계산한다. DB transaction으로 session별 version unique/current-version 증가를 보장한다.
-- TTS는 text content hash로 cache하며 text가 source of truth다. 영상은 `video/*`, 모바일 용량 제한, captions text를 갖고 autoplay를 강제하지 않는다.
-- 로그는 secret, token, raw audio를 redact한다. `/health`는 process liveness, `/ready`는 DB/provider readiness만 의미한다.
+- CORS wildcard 금지, exact frontend Origin allowlist + credentials.
+- audio MIME/10 MiB/60초 제한. raw audio는 처리 중 임시 저장만 하고 성공·실패와 무관하게 즉시 삭제한다.
+- anonymous link token은 128-bit 이상 random, DB에는 hash만 저장한다. URL·로그·referrer에 secret을 남기지 않는다.
+- WorkVersion은 content immutable이며 session별 version unique/current-version 증가를 DB transaction으로 보장한다.
+- TTS cache key는 text content hash이며 text가 source of truth다.
+- TTS는 PUBLISHED version의 `vi|ne` step text만 생성한다. cache miss/provider failure는 publish를 막지 않으며 worker/briefing은 `audio_url:null`과 `TEXT` fallback을 받는다. FastAPI는 storage/auth/transaction과 DB read만 소유하고 STT·structure·quantity parse·guide lookup·translation·TTS·visual match는 private JSONL/stdio Node bridge 하나만 호출한다. STT bridge operation은 `TRANSCRIBE_AUDIO`이며 validated `audio_base64`, MIME, filename, `language_hint`만 받고 `{transcript, language_code, confidence, schema_version, contract_version}`를 반환한다; raw audio·owner/farm/member identity는 결과와 metadata에 남기지 않는다.
+- `PUBLIC_WEB_BASE_URL`은 browser worker route의 host다. REMOTE 발급 URL은 `${PUBLIC_WEB_BASE_URL}/w/{token}`이고 browser가 API assignment endpoint를 호출한다. production `/ready`는 이 값, DB, owner auth, provider가 모두 없으면 실패한다. `DEMO_FALLBACK=1`은 명시적 demo 전용으로 첫 exact frontend Origin을 local browser host로 허용한다.
+- `/health`는 process liveness, `/ready`는 DB/provider/public-web deployment readiness다.

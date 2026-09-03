@@ -13,13 +13,17 @@
 html {
   scroll-behavior: smooth;
   scroll-padding-top: 84px;
+  overflow-x: clip;
 }
 
 body {
   min-width: 320px;
   margin: 0;
   background: #FAF8F1;
+  overflow-wrap: anywhere;
 }
+
+::selection { background: #b9d9ad; color: #173f24; }
 
 /* 웹앱은 야외·노령 사용자 가독성을 위해 랜딩보다 모든 글자를 정확히 3pt(4px) 키운다. */
 .batmeori-webapp { font-size: 20px; }
@@ -62,8 +66,33 @@ summary {
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  *, *::before, *::after {
-    scroll-behavior: auto !important;
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
+  .transition,
+  .transition-all {
+    transition-property: color, background-color, border-color, opacity, box-shadow !important;
+  }
+  .transition-transform {
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (forced-colors: active) {
+  .batmeori-webapp button,
+  .batmeori-webapp a,
+  .batmeori-webapp input,
+  .batmeori-webapp select,
+  .batmeori-webapp summary {
+    border: 2px solid ButtonText;
+  }
+  .batmeori-webapp [role="alert"],
+  .batmeori-webapp [role="status"] {
+    border: 2px solid CanvasText;
+  }
+  .batmeori-webapp :focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 3px;
   }
 }

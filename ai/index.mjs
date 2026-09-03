@@ -3,6 +3,7 @@ import { createOpenAiProvider } from './lib/openai-provider.mjs';
 import { validateStructureV2 } from './lib/structure-v2-contract.mjs';
 import { buildWorkerPackagesV2 } from './lib/worker-briefing-v2.mjs';
 import { matchVisualAsset } from './lib/visual-match.mjs';
+import { loadDialectReferenceDocument, renderDialectContext, selectDialectContext } from './lib/dialect-reference.mjs';
 
 const prompt = await readFile(new URL('./prompts/prompt-structure-005.md', import.meta.url), 'utf8');
 const transcriptionPrompt = await readFile(new URL('./prompts/prompt-transcription-002.md', import.meta.url), 'utf8');
@@ -11,6 +12,7 @@ const supplementPrompt = await readFile(new URL('./prompts/prompt-structure-supp
 const quantityPrompt = await readFile(new URL('./prompts/prompt-quantity-change-001.md', import.meta.url), 'utf8');
 const structureSchema = JSON.parse(await readFile(new URL('../docs/schemas/structure-v2.schema.json', import.meta.url), 'utf8'));
 const quantitySchema = JSON.parse(await readFile(new URL('../docs/schemas/quantity-change-v1.schema.json', import.meta.url), 'utf8'));
+const dialectReferenceDocument = await loadDialectReferenceDocument(new URL('./references/dialect-v2.json', import.meta.url));
 
 function assertStructure(value) {
   const validation = validateStructureV2(value);
@@ -24,22 +26,23 @@ function assertPackageWork(work) {
   assertStructure(structure);
 }
 
-export function createRuntime({ env = {}, providers = {} }) {
+export function createRuntime({ env = {}, providers = {}, dialectReference = dialectReferenceDocument }) {
   const provider = Object.keys(providers).length ? providers : createOpenAiProvider({ env, transcriptionPrompt, transcriptionReviewPrompt });
+  const dialectPrompt = (basePrompt, transcript) => `${basePrompt}\n${renderDialectContext(dialectReference === null ? null : selectDialectContext(transcript, dialectReference))}`;
   return {
     async transcribeAudio(payload) {
       return provider.transcribe(payload);
     },
     async buildOwnerDraftV2({ transcript }) {
-      return assertStructure(await provider.interpretStructureV2({ prompt, transcript, schema: structureSchema }));
+      return assertStructure(await provider.interpretStructureV2({ prompt: dialectPrompt(prompt, transcript), transcript, schema: structureSchema }));
     },
     async mergeSupplementV2({ structure, transcript }) {
       assertStructure(structure);
-      return assertStructure(await provider.interpretStructureV2({ prompt: `${supplementPrompt}\n${JSON.stringify(structure)}`, transcript, schema: structureSchema }));
+      return assertStructure(await provider.interpretStructureV2({ prompt: `${dialectPrompt(supplementPrompt, transcript)}\n${JSON.stringify(structure)}`, transcript, schema: structureSchema }));
     },
     async parseQuantityChange({ transcript, expected_version }) {
       if (!Number.isInteger(expected_version) || expected_version < 1) throw new TypeError('INVALID_EXPECTED_VERSION');
-      return provider.interpretQuantityChange({ prompt: quantityPrompt, transcript, expected_version, schema: quantitySchema });
+      return provider.interpretQuantityChange({ prompt: dialectPrompt(quantityPrompt, transcript), transcript, expected_version, schema: quantitySchema });
     },
     async buildWorkerPackagesV2({ work, languages, assets = [], guides = [] }) {
       assertPackageWork(work);

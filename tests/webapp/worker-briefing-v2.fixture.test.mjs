@@ -4,10 +4,10 @@ import test from 'node:test';
 
 const fixture = {
   session_id: 'session-onion', version: 2, contract_version: 'worker-briefing-v2', ontology_version: 'ontology-v2', language_code: 'vi',
-  context: { task_family: 'ONION', location_display: 'Ruộng số 1', quantity: { value: 15, unit: 'bao' }, deadline: null, notes: null },
+  context: { task_family: 'ONION', location_display: 'Ruộng số 1', quantity: { value: 15, unit: 'bao' }, deadline: null, safety: ['Mang găng tay.'], notes: null },
   badges: ['TEXT_TTS_FALLBACK'],
   steps: [{ sequence: 1, task_code: 'ONION_HARVEST', title: 'Thu hoạch hành', description: 'Nhổ nhẹ', delivery_mode: 'TEXT_TTS' }],
-  source_detail: [{ step_sequence: 1, segment: 'ACTION', source: 'AI_TRANSLATION', guide_lookup: 'MISS', verified: false, source_page: null, source_url: null, license: null }],
+  source_detail: [{ step_sequence: 1, segment: 'ACTION', source: 'AI_TRANSLATION', guide_lookup: 'MISS', verified: false, source_page: null, source_url: null, license: null }, { step_sequence: null, segment: 'SAFETY', source: 'OFFICIAL_GUIDE', guide_lookup: 'HIT', verified: true, source_page: 1, source_url: 'https://fixture.test/batmeori/safety-guide.pdf', license: 'TEST_FIXTURE_ONLY' }],
   tts: { status: 'FALLBACK', text_hash: 'a'.repeat(64), audio_url: null },
   video: [],
 };
@@ -16,6 +16,8 @@ test('fixture contains every required WorkerBriefing v2 field', () => {
   assert.deepEqual(Object.keys(fixture).sort(), ['badges', 'context', 'contract_version', 'language_code', 'ontology_version', 'session_id', 'source_detail', 'steps', 'tts', 'version', 'video']);
   assert.equal(fixture.context.task_family, 'ONION');
   assert.equal(fixture.tts.text_hash.length, 64);
+  const safetySource = fixture.source_detail.find((item) => item.segment === 'SAFETY');
+  assert.deepEqual(safetySource, { step_sequence: null, segment: 'SAFETY', source: 'OFFICIAL_GUIDE', guide_lookup: 'HIT', verified: true, source_page: 1, source_url: 'https://fixture.test/batmeori/safety-guide.pdf', license: 'TEST_FIXTURE_ONLY' });
 });
 
 test('worker screen and mock consume top-level media and badges', async () => {
@@ -23,7 +25,7 @@ test('worker screen and mock consume top-level media and badges', async () => {
     readFile(new URL('../../src/webapp/WorkerScreens.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/webapp/mock-api.ts', import.meta.url), 'utf8'),
   ]);
-  for (const field of ['assignment.badges', 'assignment.tts', 'assignment.video', 'assignment.context.quantity']) {
+  for (const field of ['assignment.badges', 'briefing.tts', 'assignment.video', 'assignment.context.quantity']) {
     assert.ok(screen.includes(field), `worker screen must render ${field}`);
   }
   for (const field of ['badges:', 'tts:', 'video:', 'task_family:']) {
@@ -37,13 +39,14 @@ test('worker screen and mock consume top-level media and badges', async () => {
 test('new drafts are v2-only and QR SPA entry paths are deployable', async () => {
   const [contracts, vercel] = await Promise.all([
     readFile(new URL('../../src/webapp/contracts.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../../vercel.json', import.meta.url), 'utf8'),
+    readFile(new URL('../../vercel.ts', import.meta.url), 'utf8'),
   ]);
   assert.match(contracts, /schema_version:\s*'2';/);
   assert.match(contracts, /contract_version:\s*'structure-v2';/);
   assert.match(contracts, /ontology_version:\s*'ontology-v2';/);
-  const rewrites = JSON.parse(vercel).rewrites.map(({ source }) => source);
-  assert.deepEqual(rewrites, ['/(.*)']);
+  const apiRewrite = vercel.indexOf("source: '/api/:path*'");
+  const spaFallback = vercel.indexOf("source: '/(.*)'");
+  assert.ok(apiRewrite >= 0 && apiRewrite < spaFallback, 'API proxy must precede the SPA fallback');
 });
 
 test('legacy reads render stored steps but do not expose quantity mutation', async () => {

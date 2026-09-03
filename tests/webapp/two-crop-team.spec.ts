@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 const teamToken = `team-${'a'.repeat(32)}`;
+const ownerAuth = { authenticated: true, expires_at: new Date(Date.now() + 60 * 60_000).toISOString(), farm: { code: 'farm-demo', display_name: '밭머리 데모 농장' } };
 const team = {
   team_id: 'team-id', work_date: '2026-09-03', status: 'ACTIVE', join_url: `http://127.0.0.1:5173/team/${teamToken}`, expires_at: new Date(Date.now() + 24 * 60 * 60_000).toISOString(), members: [{ member_id: 'member-id', display_name: 'Nguyễn', language_code: 'vi', joined_at: '2026-09-03T00:00:00.000Z', assignment_session_ids: ['work-demo-01'] }],
 };
@@ -22,6 +23,70 @@ async function seededWorker(page: Page) {
     localStorage.setItem('batmeori-demo-today-team-member', 'member-id');
   }, { team, session: ownerSession });
 }
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript((value) => localStorage.setItem('batmeori-demo-owner-session', JSON.stringify(value)), ownerAuth);
+});
+
+test('owner logs in with farm code and PIN, sees the farm, and logs out', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/start');
+  await page.evaluate(() => localStorage.removeItem('batmeori-demo-owner-session'));
+  await page.getByRole('button', { name: /농장주예요/ }).click();
+  await expect(page.getByRole('heading', { name: '농장주 로그인' })).toBeVisible();
+  await page.getByLabel('농장 코드').fill('farm-jeonnam');
+  await page.getByLabel('PIN').fill('1234');
+  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
+  await expect(page.getByText('밭머리 데모 농장').first()).toBeVisible();
+  await expect(page.getByText('farm-jeonnam').first()).toBeVisible();
+  await page.getByRole('button', { name: '로그아웃' }).click();
+  await expect(page).toHaveURL(/\/start$/);
+});
+
+test('expired owner session logs in again and returns to the same mobile screen', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 760 });
+  await page.goto('/owner/team');
+  await page.evaluate(() => { localStorage.removeItem('batmeori-demo-owner-session'); window.dispatchEvent(new Event('batmeori:owner-unauthorized')); });
+  await expect(page.getByRole('heading', { name: '농장주 로그인' })).toBeVisible();
+  await page.getByLabel('농장 코드').fill('farm-demo');
+  await page.getByLabel('PIN').fill('1234');
+  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
+  await expect(page.getByRole('heading', { name: '오늘 작업팀' })).toBeVisible();
+  await expect(page).toHaveURL(/\/owner\/team$/);
+});
+
+test('relogin to another farm clears the prior work route', async ({ page }) => {
+  await page.goto('/owner/work/work-demo-01');
+  await expect(page.getByText('farm-demo').first()).toBeVisible();
+  await page.evaluate(() => { localStorage.removeItem('batmeori-demo-owner-session'); window.dispatchEvent(new Event('batmeori:owner-unauthorized')); });
+  await page.getByLabel('농장 코드').fill('farm-other');
+  await page.getByLabel('PIN').fill('1234');
+  await page.getByRole('button', { name: '내 농장으로 들어가기' }).click();
+  await expect(page).toHaveURL(/\/owner\/home$/);
+  await expect(page.getByRole('heading', { name: '오늘 어떤 작업을 시킬까요?' })).toBeVisible();
+});
+
+test('mobile current-work navigation falls back to home until a work is loaded', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 760 });
+  await page.goto('/owner/team');
+  await page.getByRole('button', { name: '진행 중 작업' }).click();
+  await expect(page).toHaveURL(/\/owner\/home$/);
+  await expect(page.getByRole('heading', { name: '오늘 어떤 작업을 시킬까요?' })).toBeVisible();
+});
+
+test('owner session server failure stays distinct from login and can retry', async ({ page }) => {
+  await page.goto('/start');
+  await page.evaluate(() => {
+    localStorage.setItem('batmeori-demo-owner-session', '{broken');
+    history.pushState({}, '', '/owner/home');
+    dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByRole('heading', { name: '농장 연결을 확인할 수 없어요' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '농장주 로그인' })).toBeHidden();
+  await page.evaluate((value) => localStorage.setItem('batmeori-demo-owner-session', JSON.stringify(value)), ownerAuth);
+  await page.getByRole('button', { name: '다시 연결' }).click();
+  await expect(page.getByRole('heading', { name: '오늘 어떤 작업을 시킬까요?' })).toBeVisible();
+});
 
 test('logo returns to the homepage without adding a hash', async ({ page }) => {
   await page.goto('/#faq');
@@ -62,7 +127,7 @@ test('review replays the original recording', async ({ page }) => {
   await page.getByRole('button', { name: '녹음 시작' }).click();
   await page.getByRole('button', { name: '그만 말하기' }).click();
   await page.getByRole('button', { name: '음성 제출' }).click();
-  await page.getByRole('button', { name: '원음 다시 듣기' }).click();
+  await page.getByRole('button', { name: '원음 듣기' }).click();
   await expect.poll(() => page.evaluate(async () => (window as unknown as { __lastAudioBlob?: Blob }).__lastAudioBlob?.text())).toBe('original-audio');
 });
 
@@ -97,12 +162,20 @@ test('owner can re-record only quantity before confirmation', async ({ page }) =
 test('QR join sends selected language', async ({ page }) => {
   await page.addInitScript((value) => localStorage.setItem('batmeori-demo-today-team', JSON.stringify(value)), { ...team, members: [] });
   await page.goto(`/team/${teamToken}`);
-  await page.getByLabel('팀 참여 링크 또는 코드').fill(teamToken);
-  await page.getByRole('button', { name: '다음' }).click();
-  await page.getByLabel('이름 또는 별명').fill('Nguyễn');
   await page.getByRole('button', { name: 'नेपाली' }).click();
-  await page.getByRole('button', { name: '오늘 작업팀 들어가기' }).click();
+  await expect(page.getByRole('heading', { name: 'तपाईंको नाम लेख्नुहोस्' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('ne');
+  await page.getByLabel('नाम वा उपनाम').fill('Nguyễn');
+  await page.getByRole('button', { name: 'आजको टोलीमा सामेल' }).click();
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('batmeori-demo-today-team')!).members[0].language_code)).toBe('ne');
+});
+
+test('expired today-team QR asks for a newly issued QR', async ({ page }) => {
+  await page.addInitScript((value) => localStorage.setItem('batmeori-demo-today-team', JSON.stringify(value)), { ...team, expires_at: new Date(Date.now() - 1_000).toISOString(), members: [] });
+  await page.goto(`/team/${teamToken}`);
+  await page.getByLabel('Tên hoặc biệt danh').fill('Nguyễn');
+  await page.getByRole('button', { name: 'Tham gia nhóm hôm nay' }).click();
+  await expect(page.getByRole('alert')).toContainText('Mã đã hết hạn');
 });
 
 test('QR camera opens without native BarcodeDetector', async ({ page }) => {
@@ -175,21 +248,65 @@ test('owner QR stays visible when secure polling omits the raw join URL', async 
   await expect(page.getByRole('img', { name: '오늘 작업팀 참여 QR 코드' })).toBeVisible();
 });
 
+test('today-team QR restores after refresh and rotates only on explicit request', async ({ page }) => {
+  await page.addInitScript((value) => localStorage.setItem('batmeori-demo-today-team', JSON.stringify(value)), team);
+  await page.goto('/owner/team');
+  await expect(page.getByText(team.join_url, { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText(team.join_url, { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '새 QR 발급' }).click();
+  await page.getByRole('button', { name: '새 QR 발급 확인' }).click();
+  await expect(page.getByRole('status')).toContainText('이전 QR은 사용할 수 없습니다');
+  await expect(page.getByText(team.join_url, { exact: true })).toBeHidden();
+});
+
+test('confirmed work links to today-team assignment and is selected by default', async ({ page }) => {
+  await page.addInitScript((value) => localStorage.setItem('batmeori-demo-today-team', JSON.stringify(value)), team);
+  await page.goto('/owner/new');
+  await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
+  await page.getByRole('button', { name: '확정하기' }).click();
+  await page.getByRole('button', { name: '오늘 작업팀에 배정' }).click();
+  await expect(page.getByLabel('Nguyễn 작업 선택')).toHaveValue('work-demo-01');
+});
+
 test('remote briefing renders schema v2 DTO', async ({ page }) => {
   await page.goto('/w/demo-vi-token');
   await expect(page.getByText('Công việc mới nhất')).toBeVisible();
-  await expect(page.getByText(/TTS: FALLBACK/)).toBeVisible();
+  await expect(page.getByRole('listitem')).toHaveCount(4);
+  await expect(page.getByText('Mang ủng chống trượt.')).toHaveCount(0);
+  await expect(page.getByText('NỘI DUNG DEMO').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Xem từng bước' })).toBeVisible();
+  await expect(page.getByText(/TTS:|AI_TRANSLATION|[a-f0-9]{32}/)).toBeHidden();
+});
+
+test('Nepali briefing is fully localized, complete, and fits a narrow phone', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 800 });
+  await page.goto('/w/demo-ne-token');
+  await expect.poll(() => page.evaluate(() => document.documentElement.lang)).toBe('ne');
+  await expect(page.getByRole('listitem')).toHaveCount(4);
+  await expect(page.getByText('नचिप्लिने बुट लगाउनुहोस्।')).toHaveCount(0);
+  await expect(page.getByText('डेमो सामग्री').first()).toBeVisible();
+  await expect(page.getByText('20 बोरा')).toBeVisible();
+  const mainText = await page.locator('main').innerText();
+  expect(mainText).not.toMatch(/[가-힣]/);
+  expect(mainText).not.toMatch(/Ruộng|Thu hoạch|Mang|Trước|Ghi chú/);
+  expect(mainText).not.toMatch(/TTS:|AI_TRANSLATION|[a-f0-9]{32}/);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.getByRole('button', { name: 'चरणहरू हेर्नुहोस्' }).click();
+  const next = page.getByRole('button', { name: 'अर्को' });
+  await next.click(); await next.click(); await next.click();
+  await expect(page.getByRole('button', { name: 'काम सूचीमा फर्कनुहोस्' })).toBeVisible();
 });
 
 test('team member sees only explicitly assigned work', async ({ page }) => {
   await seededWorker(page);
   await page.goto('/worker/my');
   await expect(page.getByRole('heading', { name: 'Thu hoạch hành' })).toBeVisible();
-  await expect(page.getByLabel('assigned work')).toBeHidden();
+  await expect(page.getByLabel('Công việc hôm nay')).toBeHidden();
   await expect(page.getByText(/STRAWBERRY/)).toBeHidden();
 });
 
-test('team member switches both explicitly assigned crops and refreshes regenerated quantity', async ({ page }) => {
+test('team member switches both explicitly assigned crops even when the previously viewed work has a newer version', async ({ page }) => {
   await page.addInitScript((value) => {
     localStorage.setItem('batmeori-demo-session', JSON.stringify(value.session));
     localStorage.setItem('batmeori-demo-sessions', JSON.stringify([value.session, value.strawberry]));
@@ -197,10 +314,9 @@ test('team member switches both explicitly assigned crops and refreshes regenera
     localStorage.setItem('batmeori-demo-today-team-member', 'member-id');
   }, { session: ownerSession, strawberry: strawberrySession, team: { ...team, members: [{ ...team.members[0], assignment_session_ids: ['work-demo-01', 'work-demo-strawberry'] }] } });
   await page.goto('/worker/my');
-  await expect(page.getByLabel('assigned work')).toBeVisible();
+  await expect(page.getByLabel('Công việc hôm nay')).toBeVisible();
   await page.getByRole('button', { name: /Thu hoạch dâu tây/ }).click();
   await expect(page.getByRole('heading', { name: 'Thu hoạch dâu tây' })).toBeVisible();
-  const oldTts = await page.getByText(/TTS: FALLBACK/).textContent();
   await page.evaluate(() => {
     const sessions = JSON.parse(localStorage.getItem('batmeori-demo-sessions')!);
     const strawberry = sessions.find((session: { session_id: string }) => session.session_id === 'work-demo-strawberry');
@@ -210,14 +326,28 @@ test('team member switches both explicitly assigned crops and refreshes regenera
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(page.getByRole('button', { name: /Thu hoạch dâu tây · Ruộng dâu số 2/ })).toBeVisible();
   await expect(page.getByRole('status')).toContainText('Có hướng dẫn mới');
-  await expect(page.getByText(/15 망/)).toBeVisible();
-  await expect.poll(() => page.getByText(/TTS: FALLBACK/).textContent()).not.toBe(oldTts);
+  await expect(page.getByText(/15 bao/)).toBeVisible();
+  await expect(page.getByText(/TTS:|AI_TRANSLATION|[a-f0-9]{32}/)).toBeHidden();
+  await page.getByRole('button', { name: /Thu hoạch hành · Ruộng hành số 1/ }).click();
+  await expect(page.getByRole('heading', { name: 'Thu hoạch hành' })).toBeVisible();
+});
+
+test('owner can open every published work from the home list', async ({ page }) => {
+  await page.addInitScript((value) => {
+    localStorage.setItem('batmeori-demo-session', JSON.stringify(value.sessions[0]));
+    localStorage.setItem('batmeori-demo-sessions', JSON.stringify(value.sessions));
+  }, { sessions: [ownerSession, strawberrySession] });
+  await page.goto('/owner/home');
+  await expect(page.getByText('양파 수확', { exact: true })).toBeVisible();
+  await page.getByText('딸기 수확', { exact: true }).click();
+  await expect(page.getByRole('heading', { name: '진행 중 작업' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '1. 딸기 수확' })).toBeVisible();
 });
 
 test('storyboard refresh announces and visualizes a newer version', async ({ page }) => {
   await page.addInitScript((value) => localStorage.setItem('batmeori-demo-session', JSON.stringify(value)), ownerSession);
   await page.goto('/owner/work/work-demo-01/review');
-  await expect(page.getByText('최신 내용', { exact: true })).toBeVisible();
+  await expect(page.getByText('작업 확정 완료', { exact: true })).toBeVisible({ timeout: 10_000 });
   await page.evaluate(() => {
     const session = JSON.parse(localStorage.getItem('batmeori-demo-session')!);
     session.current_version = 2; session.version.version = 2; session.version.state.quantity = { value: 15, unit: '망' };
@@ -242,6 +372,7 @@ test('owner can select each published work for a team member', async ({ page }) 
 
 test('legacy worker briefing is read-only', async ({ page }) => {
   await page.goto('/w/demo-legacy-token');
-  await expect(page.getByRole('heading', { name: '기존 작업 표시' })).toBeVisible();
-  await expect(page.getByText('Hướng dẫn cũ · chỉ xem')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Hướng dẫn công việc cũ' })).toBeVisible();
+  await expect(page.getByText('Chỉ xem')).toBeVisible();
+  await expect(page.locator('main')).not.toContainText(/[가-힣]/);
 });

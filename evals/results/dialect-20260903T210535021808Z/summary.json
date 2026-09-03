@@ -1,0 +1,37 @@
+{
+  "total": 12,
+  "passed": 10,
+  "failed": [
+    "context-holdout-05#r1",
+    "context-holdout-05#r2"
+  ],
+  "excluded_negative_family": [],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "021ab2ff6ba582f3860e1e9e42a714047c3c793a",
+  "prompt_sha256": "4ef974da8a3e041c9a407b2752bca33237223fc4ea32d3b0c684a0fe476fe203",
+  "dataset_sha256": {
+    "evals/dialect-context-holdout-20260904.jsonl": "69c15b3ca4a882af2afb2c58e48f70061d1cf57d57e96c08fd25a737157c9f84"
+  },
+  "audio_count": 0,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review.",
+  "context_sha256": {
+    "ai\\references\\delivery-policy-v2.json": "7aa23e3d61cf9df4ee35d98b09806c69fe44e6a99381376ef1208867a287aee2",
+    "ai\\references\\dialect-v2.json": "0e202c400b3679fce0bda967b8d6ea1025e662cad86b023dcbba1af433a8b36b",
+    "ai\\references\\structure-parsing-v1.json": "bba3dbceda622b4dd316f31eb4d8823bfbc9ec2de33cdf220c1d62fb4afb1ce4"
+  },
+  "dialect_context": false,
+  "repetitions": 2,
+  "source_sha256_before": {
+    "ai\\prompts\\prompt-quantity-change-001.md": "caabeadd63e869a1675d4187e08d01748aec695b2ca1fe794f1519d89afbfefe",
+    "ai\\prompts\\prompt-structure-005.md": "4ef974da8a3e041c9a407b2752bca33237223fc4ea32d3b0c684a0fe476fe203",
+    "ai\\prompts\\prompt-structure-supplement-002.md": "34b2cd2d880c9b098f0080a6e5d1273dae128c9af6fef1506364e79d35187e4a",
+    "ai\\prompts\\prompt-transcription-002.md": "ebc60def478525aa83bc9ba3351c5aa0dcbcf074af6d7abe6bb636f306836d0c",
+    "ai\\prompts\\prompt-transcription-review-001.md": "63980c4fc75ccafdd7f81c704c2281cdf268c0918c7d0559bcca93567983e4b3",
+    "ai\\references\\dialect-v2.json": "0e202c400b3679fce0bda967b8d6ea1025e662cad86b023dcbba1af433a8b36b",
+    "ai\\index.mjs": "e3d14b03b6c891e4ec6416334f5ec7046854c8cf2c0487eb02a332893829266c",
+    "ai\\lib\\openai-provider.mjs": "c06dbc2cd99dbbb98b2118caa51b9951315600d6383da3d0fcc7ab5094a166c0",
+    "backend\\app\\main.py": "1277a8cd5eaa62b1d3b5b43c37fd9e38ef3282dc4012a2fbd0614676d131d223"
+  },
+  "source_changed_during_run": false
+}

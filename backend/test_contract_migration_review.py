@@ -9,9 +9,13 @@ class ContractMigrationReviewTests(unittest.TestCase):
     def test_openapi_v2_write_worker_and_legacy_read_contracts(self):
         openapi = (ROOT / "docs" / "openapi.yaml").read_text(encoding="utf-8")
 
-        self.assertIn("state: { $ref: '#/components/schemas/StructureV2' }", openapi)
+        self.assertIn("state: { $ref: '#/components/schemas/WorkState' }", openapi)
         self.assertIn("schema: { $ref: '#/components/schemas/WorkerBriefing' }", openapi)
         self.assertIn("LegacyWorkSessionRead", openapi)
+        self.assertIn("LegacyWorkVersion", openapi)
+        self.assertIn("/api/v1/tts/{text_hash}/{language_code}:", openapi)
+        self.assertIn("'403': { $ref: '#/components/responses/Forbidden' }", openapi)
+        self.assertNotIn("    WorkerAssignment:", openapi)
         self.assertIn("contract_version: { type: string, const: structure-v2 }", openapi)
 
     def test_quantity_rpc_is_v2_only_and_farm_scoped(self):
@@ -77,6 +81,90 @@ class ContractMigrationReviewTests(unittest.TestCase):
         ):
             self.assertIn(invariant, sql)
 
+    def test_clean_install_bootstrap_closes_the_009_forward_reference(self):
+        migrations = ROOT / "supabase" / "migrations"
+        before_009 = "\n".join(path.read_text(encoding="utf-8") for path in sorted(migrations.glob("*.sql"))[:8]).lower()
+        migration_009 = (migrations / "202609030009_two_crop_owner_scope.sql").read_text(encoding="utf-8").lower()
+        migration_012 = (migrations / "202609030012_refresh_quantity_translations.sql").read_text(encoding="utf-8").lower()
+        bootstrap = (ROOT / "supabase" / "clean-install-bootstrap.sql").read_text(encoding="utf-8").lower()
+        five_argument_declaration = (
+            "p_farm_id uuid,\n  p_session_id uuid,\n  p_expected_version integer,\n"
+            "  p_quantity jsonb,\n  p_state_json jsonb"
+        )
+        signature = "public.publish_quantity_change(uuid, uuid, integer, jsonb, jsonb)"
+
+        self.assertNotIn(five_argument_declaration, before_009)
+        self.assertIn(f"revoke all on function {signature}", migration_009)
+        self.assertIn("clean_install_bootstrap_requires_empty_database", bootstrap)
+        self.assertIn("namespace.nspname = 'public' and relation.relkind in ('r', 'p')", bootstrap)
+        self.assertIn(five_argument_declaration, bootstrap)
+        self.assertIn(f"revoke all on function {signature}", bootstrap)
+        self.assertIn(f"drop function if exists {signature};", migration_012)
+
+    def test_farm_code_owner_credentials_are_provisioned_and_authenticated_per_farm(self):
+        sql = (ROOT / "supabase" / "migrations" / "202609030015_farm_code_owner_credentials.sql").read_text(encoding="utf-8")
+
+        for invariant in (
+            "drop index if exists public.demo_owners_active_farm_idx",
+            "create unique index if not exists demo_owners_one_active_credential_per_farm_idx",
+            "on public.demo_owners (farm_id)",
+            "where is_active",
+            "create function public.provision_farm_owner(",
+            "p_farm_code text",
+            "p_display_name text",
+            "p_pin text",
+            "farm_code text, farm_name text",
+            "on conflict (farm_id) where is_active do update",
+            "extensions.crypt(p_pin, extensions.gen_salt('bf', 12))",
+            "create function public.authenticate_farm_owner(p_farm_code text, p_pin text)",
+            "farm.slug = lower(btrim(p_farm_code))",
+            "extensions.crypt(p_pin, owner.pin_hash) = owner.pin_hash",
+            "grant execute on function public.provision_farm_owner(text, text, text) to service_role",
+            "grant execute on function public.authenticate_farm_owner(text, text) to service_role",
+        ):
+            self.assertIn(invariant, sql)
+
+        self.assertNotIn("drop function if exists public.authenticate_demo_owner", sql)
+        self.assertNotIn("drop function if exists public.seed_demo_owner", sql)
+        self.assertNotIn("revoke all on function public.authenticate_demo_owner", sql)
+        self.assertNotIn("revoke all on function public.seed_demo_owner", sql)
+
+        returned_columns = sql.split(") returns table(", 1)[1].split(")\nlanguage plpgsql", 1)[0]
+        self.assertNotIn("pin", returned_columns)
+
+    def test_015_fails_before_active_credential_data_loss_and_serializes_qr_rotation(self):
+        sql = (ROOT / "supabase" / "migrations" / "202609030015_farm_code_owner_credentials.sql").read_text(encoding="utf-8")
+
+        for invariant in (
+            "having count(*) > 1",
+            "active_demo_owner_duplicate",
+            "create table if not exists public.today_work_team_invite_rotations",
+            "primary key (team_id, idempotency_key)",
+            "create function public.rotate_today_work_team_invite(",
+            "for update",
+            "values (target_team.id, target_team.invite_issue_idempotency_key)",
+            "on conflict do nothing",
+            "return next target_team",
+            "create function public.p0_readiness()",
+            "to_regprocedure('public.authenticate_farm_owner(text,text)')",
+            "to_regprocedure('public.provision_farm_owner(text,text,text)')",
+            "grant execute on function public.p0_readiness() to service_role",
+        ):
+            self.assertIn(invariant, sql)
+
+    def test_farm_owner_provisioner_reads_secrets_without_printing_them(self):
+        source = (ROOT / "backend" / "provision_farm_owner.py").read_text(encoding="utf-8")
+
+        for invariant in (
+            'required_environment("FARM_CODE")',
+            'required_environment("FARM_DISPLAY_NAME")',
+            'required_environment("FARM_OWNER_PIN")',
+            '"provision_farm_owner"',
+        ):
+            self.assertIn(invariant, source)
+        self.assertNotIn("print(pin)", source)
+        self.assertNotIn('os.getenv("FARM_OWNER_PIN",', source)
+
     def test_documented_node_bridge_includes_transcribe_audio_operation(self):
         architecture = (ROOT / "docs" / "ARCHITECTURE.md").read_text(encoding="utf-8")
         contracts = (ROOT / "docs" / "AI_CONTRACTS.md").read_text(encoding="utf-8")
@@ -95,10 +183,24 @@ class ContractMigrationReviewTests(unittest.TestCase):
         ):
             self.assertIn(invariant, sql)
 
-    def test_old_incomplete_quantity_publish_rpc_is_not_callable_after_009(self):
-        sql = (ROOT / "supabase" / "migrations" / "202609030009_two_crop_owner_scope.sql").read_text(encoding="utf-8")
+    def test_legacy_auth_and_write_rpcs_are_removed_only_after_current_cutover(self):
+        migrations = ROOT / "supabase" / "migrations"
+        contract_path = migrations / "202609030017_remove_legacy_write_rpcs.sql"
+        contract = contract_path.read_text(encoding="utf-8")
+        backend = (ROOT / "backend" / "app" / "main.py").read_text(encoding="utf-8")
+        obsolete_signatures = (
+            "authenticate_demo_owner(text)",
+            "seed_demo_owner(text, text)",
+            "publish_initial_draft(uuid, jsonb, text, text, text, boolean, text, text, jsonb)",
+            "publish_quantity_change(uuid, integer, jsonb)",
+            "publish_quantity_change(uuid, uuid, integer, jsonb, jsonb)",
+            "issue_worker_link(uuid, text, jsonb)",
+        )
 
-        self.assertIn("revoke all on function public.publish_quantity_change(uuid, uuid, integer, jsonb, jsonb)", sql)
+        self.assertEqual(contract_path, sorted(migrations.glob("*.sql"))[-1])
+        for signature in obsolete_signatures:
+            self.assertIn(f"drop function if exists public.{signature};", contract)
+            self.assertNotIn(f'"{signature.split("(", 1)[0]}"', backend)
 
     def test_legacy_visual_assets_can_receive_manifest_metadata_once(self):
         sql = (ROOT / "supabase" / "migrations" / "202609030014_backfill_legacy_visual_asset_metadata.sql").read_text(encoding="utf-8")

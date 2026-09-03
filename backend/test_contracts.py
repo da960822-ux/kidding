@@ -60,6 +60,23 @@ class CurrentContractTests(unittest.TestCase):
         self.assertFalse(list(validator.iter_errors(structure("STRAWBERRY", "STRAWBERRY_HARVEST"))))
         self.assertTrue(list(validator.iter_errors(structure("ONION", "ONION_COLLECT"))))
         self.assertTrue(list(validator.iter_errors(structure("ONION", "STRAWBERRY_HARVEST"))))
+
+    def test_empty_steps_require_a_blocking_task_ambiguity(self):
+        validator = Draft202012Validator(json.loads(STRUCTURE_SCHEMA.read_text(encoding="utf-8")))
+        candidate = structure("ONION", "ONION_HARVEST")
+        candidate.update(
+            interpretation="AMBIGUOUS",
+            steps=[],
+            ambiguities=[{"field": "task", "message": "작업을 알 수 없습니다.", "blocking": True, "kind": "TASK"}],
+        )
+        self.assertFalse(list(validator.iter_errors(candidate)))
+
+        candidate["interpretation"] = "READY"
+        self.assertTrue(list(validator.iter_errors(candidate)))
+        candidate["interpretation"] = "AMBIGUOUS"
+        candidate["ambiguities"][0]["blocking"] = False
+        self.assertTrue(list(validator.iter_errors(candidate)))
+
     def test_contract_documents_name_structure_v2_as_current_and_v1_as_legacy(self):
         documents = [
             OPENAPI,

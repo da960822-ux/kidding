@@ -65,13 +65,15 @@ class AssetManifestImportTests(unittest.TestCase):
             sql,
         )
 
-    def test_seed_runner_only_reads_pin_from_environment(self):
-        source = (ROOT / "backend" / "seed_demo_owner.py").read_text(encoding="utf-8")
+    def test_provision_runner_only_reads_credentials_from_environment(self):
+        source = (ROOT / "backend" / "provision_farm_owner.py").read_text(encoding="utf-8")
 
-        self.assertIn('os.getenv("DEMO_OWNER_PIN")', source)
-        self.assertIn('rpc("seed_demo_owner"', source)
+        self.assertIn('required_environment("FARM_CODE")', source)
+        self.assertIn('required_environment("FARM_DISPLAY_NAME")', source)
+        self.assertIn('required_environment("FARM_OWNER_PIN")', source)
+        self.assertIn('rpc(\n        "provision_farm_owner"', source)
         self.assertNotIn("print(pin)", source)
-        self.assertNotIn("DEMO_OWNER_PIN=", source)
+        self.assertNotIn("FARM_OWNER_PIN=", source)
 
 
 if __name__ == "__main__":

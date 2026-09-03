@@ -24,8 +24,9 @@ export function validateStructureV2(value) {
   if (value.contract_version !== 'structure-v2' || value.ontology_version !== ONTOLOGY_VERSION || value.schema_version !== '2') return { ok: false, code: 'INVALID_CONTRACT_VERSION' };
   if (!['READY', 'AMBIGUOUS', 'UNSUPPORTED'].includes(value.interpretation) || !nonEmpty(value.summary_ko) || !['ONION', 'STRAWBERRY'].includes(value.task_family) || !validQuantity(value.quantity) || !nullableString(value.deadline) || !nullableString(value.notes) || !Array.isArray(value.safety) || value.safety.some((item) => !nonEmpty(item))) return { ok: false, code: 'INVALID_STRUCTURE' };
   if (!hasKeys(value.location, ['raw_text', 'kind', 'canonical_name']) || !nullableString(value.location.raw_text) || !['DEICTIC', 'NAMED', 'UNSPECIFIED'].includes(value.location.kind) || !nullableString(value.location.canonical_name)) return { ok: false, code: 'INVALID_LOCATION' };
-  if (!Array.isArray(value.steps) || value.steps.length === 0) return { ok: false, code: 'NO_EXECUTABLE_STEP' };
+  if (!Array.isArray(value.steps)) return { ok: false, code: 'INVALID_STEP' };
   if (value.steps.some((step) => !validStep(step, value.task_family, value.interpretation))) return { ok: false, code: 'INVALID_STEP' };
   if (!Array.isArray(value.ambiguities) || value.ambiguities.some((item) => !validAmbiguity(item)) || (value.interpretation === 'AMBIGUOUS' && value.ambiguities.length === 0)) return { ok: false, code: 'INVALID_AMBIGUITY' };
+  if (value.steps.length === 0 && (value.interpretation !== 'AMBIGUOUS' || !value.ambiguities.some((item) => item.blocking && item.kind === 'TASK'))) return { ok: false, code: 'NO_EXECUTABLE_STEP' };
   return { ok: true };
 }

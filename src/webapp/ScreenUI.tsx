@@ -1,11 +1,13 @@
-import type { ButtonHTMLAttributes, PropsWithChildren, ReactNode } from 'react';
+import { useEffect, useRef, type ButtonHTMLAttributes, type PropsWithChildren, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 export function PageHeading({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => { heading.current?.focus({ preventScroll: true }); }, [title]);
   return (
     <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
-        <h1 className="text-3xl font-black tracking-[-0.035em] text-ink sm:text-4xl">{title}</h1>
+        <h1 ref={heading} tabIndex={-1} className="text-3xl font-black tracking-[-0.035em] text-ink outline-none sm:text-4xl">{title}</h1>
         <p className="mt-2 text-base font-medium leading-7 text-muted sm:text-lg">{description}</p>
       </div>
       {action}

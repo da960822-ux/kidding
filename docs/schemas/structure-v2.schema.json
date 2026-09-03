@@ -13,13 +13,37 @@
     "deadline": {"type": ["string", "null"]},
     "safety": {"type": "array", "items": {"type": "string", "minLength": 1}},
     "notes": {"type": ["string", "null"]},
-    "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/step"}},
+    "steps": {"type": "array", "minItems": 0, "items": {"$ref": "#/$defs/step"}},
     "ambiguities": {"type": "array", "items": {"$ref": "#/$defs/ambiguity"}},
     "schema_version": {"const": "2"},
     "contract_version": {"const": "structure-v2"},
     "ontology_version": {"const": "ontology-v2"}
   },
   "allOf": [
+    {
+      "if": {"properties": {"interpretation": {"const": "AMBIGUOUS"}}, "required": ["interpretation"]},
+      "then": {"properties": {"ambiguities": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"interpretation": {"enum": ["READY", "UNSUPPORTED"]}}, "required": ["interpretation"]},
+      "then": {"properties": {"steps": {"minItems": 1}}}
+    },
+    {
+      "if": {"properties": {"steps": {"maxItems": 0}}, "required": ["steps"]},
+      "then": {
+        "properties": {
+          "interpretation": {"const": "AMBIGUOUS"},
+          "ambiguities": {
+            "contains": {
+              "type": "object",
+              "required": ["blocking", "kind"],
+              "properties": {"blocking": {"const": true}, "kind": {"const": "TASK"}}
+            },
+            "minContains": 1
+          }
+        }
+      }
+    },
     {
       "if": {"properties": {"task_family": {"const": "ONION"}}},
       "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"anyOf": [{"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT"]}, {"type": "null"}]}}}}}}

@@ -22,13 +22,8 @@ services:
       - key: PUBLIC_WEB_BASE_URL
         sync: false
       - key: PUBLIC_API_BASE_URL
-        fromService:
-          type: web
-          name: batmeori-api
-          envVarKey: RENDER_EXTERNAL_URL
-      - key: OPENAI_API_KEY
         sync: false
-      - key: DEMO_OWNER_PIN
+      - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5.6-terra

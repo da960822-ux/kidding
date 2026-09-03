@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node scripts/run-all-tests.mjs",
     "build": "tsc --noEmit -p tsconfig.app.json && vite build --config vite.config.ts",
+    "check:deployment": "node scripts/check-vercel-proxy.mjs",
     "check:contracts": "node scripts/check-frontend-contract.mjs",
-    "test:web": "playwright test tests/webapp/two-crop-team.spec.ts",
+    "test:web": "playwright test tests/webapp/two-crop-team.spec.ts tests/webapp/full-p0-flow.spec.ts tests/webapp/ux-hardening.spec.ts",
     "preview": "vite preview"
   },
   "dependencies": {

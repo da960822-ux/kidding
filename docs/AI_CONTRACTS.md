@@ -25,9 +25,17 @@ provider adapter는 server-only environment에서 실행한다. provider/model/v
 }
 ```
 
-OpenAI adapter는 특정 작물·수량·작업 어휘가 없는 일반 한국어 작업 문맥과 `language=ko`로 `OPENAI_TRANSCRIBE_MODEL`을 먼저 호출하고 token log probability를 확인한다. `OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD`보다 낮은 말 토큰이 있을 때만 `OPENAI_TRANSCRIBE_VERIFICATION_MODEL`로 같은 원음을 다시 전사한다. 두 결과가 다르면 `OPENAI_TRANSCRIPT_REVIEW_MODEL`이 후보에 없는 문장을 만들지 못하는 enum 계약으로 A/B/UNCLEAR만 고른다. 숫자·단위·작업·장소 충돌이 불명확하거나 UNCLEAR이면 빈 transcript로 반환해 `422 AUDIO_UNCLEAR` 재녹음을 요청한다. provider 연결·응답 실패만 `503 PROVIDER_UNAVAILABLE`이다. raw audio는 요청 완료 즉시 삭제하고 transcript만 version 감사에 남긴다. 실행 경로에는 특정 정답 문장, 고정 농업 키워드, 사후 치환 규칙을 넣지 않는다.
+OpenAI adapter는 특정 작물·수량·작업 어휘가 없는 일반 한국어 작업 문맥과 `language=ko`로 `OPENAI_TRANSCRIBE_MODEL`을 먼저 호출하고 token log probability를 확인한다. 한국어 UTF-8 분할 토큰의 대체문자와 byte 조각도 신뢰도 검사에서 제외하지 않는다. `OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD`보다 낮은 말 토큰이 있을 때만 `OPENAI_TRANSCRIBE_VERIFICATION_MODEL`로 같은 원음을 다시 전사한다. 두 결과가 다르면 `OPENAI_TRANSCRIPT_REVIEW_MODEL`이 후보에 없는 문장을 만들지 못하는 enum 계약으로 A/B/UNCLEAR만 고른다. 숫자·단위·작업·장소 충돌이 불명확하거나 UNCLEAR이면 빈 transcript로 반환해 `422 AUDIO_UNCLEAR` 재녹음을 요청한다. provider 연결·응답 실패만 `503 PROVIDER_UNAVAILABLE`이다. raw audio는 요청 완료 즉시 삭제하고 transcript만 version 감사에 남긴다. 실행 경로에는 특정 정답 문장, 고정 농업 키워드, 사후 치환 규칙을 넣지 않는다.
 
 ## 구조화 `structure-v2`
+
+### 사투리 참고 자료
+
+Node runtime은 현재 ontology-v2 전용 JSON 사투리 자료에서 관련 항목을 선택해 초기 구조화·보완·수량 변경 LLM 요청의 참고 문맥으로 전달한다. 원본 transcript는 수정하지 않는다. 자료에는 표현의 의미 후보, 문맥 조건, 반례, 작성 출처·검수 상태를 기록하며, 자체 작성 자료를 공식 사전이나 사람 검수 완료로 표시하지 않는다. 참고 자료는 별도 지시나 정답이 아니며 task_code·수량·장소를 직접 치환하지 않는다. retired code를 가진 legacy 참고 JSON은 사용하지 않는다.
+
+사실 보존은 원문을 글자 그대로 복사하라는 뜻이 아니다. 사투리의 동작 의미와 조사·어미를 표준 한국어로 정리할 수 있지만, 없는 작업·수량·목적지를 만들 수 없다. 수량 단위와 뒤따르는 동사의 경계를 문맥으로 확인하고, 불확실하면 blocking ambiguity로 남긴다. 명시적으로 미정인 수량은 다른 숫자(밭 번호·횟수 등)로 채우지 않는다. 모든 명시적 작업의 순서를 보존하며, 단계별 영상 유무는 작업 분류에 영향을 주지 않는다.
+
+BE는 `DEICTIC` 위치인데 LOCATION ambiguity가 빠진 경우 non-blocking 위치 권고를 추가하고, ambiguity가 있는데 READY인 응답은 AMBIGUOUS로 정규화한다. 원문 위치를 화면에 보존한다. 단순 지시어는 LLM이 non-blocking으로 반환하며, 실제 장소 충돌로 LLM이 반환한 blocking LOCATION은 BE가 임의로 낮추지 않는다. 기존 unknown 값은 추측해 채우지 않는다. schema·risk·게시 권한은 참고 자료보다 우선한다.
 
 입력: transcript와 양파·딸기 ontology. 출력 최소:
 
@@ -53,13 +61,15 @@ OpenAI adapter는 특정 작물·수량·작업 어휘가 없는 일반 한국�
 }
 ```
 
-`interpretation`은 `READY`, `AMBIGUOUS`, `UNSUPPORTED` 중 하나다. `ambiguities[]` 원소는 `field`, `message`, `blocking`, `kind`(`SAFETY|TASK|LOCATION|QUANTITY|TIME|OTHER`)를 가진다. AI는 추측하지 않고 unknown을 `UNSPECIFIED` 또는 `null`로 둔다. 실행할 단계가 없으면 blocking; 대상·장소가 불명확하면 ambiguity; 수량은 언급됐지만 값 또는 단위가 모호할 때만 질문한다. `DEICTIC` location ambiguity는 BE가 non-blocking으로 정규화하므로 owner가 현장 설명 reason으로 전달할 수 있다. `deadline`/`notes`는 선택이므로 질문하지 않는다. 질문은 한 번에 하나, 답변은 기존 draft에 merge한다. non-blocking ambiguity는 owner가 `PUBLISH_AS_IS` 또는 `SUPPLEMENT`를 선택할 수 있다. unsupported non-safety task는 `task_code:null`/`UNSUPPORTED` marker와 video null로 남겨 text+TTS fallback을 허용한다. safety ambiguity는 강제 gate다.
+`interpretation`은 `READY`, `AMBIGUOUS`, `UNSUPPORTED` 중 하나다. `ambiguities[]` 원소는 `field`, `message`, `blocking`, `kind`(`SAFETY|TASK|LOCATION|QUANTITY|TIME|OTHER`)를 가진다. AI는 추측하지 않고 unknown을 `UNSPECIFIED` 또는 `null`로 둔다. 실행할 단계가 없으면 blocking; 대상·장소가 불명확하면 ambiguity; 수량은 언급됐지만 값 또는 단위가 모호할 때만 질문한다. `DEICTIC` 자체는 non-blocking LOCATION 권고이며 owner가 현장 설명 전달 버튼으로 reason을 선택할 수 있다. 실제 장소 후보 충돌이나 실행 불가능을 근거로 한 blocking LOCATION은 보존한다. `deadline`/`notes`는 선택이므로 질문하지 않는다. 질문은 한 번에 하나, 답변은 기존 draft에 merge한다. non-blocking ambiguity는 owner가 `PUBLISH_AS_IS` 또는 `SUPPLEMENT`를 선택할 수 있다. unsupported non-safety task는 `task_code:null`/`UNSUPPORTED` marker와 video null로 남겨 text+TTS fallback을 허용한다. safety ambiguity는 강제 gate다.
 
-모든 step과 ambiguity는 transcript에 실제로 있는 표현에 근거해야 한다. transcript에 없는 단어나 목적지를 ambiguity message, summary, step에 만들지 않는다. 운반은 명시된 이동 동사와 목적지가 모두 있을 때만 `*_TRANSPORT`로 분류한다. 컨테이너에 넣는 표현만으로 운반을 추론하지 않는다. `TASK`, `QUANTITY`, `SAFETY` ambiguity는 blocking이며 `LOCATION`의 현장 지시어만 non-blocking으로 정규화할 수 있다.
+모든 step과 ambiguity는 transcript에 실제로 있는 표현에 근거해야 한다. transcript에 없는 단어나 목적지를 ambiguity message, summary, step에 만들지 않는다. 운반은 명시된 이동 동사와 목적지가 모두 있을 때만 `*_TRANSPORT`로 분류한다. 컨테이너에 넣는 표현만으로 운반을 추론하지 않는다. `TASK`, `QUANTITY`, `SAFETY` ambiguity는 blocking이며 단순 현장 지시어의 `LOCATION` 권고만 non-blocking으로 반환한다.
 
 P0 task_code는 양파의 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`와 딸기의 `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. 각 non-null step은 출력 `task_family`와 일치해야 하며, BE가 이를 다시 검증한다. unsupported non-safety task는 `task_code:null`과 `unsupported_reason`으로 반환한다. owner override 뒤 BE가 `delivery_mode: TEXT_TTS|TEXT`로 보존한다. 안전·HIGH·schema invalid·no executable step은 override할 수 없다. safety는 입력에 명시된 것만 보존한다.
 
 LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구조화 JSON만 반환하고 BE가 검수 manifest와 TTS 결과를 결합해 `openapi.yaml`의 DraftState/PublishedWorkState를 만든다.
+
+한 지시에 두 작물의 실행 작업이 있으면 `AMBIGUOUS`, 빈 `steps`, blocking `TASK`로 작물 선택/분리를 요청한다. required `task_family`에는 원문에 있는 첫 실행 작물을 임시 표현하되 게시 가능한 선택으로 취급하지 않는다. 부정문에만 등장한 작물은 제외한다. 명시적으로 수량을 모른다고 하거나 결정하지 않았다고 한 경우는 수량 자체를 생략한 경우와 구분하며, unknown과 blocking `QUANTITY`를 함께 보존한다.
 
 ## 수량 변경 `quantity-change-v1`
 
@@ -109,7 +119,7 @@ BE adapter는 provider에 지원되는 제약만 담은 사본을 보낸다. 저
 위 canonical schema와 BE semantic validation을 다시 적용한다. provider 호환 사본은
 별도 제품 계약이나 source of truth가 아니다.
 
-빈 `steps[]`는 executable step이 없는 blocking draft다. `READY`에는 하나 이상의 step이 필요하다.
+빈 `steps[]`는 `AMBIGUOUS`이면서 `blocking:true`, `kind:TASK` ambiguity가 하나 이상인 경우에만 허용하는 blocking draft다. `READY`와 `UNSUPPORTED`에는 하나 이상의 executable step이 필요하다.
 
 ## 안전 판정 `safety-policy-v1`
 
@@ -119,7 +129,19 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 입력: 게시된 step text, `language_code`(`ko|vi|ne`), voice settings. 출력: 재생 가능한 `audio_url` 또는 실패 상태. publish 시 text content hash로 생성·cache하며 text를 source of truth로 둔다. 실패하면 text를 표시한다.
 
+## Worker briefing `worker-briefing-v2`
+
+`worker-briefing-v2`는 `vi` 또는 `ne` 하나의 locale 전용 delivery DTO다. `context.location_display`, quantity unit, `deadline`, `notes`, `steps[].title`, `steps[].description`, `safety[].text`, `video[].captions_text`는 모두 선택된 locale로만 보낸다. source Korean 또는 다른 locale의 fallback을 그대로 보내면 package validation이 실패한다.
+
+`context.safety[]`는 worker에게 표시할 현지화된 안전 문구다. 각 문구의 provenance는 기존 `source_detail[]`에 `segment:"SAFETY"`, `step_sequence:null`로 같은 배열 순서에 보존한다. safety는 검수된 `OFFICIAL_GUIDE` HIT(`verified:true`, page/url/license 포함)여야 하며, 안전 번역 MISS는 package를 만들거나 게시할 수 없다. step action provenance는 `step_sequence`과 source step 순서를 보존한다.
+
+`steps[]`는 published WorkVersion의 모든 step을 같은 수와 배열 순서로 보존한다. video match 또는 TTS 실패는 step을 삭제하거나 재정렬하지 않으며 delivery mode만 `TEXT_TTS` 또는 `TEXT`로 낮춘다. TTS input은 `context.safety[]` 전체 다음 `steps[]`의 title·description 전체를 같은 순서로 합친다. Worker DTO의 `tts.text_hash`는 64자리 SHA-256 opaque fingerprint로서 UI에 표시하지 않는다. Node↔BE private `tts_transport`는 그 exact `text`, `text_hash`, audio bytes를 보관해 BE가 package content 기반 expected text/hash를 재검증한다.
+
+worker DTO에는 transcript, raw audio, `risk_assessment`, identity/owner audit field, token/cache key를 넣지 않는다. `tts.text_hash`만 cache validation용 opaque hash로 허용하며 UI는 이를 표시하지 않는다. `session_id`와 version은 published briefing 식별을 위한 허용 field다.
+
 ## 영상 매칭 `visual-match-v1`
+
+현재 전달 정책은 신규 양파 운반(`ONION_TRANSPORT`) package의 영상만 제외하고 같은 작업 코드·텍스트·TTS를 유지한다. 이 설정은 `ai/references/delivery-policy-v2.json`의 데이터로 관리하며 동작 표현 치환이나 task_code 변경에 사용하지 않는다. 다른 단계 영상과 이미 저장된 immutable briefing package는 변경하지 않는다.
 
 입력: allowlisted `task_code`; 출력: `visual_asset_id` 또는 `null`. asset은 `provenance: AI_GENERATED_PREGENERATED`, `review_status: APPROVED`, `safety_level: LOW`일 때만 매칭·게시한다. HIGH는 생성·기록 가능하지만 게시 금지. P0 영상은 기계 정지 수작업뿐이며 운전·회전날·농약·고소작업을 포함하지 않는다.
 

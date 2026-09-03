@@ -1,0 +1,27 @@
+{
+  "total": 50,
+  "passed": 43,
+  "failed": [
+    "v2-24",
+    "v2-25",
+    "v2-26",
+    "v2-30",
+    "jeolla-v2-04",
+    "jeolla-v2-08",
+    "stt-smoke-003"
+  ],
+  "excluded_negative_family": [
+    "v2-27",
+    "v2-28"
+  ],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "021ab2ff6ba582f3860e1e9e42a714047c3c793a",
+  "prompt_sha256": "0215756d39f26587bcf8f6a1e6ca7fbb4f50af50408a946eb07b1fd864a8e1af",
+  "dataset_sha256": {
+    "ai/evals/transcript-v2.jsonl": "aec07657b034321df1b8d4bcebd403f77421ab3a8850a7add1cc4cea627f8eca",
+    "ai/evals/transcript-jeolla-v2.jsonl": "08226641095d78263b2866d9b7f3f83378b94684638ded487bf7fb7fa69b49fc",
+    "evals/dialect-holdout-20260904.jsonl": "ee060d4d3bb89503498e7c8044b29837b996a62859e8a87996c94cf872789310"
+  },
+  "limits": "Authored synthetic text; three synthetic WAVs, no real-speaker accuracy claim. No database writes. Existing 33-case data contains two validator-negative cases excluded from live model scoring. Field-level checks are not full human semantic review."
+}

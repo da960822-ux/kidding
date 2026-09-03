@@ -20,8 +20,8 @@ function App() {
   const appHref = '/start';
 
   useEffect(() => {
-    document.documentElement.lang = locale;
-  }, [locale]);
+    if (!appMode) document.documentElement.lang = locale;
+  }, [appMode, locale]);
 
   const changeLocale = (nextLocale: Locale) => {
     setLocale(nextLocale);

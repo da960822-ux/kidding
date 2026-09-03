@@ -1,0 +1,256 @@
+{
+  "reference_version": "dialect-v2",
+  "provenance": {
+    "kind": "SELF_AUTHORED_DIALECT_KNOWLEDGE",
+    "source": "project-authored semantic hints",
+    "review_status": "PENDING",
+    "verified": false,
+    "official_sources": [
+      {
+        "source_id": "rda-strawberry-2010",
+        "url": "https://www.rda.go.kr/middlePopOpenPopNongsaroDBView.do?no=2010",
+        "status": "COLLECTED_UNVERIFIED",
+        "use": "RDA strawberry harvest and post-harvest terminology",
+        "evidence_summary": "본문의 딸기 수확 요령과 수확 후 품질·손상 관리 항목에서 수확·선별 의미를 확인; 포장 의미는 같은 기술자료의 후처리 맥락에서만 참고.",
+        "license_note": "공공누리 제2유형 표시 자료; 원문 복제 없이 용어 의미만 자체 요약"
+      },
+      {
+        "source_id": "gurye-research-2017",
+        "url": "https://journal.kci.go.kr/kolali/archive/articlePdf?artiId=ART002249040",
+        "status": "OBSERVED_PRIMARY_RESEARCH",
+        "use": "류성기(2017) 전남 구례 방언 문법 연구",
+        "evidence_summary": "초록과 본문에서 여그·여=여기, 저그=저기, -어 뿌리다를 확인; 10대·60대 사용률 차이가 있어 현재 현장 사용을 일반화하지 않음.",
+        "license_note": "연구 내용은 개별 어형 근거로만 요약하고 원문 복제하지 않음"
+      },
+      {
+        "source_id": "rda-safety-guide",
+        "url": "https://farmer.rda.go.kr/farmAttach/healthSafety/publishBook/240571_MF_ATTACH_01.pdf",
+        "status": "COLLECTED_UNVERIFIED",
+        "use": "RDA shared safe-work guide terminology for harvest and sorting"
+      },
+      {
+        "source_id": "nikl-regional-search",
+        "url": "https://opendict.korean.go.kr/",
+        "status": "LOOKUP_ONLY",
+        "use": "National Institute of Korean Language dictionary landing page"
+      },
+      {
+        "source_id": "nikl-dialect-search",
+        "url": "https://dialect.korean.go.kr/dialect/search/coopsearch",
+        "status": "LOOKUP_ONLY",
+        "use": "National Institute of Korean Language regional-language search"
+      },
+      {
+        "source_id": "nikl-yeogeo-example",
+        "url": "https://www.korean.go.kr/nkview/nknews/200007/24_7.htm",
+        "status": "OBSERVED_OFFICIAL_TEXT",
+        "use": "NIKL newsletter quoting 여그 in a student's internet post; not regional frequency evidence",
+        "evidence_summary": "본문 예문에 여그가 실제 표기됨; 의미·현장 빈도는 별도 확정하지 않음.",
+        "license_note": "원문 복제 없이 어형 관찰만 기록"
+      },
+      {
+        "source_id": "nikl-southern-dialect-index",
+        "url": "https://m.korean.go.kr/front/wordLocal/wordLocalList.do",
+        "status": "LOOKUP_ONLY",
+        "use": "National Institute of Korean Language southern-dialect search"
+      },
+      {
+        "source_id": "nikl-jeonnam-research-1987",
+        "url": "https://www.korean.go.kr/nkview/nklife/1987_1/1987_0107.pdf",
+        "status": "LOOKUP_ONLY",
+        "use": "National Institute of Korean Language Jeonnam dialect research reference"
+      },
+      {
+        "source_id": "rda-onion-index",
+        "url": "https://www.nongsaro.go.kr/portal/ps/psb/psbx/cropEbookLst.ps?menuId=PS65290&sStdPrdlstCode=VC041201&stdPrdlstCode=VC",
+        "status": "LOOKUP_ONLY",
+        "use": "RDA onion cultivation guide index for harvest, storage, sorting, packing, and shipping",
+        "license_note": "목록 확인용; 본문 용어 근거로 사용하지 않음"
+      }
+    ],
+    "entry_status": "SELF_AUTHORED_CANDIDATE_UNLESS_ENTRY_SOURCE_IDS",
+      "examples_status": "SELF_AUTHORED"
+  },
+  "entries": [
+    {
+      "id": "onion-harvest",
+      "task_family": "ONION",
+      "task_code": "ONION_HARVEST",
+      "forms": ["캐", "캐부러", "캐불고", "캐서", "뽑아", "거둬", "수확"],
+      "semantic_candidates": ["harvest or dig up onions"],
+      "context_prerequisites": ["an explicit harvest action is required"],
+      "counterexamples": ["a quantity or crop word alone is not a harvest action"],
+      "review_status": "PENDING",
+      "examples": [{"text": "양파를 캐서 자루에 담아부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "onion-trimming",
+      "task_family": "ONION",
+      "task_code": "ONION_TRIMMING",
+      "forms": ["다듬어", "다듬부러", "잎하고 뿌리", "잎 정리", "뿌리 자르", "꼭지"],
+      "semantic_candidates": ["trim onion leaves or roots"],
+      "context_prerequisites": ["an explicit trimming action is required"],
+      "counterexamples": ["a noisy STT spelling of a body part is not a new task"],
+      "review_status": "PENDING",
+      "examples": [{"text": "양파 잎하고 뿌리 다듬어부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "onion-sorting",
+      "task_family": "ONION",
+      "task_code": "ONION_SORTING",
+      "forms": ["갈라", "갈라 놔", "갈라놔", "나눠", "골라", "선별", "크기대로 나눠", "썩은 거 빼", "무른 것", "상한 것", "잔 것", "큰 것"],
+      "semantic_candidates": ["sort or separate onions"],
+      "context_prerequisites": ["an explicit sorting or separating action is required"],
+      "counterexamples": ["putting items in a container is not sorting"],
+      "review_status": "PENDING",
+      "examples": [{"text": "양파 크기대로 갈라 놔부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "onion-transport",
+      "task_family": "ONION",
+      "task_code": "ONION_TRANSPORT",
+      "forms": ["옮겨", "옮겨부러", "날러", "날라", "날러부러", "실어 나르", "수송", "가져가", "갖다 놔"],
+      "semantic_candidates": ["move onions to an explicit destination"],
+      "context_prerequisites": ["explicit movement action and explicit destination"],
+      "counterexamples": ["putting an item into a container alone does not prove transport"],
+      "review_status": "PENDING",
+      "source_ids": [],
+      "evidence_status": "SELF_AUTHORED_CANDIDATE",
+      "examples": [{"text": "양파를 창고로 옮겨부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "strawberry-harvest",
+      "task_family": "STRAWBERRY",
+      "task_code": "STRAWBERRY_HARVEST",
+      "forms": ["따", "따부러", "따서", "익은 거 따", "수확"],
+      "semantic_candidates": ["harvest strawberries"],
+      "context_prerequisites": ["an explicit picking or harvest action is required"],
+      "counterexamples": ["a strawberry word alone is not a harvest action"],
+      "review_status": "PENDING",
+      "source_ids": ["rda-strawberry-2010"],
+      "evidence_status": "OBSERVED_OFFICIAL_SOURCE",
+      "examples": [{"text": "딸기 익은 것만 따부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "strawberry-sorting",
+      "task_family": "STRAWBERRY",
+      "task_code": "STRAWBERRY_SORTING",
+      "forms": ["갈라", "갈라 놔", "갈라놔", "나눠", "골라", "선별", "크기대로 나눠", "무른 것", "상한 것", "잔 것", "큰 것"],
+      "semantic_candidates": ["sort or separate strawberries"],
+      "context_prerequisites": ["an explicit sorting or separating action is required"],
+      "counterexamples": ["putting items in a container is not sorting"],
+      "review_status": "PENDING",
+      "source_ids": ["rda-strawberry-2010"],
+      "evidence_status": "OBSERVED_OFFICIAL_SOURCE",
+      "examples": [{"text": "딸기 크기대로 골라 놔부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "strawberry-inspection",
+      "task_family": "STRAWBERRY",
+      "task_code": "STRAWBERRY_INSPECTION",
+      "forms": ["상한지 봐", "상한지봐", "익었나 봐", "살펴", "확인", "검사"],
+      "semantic_candidates": ["inspect strawberries for spoilage or condition"],
+      "context_prerequisites": ["an explicit inspection or checking action is required"],
+      "counterexamples": ["a safety or quality concern without an inspection action is not a step"],
+      "review_status": "PENDING",
+      "source_ids": ["rda-strawberry-2010"],
+      "evidence_status": "OBSERVED_OFFICIAL_SOURCE",
+      "examples": [{"text": "딸기 상한 것 있는지 살펴부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "strawberry-packing",
+      "task_family": "STRAWBERRY",
+      "task_code": "STRAWBERRY_PACKING",
+      "forms": ["담아", "담아부러", "포장", "상자에 담아", "상자에 넣어", "봉지에 담아", "팩에 담아"],
+      "semantic_candidates": ["put strawberries into packaging or pack them"],
+      "context_prerequisites": ["an explicit packing or placing-in-packaging action is required"],
+      "counterexamples": ["packing does not imply transport to another destination"],
+      "review_status": "PENDING",
+      "source_ids": ["rda-strawberry-2010"],
+      "evidence_status": "OBSERVED_OFFICIAL_SOURCE",
+      "examples": [{"text": "딸기를 상자에 넣어 포장해부러", "status": "SELF_AUTHORED"}]
+    },
+    {
+      "id": "dialect-directive-ending",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["부러", "뿔고", "잉", "해라잉"],
+      "semantic_candidates": ["dialect directive or connective ending"],
+      "context_prerequisites": ["endings do not create a task by themselves"],
+      "counterexamples": ["an auxiliary or directive ending alone is not an executable step"],
+      "review_status": "PENDING"
+    },
+    {
+      "id": "quantity-action-boundary",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["망", "상자", "바구니", "개", "포대", "자루", "단", "줄"],
+      "semantic_candidates": ["quantity unit followed by a separate action stem"],
+      "context_prerequisites": ["keep a quantity unit separate from an adjacent action; preserve both meanings when supported"],
+      "counterexamples": ["do not merge a unit with an adjacent action stem into one unit"],
+      "review_status": "PENDING"
+    },
+    {
+      "id": "numbered-field-location",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["번 밭", "번밭"],
+      "semantic_candidates": ["numbered field or location qualifier"],
+      "context_prerequisites": ["number + 번 with 밭 is location context, not a quantity; quantity still needs an explicit unit"],
+      "counterexamples": ["do not parse 2번 밭 as quantity 2번"],
+      "review_status": "PENDING"
+    },
+    {
+      "id": "quantity-unknown",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["수량은 아직 모르겠어", "수량은 나중에", "수량 몰라", "몇 망"],
+      "semantic_candidates": ["quantity is explicitly unresolved"],
+      "context_prerequisites": ["ask a blocking quantity clarification and keep quantity null or UNSPECIFIED"],
+      "counterexamples": ["do not mark READY with a guessed quantity"],
+      "review_status": "PENDING"
+    },
+    {
+      "id": "deictic-location",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["여그", "저그", "저짝", "저쪽", "한쪽"],
+      "semantic_candidates": ["deictic location preserved for on-site understanding"],
+      "context_prerequisites": ["preserve raw deictic location with canonical_name null; a deictic expression alone permits execution with a non-blocking on-site advisory; block only an explicit location conflict"],
+      "counterexamples": ["do not invent a canonical destination from a deictic expression"],
+      "review_status": "PENDING",
+      "source_ids": ["gurye-research-2017", "nikl-yeogeo-example"],
+      "evidence_status": "OBSERVED_PRIMARY_RESEARCH"
+    },
+    {
+      "id": "named-work-location",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["앞밭", "끝밭", "창고", "선별장", "하우스", "고랑", "두둑", "작업줄"],
+      "semantic_candidates": ["named field, storage, sorting, or greenhouse location"],
+      "context_prerequisites": ["preserve the named location as stated; it may serve as a movement destination"],
+      "counterexamples": ["a named location alone does not prove transport or another action"],
+      "review_status": "PENDING"
+    },
+    {
+      "id": "field-direction",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["안쪽", "바깥쪽", "옆", "뒤", "앞", "건너", "이쪽", "저쪽"],
+      "semantic_candidates": ["field direction or relative location"],
+      "context_prerequisites": ["preserve direction as location context; do not invent a named destination"],
+      "counterexamples": ["a direction does not prove transport without an explicit movement action"],
+      "review_status": "PENDING"
+    },
+    {
+      "id": "work-sequence",
+      "task_family": null,
+      "task_code": null,
+      "forms": ["먼저", "그라고", "그 다음", "다음에", "한데", "따로", "다시"],
+      "semantic_candidates": ["work sequence or grouping cue"],
+      "context_prerequisites": ["use sequence words to order explicit actions only"],
+      "counterexamples": ["a sequence cue or connective does not create a task by itself"],
+      "review_status": "PENDING"
+    }
+  ]
+}

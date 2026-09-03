@@ -17,7 +17,8 @@ function comparableTranscript(value) {
 }
 
 function lowConfidence(logprobs, minimum) {
-  const spokenTokens = Array.isArray(logprobs) ? logprobs.filter((item) => typeof item?.logprob === 'number' && /[\p{L}\p{N}]/u.test(item?.token ?? '')) : [];
+  // Korean UTF-8 characters can span tokens rendered as replacement characters.
+  const spokenTokens = Array.isArray(logprobs) ? logprobs.filter((item) => typeof item?.logprob === 'number' && (/[\p{L}\p{N}\uFFFD]/u.test(item?.token ?? '') || item?.bytes?.some((byte) => byte >= 128))) : [];
   return !spokenTokens.length || spokenTokens.some((item) => item.logprob < minimum);
 }
 

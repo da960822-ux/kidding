@@ -12,7 +12,6 @@ export type V2TaskCode =
 
 // Legacy values are query-only. Keep this open so old stored rows remain readable.
 export type LegacyV1TaskCode = string;
-export type TaskCode = V2TaskCode;
 
 export type Interpretation = 'READY' | 'AMBIGUOUS' | 'UNSUPPORTED';
 export type RiskLevel = 'LOW' | 'HIGH' | 'UNKNOWN';
@@ -115,7 +114,6 @@ export interface WorkDraft {
   interpretation: Interpretation;
   state: WorkState;
   ambiguities: Ambiguity[];
-  risk_assessment: RiskAssessment;
   transcript: string;
   schema_version: '2';
   contract_version: 'structure-v2';
@@ -126,7 +124,6 @@ export interface WorkVersion {
   version: number;
   lifecycle: 'PUBLISHED' | 'SUPERSEDED';
   state: WorkState;
-  risk_assessment?: RiskAssessment;
   ambiguity_override?: boolean;
   override_reason?: OverrideReason | null;
   overridden_at?: string | null;
@@ -195,6 +192,7 @@ export interface V2WorkerContext {
   location_display: string;
   quantity: Quantity | 'UNSPECIFIED' | null;
   deadline: string | null;
+  safety: string[];
   notes: string | null;
 }
 
@@ -209,7 +207,7 @@ export interface V2WorkerStep {
 }
 
 export interface WorkerSourceDetail {
-  step_sequence: number;
+  step_sequence: number | null;
   segment: Translation['segment'];
   source: Translation['source'];
   guide_lookup: Translation['guide_lookup'];
@@ -274,6 +272,7 @@ export type ApiErrorCode =
   | 'ACCESS_DENIED'
   | 'LINK_EXPIRED'
   | 'VERSION_CONFLICT'
+  | 'LEGACY_READ_ONLY'
   | 'OVERRIDE_NOT_ALLOWED'
   | 'AUDIO_UNCLEAR'
   | 'SCHEMA_INVALID'
@@ -284,4 +283,8 @@ export type ApiErrorCode =
 export interface OwnerSession {
   authenticated: true;
   expires_at: string;
+  farm: {
+    code: string;
+    display_name: string;
+  };
 }

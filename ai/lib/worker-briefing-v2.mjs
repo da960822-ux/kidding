@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+
+const { video_excluded_task_codes: videoExcludedTaskCodes } = JSON.parse(readFileSync(new URL('../references/delivery-policy-v2.json', import.meta.url), 'utf8'));
 
 const LANGUAGES = new Set(['vi', 'ne']);
-const FORBIDDEN = new Set(['transcript', 'raw_audio', 'risk_assessment', 'token_hash', 'owner_id', 'farm_id', 'member_id', 'worker_id', 'display_name']);
+const FORBIDDEN = new Set(['transcript', 'raw_audio', 'risk_assessment', 'token', 'token_hash', 'cache_key', 'owner_id', 'farm_id', 'member_id', 'worker_id', 'display_name']);
 const hash = (value) => createHash('sha256').update(value).digest('hex');
 
 function assertLanguage(languageCode) {
@@ -13,6 +16,17 @@ function assertIdentityFree(value) {
     if (FORBIDDEN.has(key)) throw new TypeError('IDENTITY_FIELD_FORBIDDEN');
     assertIdentityFree(nested);
   }
+}
+
+function localized(value) {
+  if (typeof value !== 'string' || !value.trim() || /\p{Script=Hangul}/u.test(value)) throw new TypeError('LOCALE_LEAK');
+  return value;
+}
+
+function guideFor(languageCode, candidate) {
+  return candidate && candidate.language_code === languageCode && candidate.verified === true && typeof candidate.translated_text === 'string'
+    && candidate.translated_text.trim() && Number.isInteger(candidate.source_page) && typeof candidate.source_url === 'string'
+    && /^https?:\/\//.test(candidate.source_url) && typeof candidate.license === 'string' && candidate.license.trim() ? candidate : null;
 }
 
 function sourceDetail(stepSequence, segment, guide) {
@@ -28,9 +42,16 @@ async function localizeContext(work, languageCode, translate) {
     work.notes === null || work.notes === undefined ? null : translate({ languageCode, text: work.notes, segment: 'OTHER' }),
   ]);
   const quantity = work.quantity && typeof work.quantity === 'object'
-    ? { ...work.quantity, unit: await translate({ languageCode, text: work.quantity.unit, segment: 'QUANTITY' }) }
-    : work.quantity;
-  return { task_family: work.task_family, location_display: locationDisplay, quantity, deadline, notes };
+    ? { ...work.quantity, unit: localized(await translate({ languageCode, text: work.quantity.unit, segment: 'QUANTITY' })) }
+    : work.quantity === 'UNSPECIFIED' ? null : work.quantity;
+  return {
+    task_family: work.task_family,
+    location_display: localized(locationDisplay),
+    quantity,
+    deadline: deadline === null ? null : localized(deadline),
+    notes: notes === null ? null : localized(notes),
+    safety: [],
+  };
 }
 
 export async function buildWorkerPackagesV2(work, languages, services) {
@@ -38,23 +59,31 @@ export async function buildWorkerPackagesV2(work, languages, services) {
   if (!Array.isArray(languages) || new Set(languages).size !== languages.length) throw new TypeError('INVALID_LANGUAGES');
   const entries = await Promise.all(languages.map(async (languageCode) => {
     assertLanguage(languageCode);
-    const video = [];
-    const localized = await Promise.all(work.steps.map(async (step) => {
-      const title = await services.translate({ languageCode, text: step.title_ko, segment: 'ACTION' });
-      const candidate = await (services.guideLookup?.({ languageCode, canonical_ko: step.description_ko }) ?? null);
-      const guide = candidate && candidate.language_code === languageCode && typeof candidate.translated_text === 'string'
-        && candidate.translated_text.trim() && Number.isInteger(candidate.source_page) && typeof candidate.source_url === 'string'
-        && typeof candidate.license === 'string' ? candidate : null;
-      const description = guide?.translated_text ?? await services.translate({ languageCode, text: step.description_ko, segment: 'ACTION' });
-      const asset = services.matchVisualAsset(step.task_code);
-      if (asset) video.push({ step_sequence: step.sequence, asset_id: asset.id, task_code: step.task_code, video_url: asset.public_path, provenance: 'AI_GENERATED_PREGENERATED', review_status: 'APPROVED', safety_level: 'LOW', captions_text: asset.captions_text });
-      return { sequence: step.sequence, task_code: step.task_code, title, description, delivery_mode: asset ? 'VIDEO' : 'TEXT_TTS', guide };
+    const context = await localizeContext(work, languageCode, services.translate);
+    const safety = await Promise.all((work.safety ?? []).map(async (notice) => {
+      const guide = guideFor(languageCode, await (services.guideLookup?.({ languageCode, canonical_ko: notice, segment: 'SAFETY' }) ?? null));
+      if (!guide) throw new TypeError('SAFETY_TRANSLATION_UNVERIFIED');
+      return { text: localized(guide.translated_text), guide };
     }));
-    const steps = localized.map(({ sequence, task_code, title, description, delivery_mode }) => ({ sequence, task_code, title, description, delivery_mode }));
-    const source = localized.map((step) => sourceDetail(step.sequence, 'ACTION', step.guide));
-    const texts = steps.map((step) => `${step.title} ${step.description}`);
-    const textHash = hash(texts.join('\n'));
-    const speech = await services.synthesize({ languageCode, text: texts.join('\n') }).catch(() => ({ status: 'FALLBACK', audio_url: null }));
+    context.safety = safety.map((notice) => notice.text);
+    const localizedSteps = await Promise.all(work.steps.map(async (step) => {
+      const title = localized(await services.translate({ languageCode, text: step.title_ko, segment: 'ACTION' }));
+      const candidate = await (services.guideLookup?.({ languageCode, canonical_ko: step.description_ko }) ?? null);
+      const guide = guideFor(languageCode, candidate);
+      const description = localized(guide?.translated_text ?? await services.translate({ languageCode, text: step.description_ko, segment: 'ACTION' }));
+      const asset = videoExcludedTaskCodes.includes(step.task_code) ? null : services.matchVisualAsset(step.task_code);
+      const video = asset ? { step_sequence: step.sequence, asset_id: asset.id, task_code: step.task_code, video_url: asset.public_path, provenance: 'AI_GENERATED_PREGENERATED', review_status: 'APPROVED', safety_level: 'LOW', captions_text: localized(await services.translate({ languageCode, text: asset.captions_text, segment: 'ACTION' })) } : null;
+      return { sequence: step.sequence, task_code: step.task_code, title, description, delivery_mode: asset ? 'VIDEO' : 'TEXT_TTS', guide, video };
+    }));
+    const steps = localizedSteps.map(({ sequence, task_code, title, description, delivery_mode }) => ({ sequence, task_code, title, description, delivery_mode }));
+    const video = localizedSteps.flatMap((step) => step.video ? [step.video] : []);
+    const source = [
+      ...safety.map((notice) => sourceDetail(null, 'SAFETY', notice.guide)),
+      ...localizedSteps.map((step) => sourceDetail(step.sequence, 'ACTION', step.guide)),
+    ];
+    const text = [...context.safety, ...steps.map((step) => `${step.title} ${step.description}`)].join('\n');
+    const textHash = hash(text);
+    const speech = await services.synthesize({ languageCode, text }).catch(() => ({ status: 'FALLBACK', audio_url: null }));
     const ttsStatus = speech.status === 'READY' ? 'READY' : 'FALLBACK';
     const briefing = {
       session_id: work.session_id,
@@ -62,14 +91,15 @@ export async function buildWorkerPackagesV2(work, languages, services) {
       contract_version: 'worker-briefing-v2',
       ontology_version: 'ontology-v2',
       language_code: languageCode,
-      context: await localizeContext(work, languageCode, services.translate),
+      context,
       badges: ttsStatus === 'FALLBACK' ? ['TEXT_TTS_FALLBACK'] : [],
       steps: steps.map((step) => ttsStatus === 'FALLBACK' && step.delivery_mode === 'TEXT_TTS' ? { ...step, delivery_mode: 'TEXT' } : step),
       source_detail: source,
       tts: { status: ttsStatus, text_hash: textHash, audio_url: speech.audio_url ?? null },
       video
     };
-    return [languageCode, { cache_key: hash(JSON.stringify(briefing)), briefing, tts_transport: { status: ttsStatus, text_hash: textHash, audio_url: speech.audio_url ?? null, audio_bytes_base64: speech.audio_bytes_base64 ?? null } }];
+    assertIdentityFree(briefing);
+    return [languageCode, { cache_key: hash(JSON.stringify(briefing)), briefing, tts_transport: { status: ttsStatus, text, text_hash: textHash, audio_url: speech.audio_url ?? null, audio_bytes_base64: speech.audio_bytes_base64 ?? null } }];
   }));
   return Object.fromEntries(entries);
 }

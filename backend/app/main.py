@@ -16,6 +16,7 @@ import wave
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 from fastapi import Cookie, FastAPI, File, Form, Header, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -36,7 +37,6 @@ TASK_CODES_BY_FAMILY = {
 }
 TASK_CODES = set().union(*TASK_CODES_BY_FAMILY.values())
 INITIAL_CROP_PATTERN = re.compile(r"양파|딸기")
-INITIAL_TASK_PATTERN = re.compile(r"수확|캐|뽑|손질|다듬|선별|분류|고르|골라|운반|옮|나르|따|검사|확인|포장|담")
 LEGACY_TASK_CODES_BY_FAMILY = {
     "ONION": {"ONION_COLLECT", "BAGGING", "LOADING", "WAREHOUSE_TRANSPORT", "STACKING"},
     "STRAWBERRY": set(),
@@ -57,7 +57,7 @@ AI_REQUEST_LIMIT = 12
 TEAM_JOIN_REQUEST_LIMIT = 12
 
 # ponytail: process-local rate limit; use a shared limiter before multi-worker deployment.
-pin_failures: dict[str, list[float]] = {}
+pin_failures: dict[tuple[str, str], list[float]] = {}
 ai_requests: dict[str, list[float]] = {}
 team_join_requests: dict[str, list[float]] = {}
 
@@ -77,6 +77,11 @@ def load_local_env() -> None:
 load_local_env()
 
 
+def valid_public_url(value: str) -> bool:
+    parsed = urlsplit(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc) and not parsed.username and not parsed.password
+
+
 class Settings:
     def __init__(self) -> None:
         self.supabase_url = os.getenv("SUPABASE_URL", "")
@@ -87,6 +92,7 @@ class Settings:
         self.public_web_base_url = os.getenv("PUBLIC_WEB_BASE_URL", "").rstrip("/")
         self.public_api_base_url = os.getenv("PUBLIC_API_BASE_URL", "").rstrip("/")
         self.demo_fallback = os.getenv("DEMO_FALLBACK", "0").lower() in {"1", "true", "yes"}
+        self.app_revision = os.getenv("APP_REVISION") or os.getenv("RENDER_GIT_COMMIT") or "local"
 
     @property
     def origins(self) -> list[str]:
@@ -102,24 +108,26 @@ class Settings:
 
     @property
     def public_web_configured(self) -> bool:
-        return bool(self.public_web_base_url) or (self.demo_fallback and bool(self.origins))
+        if self.public_web_base_url:
+            return valid_public_url(self.public_web_base_url)
+        return self.demo_fallback and any(valid_public_url(origin) for origin in self.origins)
 
     @property
     def public_api_configured(self) -> bool:
-        return bool(self.public_api_base_url) or self.demo_fallback
+        return valid_public_url(self.public_api_base_url)
 
 
 settings = Settings()
 app = FastAPI(
     title="Batmeori API",
-    version="1.1.0",
+    version="2.0.0",
     description="Provider-neutral P0 REST service for onion and strawberry work instructions.",
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Idempotency-Key"],
 )
 
@@ -150,12 +158,20 @@ async def ai_provider_error_handler(_: Request, __: AiProviderError) -> JSONResp
 
 @app.exception_handler(RequestValidationError)
 async def request_validation_handler(_: Request, exc: RequestValidationError) -> JSONResponse:
+    def without_input(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: without_input(item) for key, item in value.items() if key != "input"}
+        if isinstance(value, (list, tuple)):
+            return [without_input(item) for item in value]
+        return value
+
+    errors = [without_input(error) for error in exc.errors()]
     return JSONResponse(
         status_code=422,
         content={
             "code": "SCHEMA_INVALID",
             "message": "입력 형식이 올바르지 않습니다.",
-            "details": {"errors": exc.errors()},
+            "details": {"errors": errors},
         },
     )
 
@@ -303,12 +319,27 @@ class WorkerState(StrictModel):
 
 
 class PinLoginRequest(StrictModel):
+    farm_code: str = Field(min_length=3, max_length=32, pattern=r"^[a-z0-9][a-z0-9-]{2,31}$")
     pin: str = Field(min_length=4, max_length=32)
+
+    @field_validator("farm_code", mode="before")
+    @classmethod
+    def normalized_farm_code(cls, value: Any) -> Any:
+        normalized = value.strip().lower() if isinstance(value, str) else value
+        if not normalized:
+            raise ValueError("farm_code is required")
+        return normalized
+
+
+class OwnerFarm(StrictModel):
+    code: str
+    display_name: str
 
 
 class OwnerSession(StrictModel):
     authenticated: bool = True
     expires_at: datetime
+    farm: OwnerFarm
 
 
 class WorkDraft(StrictModel):
@@ -403,16 +434,6 @@ class WorkerLinkIssueResponse(StrictModel):
     issued_worker_links: list[IssuedWorkerLink]
 
 
-class WorkerAssignment(StrictModel):
-    language_code: str
-    session_id: str
-    version: int
-    lifecycle: str = "PUBLISHED"
-    state: WorkerState
-    badges: list[str]
-    source_detail: list[SegmentTranslation] = Field(default_factory=list)
-
-
 class TeamMember(StrictModel):
     member_id: str
     display_name: str = Field(min_length=1, max_length=30)
@@ -432,7 +453,7 @@ class TodayWorkTeam(StrictModel):
     team_id: str
     work_date: str
     status: str = "ACTIVE"
-    join_url: str | None = None
+    join_url: str
     expires_at: datetime
     members: list[TeamMember] = Field(default_factory=list)
 
@@ -471,14 +492,6 @@ class TeamAssignmentsResponse(StrictModel):
     assignments: list[dict[str, Any]] = Field(default_factory=list)
 
 
-class Briefing(StrictModel):
-    session_id: str
-    version: int
-    language_code: str
-    steps: list[Step] = Field(min_length=1)
-    demo_badge: str | None = None
-
-
 class QuantityChangeParseResult(StrictModel):
     interpretation: str
     quantity: Quantity | None
@@ -504,31 +517,6 @@ class StructureStepOutput(StrictModel):
         return self
 
 
-class StructureOutput(StrictModel):
-    interpretation: Literal["READY", "AMBIGUOUS", "UNSUPPORTED"]
-    summary_ko: str = Field(min_length=1)
-    location: Location
-    task_family: Literal["ONION", "STRAWBERRY"]
-    quantity: Quantity | Literal["UNSPECIFIED"] | None
-    deadline: str | None
-    safety: list[str]
-    notes: str | None
-    steps: list[StructureStepOutput]
-    ambiguities: list[Ambiguity]
-    schema_version: Literal["1"]
-    contract_version: Literal["structure-v1"]
-
-    @model_validator(mode="after")
-    def validate_contract(self) -> "StructureOutput":
-        if self.interpretation == "READY" and not self.steps:
-            raise ValueError("READY requires steps")
-        if self.interpretation == "AMBIGUOUS" and not self.ambiguities:
-            raise ValueError("AMBIGUOUS requires ambiguities")
-        if not self.steps and not any(item.blocking and item.kind == "TASK" for item in self.ambiguities):
-            raise ValueError("empty steps require blocking task ambiguity")
-        return self
-
-
 class StructureOutputV2(StrictModel):
     interpretation: Literal["READY", "AMBIGUOUS", "UNSUPPORTED"]
     summary_ko: str = Field(min_length=1)
@@ -550,6 +538,8 @@ class StructureOutputV2(StrictModel):
             raise ValueError("READY requires steps")
         if self.interpretation == "AMBIGUOUS" and not self.ambiguities:
             raise ValueError("AMBIGUOUS requires ambiguities")
+        if not self.steps and not any(item.blocking and item.kind == "TASK" for item in self.ambiguities):
+            raise ValueError("empty steps require blocking task ambiguity")
         return self
 
 
@@ -634,7 +624,7 @@ def validate_contract_schema(raw: Any, filename: str) -> None:
         raise ApiError(422, "SCHEMA_INVALID", "AI 결과가 계약을 충족하지 않습니다.") from exc
 
 
-def deterministic_risk(transcript: str, output: StructureOutput | StructureOutputV2) -> RiskAssessment:
+def deterministic_risk(transcript: str, output: StructureOutputV2) -> RiskAssessment:
     text = f"{transcript} {' '.join(output.safety)}".lower()
     safety_ambiguity = any(item.kind == "SAFETY" for item in output.ambiguities)
     high_rules = {
@@ -655,7 +645,7 @@ def deterministic_risk(transcript: str, output: StructureOutput | StructureOutpu
 def work_state_from_structure_v2(output: StructureOutputV2, transcript: str = "") -> WorkState:
     location_display = "장소 미지정"
     if output.location.kind == "DEICTIC":
-        location_display = "농장주 확인 필요"
+        location_display = output.location.raw_text or "농장주가 가리킨 곳"
     elif output.location.kind == "NAMED":
         location_display = output.location.canonical_name or output.location.raw_text or "장소 미지정"
     return WorkState(
@@ -696,17 +686,20 @@ async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkSt
 
     state = work_state_from_structure_v2(output, transcript)
     validate_state(state, allow_unsupported=True, for_publish=False)
-    if not state.steps or state.risk_assessment.level != "LOW" or any(item.kind == "SAFETY" for item in output.ambiguities):
+    if state.risk_assessment.level != "LOW" or any(item.kind == "SAFETY" for item in output.ambiguities):
         raise ApiError(422, "OVERRIDE_NOT_ALLOWED", "안전 또는 실행 단계 조건을 충족하지 않습니다.")
     ambiguities = [
-        item.model_copy(update={"blocking": False})
-        if output.location.kind == "DEICTIC" and item.kind == "LOCATION"
-        else item.model_copy(update={"blocking": True})
+        item.model_copy(update={"blocking": True})
         if item.kind in {"TASK", "QUANTITY", "SAFETY"}
         else item
         for item in output.ambiguities
     ]
-    return state, ambiguities, output.interpretation
+    if state.location.kind == "DEICTIC" and not any(item.kind == "LOCATION" for item in ambiguities):
+        ambiguities.append(Ambiguity(
+            field="location", message="가리킨 장소를 현장에서 함께 확인하면 됩니다.", blocking=False, kind="LOCATION",
+        ))
+    interpretation = "AMBIGUOUS" if output.interpretation == "READY" and ambiguities else output.interpretation
+    return state, ambiguities, interpretation
 
 
 def parse_quantity_output(raw: Any, expected_version: int) -> QuantityChangeParseResult:
@@ -739,8 +732,6 @@ def draft_summary(state: WorkState) -> str:
     if isinstance(quantity, Quantity):
         quantity_text = f"{quantity.value}{quantity.unit}"
     location_text = state.location_display
-    if state.location.kind == "DEICTIC":
-        location_text = "농장주가 가리킨 곳"
     crop = "양파" if state.task_family == "ONION" else "딸기"
     task_text = " · ".join(step.title_ko for step in state.steps) or "작업 미지정"
     return f"{location_text} · {crop} {quantity_text} · {task_text}"
@@ -837,22 +828,6 @@ def parse_version(row: dict[str, Any]) -> WorkVersion:
     )
 
 
-def localized_state(state: WorkState, language_code: str, client: Client | None = None) -> WorkState:
-    state_data = state.model_dump()
-    state_data["steps"] = [
-        {
-            **step.model_dump(),
-            "translations": [
-                translation.model_dump()
-                for translation in step.translations
-                if translation.language_code == language_code
-            ],
-        }
-        for step in state.steps
-    ]
-    return WorkState.model_validate(state_data)
-
-
 def localized_worker_state(state: WorkState, language_code: str, client: Client | None = None) -> WorkerState:
     worker_only = {"risk_assessment", "schema_version", "contract_version", "ontology_version"}
     state_data = state.model_dump(exclude=worker_only)
@@ -927,7 +902,7 @@ def team_members(client: Client, team_id: str) -> list[TeamMember]:
     ]
 
 
-def today_team_response(client: Client, team_row: dict[str, Any], join_url: str | None = None) -> TodayWorkTeam:
+def today_team_response(client: Client, team_row: dict[str, Any], join_url: str) -> TodayWorkTeam:
     return TodayWorkTeam(
         team_id=str(team_row["id"]),
         work_date=str(team_row["work_date"]),
@@ -935,10 +910,6 @@ def today_team_response(client: Client, team_row: dict[str, Any], join_url: str 
         expires_at=team_row["expires_at"],
         members=team_members(client, str(team_row["id"])),
     )
-
-
-def worker_assignment_for_session(client: Client, session_id: str, language_code: str, farm_id: str) -> dict[str, Any]:
-    return stored_worker_briefing(client, session_id, language_code, farm_id)
 
 
 def owner_session_response(client: Client, session_row: dict[str, Any], version_row: dict[str, Any]) -> OwnerWorkSession:
@@ -977,22 +948,25 @@ def client_address(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def check_pin_rate_limit(request: Request) -> None:
+def pin_failure_key(request: Request, farm_code: str) -> tuple[str, str]:
+    return client_address(request), farm_code
+
+
+def check_pin_rate_limit(request: Request, farm_code: str) -> None:
     now = time.time()
-    address = client_address(request)
-    recent = [timestamp for timestamp in pin_failures.get(address, []) if now - timestamp < PIN_FAILURE_WINDOW_SECONDS]
-    pin_failures[address] = recent
+    key = pin_failure_key(request, farm_code)
+    recent = [timestamp for timestamp in pin_failures.get(key, []) if now - timestamp < PIN_FAILURE_WINDOW_SECONDS]
+    pin_failures[key] = recent
     if len(recent) >= PIN_FAILURE_LIMIT:
         raise ApiError(429, "RATE_LIMITED", "잠시 후 다시 시도하세요.")
 
 
-def record_pin_failure(request: Request) -> None:
-    address = client_address(request)
-    pin_failures.setdefault(address, []).append(time.time())
+def record_pin_failure(request: Request, farm_code: str) -> None:
+    pin_failures.setdefault(pin_failure_key(request, farm_code), []).append(time.time())
 
 
-def clear_pin_failures(request: Request) -> None:
-    pin_failures.pop(client_address(request), None)
+def clear_pin_failures(request: Request, farm_code: str) -> None:
+    pin_failures.pop(pin_failure_key(request, farm_code), None)
 
 
 def check_ai_rate_limit(request: Request) -> None:
@@ -1023,6 +997,24 @@ def require_idempotency(value: str | None) -> str:
 
 def hash_link_token(token: str) -> str:
     return hmac.new(settings.owner_session_secret.encode(), token.encode(), hashlib.sha256).hexdigest()
+
+
+def today_team_token(team_id: str, issue_key: str) -> str:
+    if not team_id or not issue_key:
+        raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
+    return hmac.new(
+        settings.owner_session_secret.encode(),
+        f"today-team:{team_id}:{issue_key}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def today_team_join_url(team_row: dict[str, Any], request: Request) -> str:
+    token = today_team_token(str(team_row["id"]), str(team_row["invite_issue_idempotency_key"]))
+    public_web_base_url = settings.public_web_base_url or request.headers.get("origin", "").rstrip("/")
+    if not public_web_base_url:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "공개 웹 주소가 준비되지 않았습니다.")
+    return f"{public_web_base_url}/team/{token}"
 
 
 def today_seoul() -> tuple[str, datetime]:
@@ -1163,10 +1155,6 @@ async def read_audio_upload(upload: UploadFile, language_hint: str = "ko") -> by
     return content
 
 
-def provider_unavailable() -> None:
-    raise ApiError(503, "PROVIDER_UNAVAILABLE", "AI 제공자가 준비되지 않았습니다.")
-
-
 async def node_transcript(audio: bytes, filename: str, content_type: str, language_hint: str) -> str:
     try:
         result = await bridge_call(
@@ -1192,8 +1180,8 @@ async def node_transcript(audio: bytes, filename: str, content_type: str, langua
 
 
 def require_initial_instruction(transcript: str) -> None:
-    if not INITIAL_CROP_PATTERN.search(transcript) or not INITIAL_TASK_PATTERN.search(transcript):
-        raise ApiError(422, "AUDIO_UNCLEAR", "작물명과 수행할 작업을 확인하지 못했습니다. 녹음을 들어본 뒤 다시 말씀해주세요.")
+    if not INITIAL_CROP_PATTERN.search(transcript):
+        raise ApiError(422, "AUDIO_UNCLEAR", "지원하는 작물명을 확인하지 못했습니다. 녹음을 들어본 뒤 다시 말씀해주세요.")
 
 
 def current_assets(client: Client) -> list[dict[str, Any]]:
@@ -1302,8 +1290,6 @@ def structure_v2_work_input(
 def tts_url(text_hash: str, language_code: str) -> str | None:
     if settings.public_api_base_url:
         return f"{settings.public_api_base_url}/api/v1/tts/{text_hash}/{language_code}"
-    if settings.demo_fallback and settings.origins:
-        return f"{settings.origins[0].rstrip('/')}/api/v1/tts/{text_hash}/{language_code}"
     return None
 
 
@@ -1318,14 +1304,42 @@ def tts_fallback(briefing: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def worker_tts_text(briefing: dict[str, Any]) -> str:
+    context = briefing.get("context")
+    steps = briefing.get("steps")
+    if not isinstance(context, dict) or not isinstance(context.get("safety"), list) or not isinstance(steps, list):
+        raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
+    texts = [*context["safety"]]
+    for step in steps:
+        if not isinstance(step, dict):
+            raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
+        title, description = step.get("title"), step.get("description")
+        if not isinstance(title, str) or not isinstance(description, str):
+            raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
+        texts.append(f"{title} {description}")
+    if any(not isinstance(text, str) or not text.strip() for text in texts):
+        raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
+    return "\n".join(texts)
+
+
 def finalize_tts_package(client: Client, language_code: str, package: dict[str, Any]) -> dict[str, Any]:
     briefing = package.get("briefing") if isinstance(package, dict) else None
     transport = package.get("tts_transport") if isinstance(package, dict) else None
     if not isinstance(briefing, dict) or not isinstance(transport, dict):
         raise ApiError(422, "SCHEMA_INVALID", "AI TTS 결과가 올바르지 않습니다.")
-    if transport.get("status") != "READY" or transport.get("text_hash") != briefing.get("tts", {}).get("text_hash"):
-        return tts_fallback(briefing)
+    text = transport.get("text")
     text_hash = transport.get("text_hash")
+    if (
+        transport.get("status") not in {"READY", "FALLBACK"}
+        or not isinstance(text, str)
+        or text != worker_tts_text(briefing)
+        or not isinstance(text_hash, str)
+        or not hmac.compare_digest(text_hash, hashlib.sha256(text.encode()).hexdigest())
+        or text_hash != briefing.get("tts", {}).get("text_hash")
+    ):
+        raise ApiError(422, "SCHEMA_INVALID", "AI TTS 결과가 올바르지 않습니다.")
+    if transport.get("status") != "READY":
+        return tts_fallback(briefing)
     audio_base64 = transport.get("audio_bytes_base64")
     audio_location = tts_url(text_hash, language_code) if isinstance(text_hash, str) else None
     if not isinstance(text_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", text_hash) or not isinstance(audio_base64, str) or audio_location is None:
@@ -1353,6 +1367,68 @@ def finalize_tts_package(client: Client, language_code: str, package: dict[str, 
     result = dict(briefing)
     result["tts"] = {"status": "READY", "text_hash": text_hash, "audio_url": audio_location}
     return result
+
+
+def validate_worker_briefing(
+    package: dict[str, Any], language_code: str, session_id: str, version: int, state: WorkState
+) -> None:
+    validate_contract_schema(package, "worker-briefing-v2.schema.json")
+    if package["language_code"] != language_code or package["session_id"] != session_id or package["version"] != version:
+        raise ApiError(422, "SCHEMA_INVALID", "근로자 안내 패키지 식별자가 일치하지 않습니다.")
+
+    expected_steps = [(step.sequence, step.task_code) for step in state.steps]
+    package_steps = [(step["sequence"], step["task_code"]) for step in package["steps"]]
+    if package_steps != expected_steps:
+        raise ApiError(422, "SCHEMA_INVALID", "근로자 안내 작업 단계가 원본과 일치하지 않습니다.")
+
+    expected_sequences = {sequence for sequence, _ in expected_steps}
+    action_details = [detail for detail in package["source_detail"] if detail["segment"] != "SAFETY"]
+    source_sequences = [detail["step_sequence"] for detail in action_details]
+    if (
+        any(sequence not in expected_sequences for sequence in source_sequences)
+        or source_sequences != sorted(source_sequences)
+        or set(source_sequences) != expected_sequences
+    ):
+        raise ApiError(422, "SCHEMA_INVALID", "근로자 안내 출처 순서가 올바르지 않습니다.")
+
+    safety_details = [detail for detail in package["source_detail"] if detail["segment"] == "SAFETY"]
+    if len(safety_details) != len(package["context"]["safety"]) or any(
+        detail["step_sequence"] is not None
+        or detail["source"] != "OFFICIAL_GUIDE"
+        or detail["guide_lookup"] != "HIT"
+        or detail["verified"] is not True
+        or not isinstance(detail["source_page"], int)
+        or detail["source_page"] < 1
+        or not isinstance(detail["source_url"], str)
+        or not detail["source_url"].startswith(("http://", "https://"))
+        or not isinstance(detail["license"], str)
+        or not detail["license"].strip()
+        for detail in safety_details
+    ):
+        raise ApiError(422, "OVERRIDE_NOT_ALLOWED", "안전 표현은 검증된 공식 가이드만 게시할 수 있습니다.")
+
+    task_code_by_sequence = dict(expected_steps)
+    video_sequences: set[int] = set()
+    for video in package["video"]:
+        sequence = video["step_sequence"]
+        if sequence not in task_code_by_sequence or video["task_code"] != task_code_by_sequence[sequence] or sequence in video_sequences:
+            raise ApiError(422, "SCHEMA_INVALID", "근로자 안내 영상이 작업 단계와 일치하지 않습니다.")
+        video_sequences.add(sequence)
+
+    text_fields: list[str] = [package["context"]["location_display"]]
+    quantity = package["context"]["quantity"]
+    if isinstance(quantity, dict):
+        text_fields.append(str(quantity.get("unit", "")))
+    text_fields.extend(value for value in (package["context"]["deadline"], package["context"]["notes"]) if value is not None)
+    text_fields.extend(step["title"] for step in package["steps"])
+    text_fields.extend(step["description"] for step in package["steps"])
+    text_fields.extend(package["context"]["safety"])
+    text_fields.extend(video["captions_text"] for video in package["video"])
+    for text in text_fields:
+        if not isinstance(text, str) or not text.strip() or re.search(r"[가-힣]", text) or (
+            language_code == "vi" and re.search(r"[\u0900-\u097F]", text)
+        ):
+            raise ApiError(422, "SCHEMA_INVALID", "근로자 안내 언어가 선택한 언어와 일치하지 않습니다.")
 
 
 def private_tts_bytes(value: Any) -> bytes | None:
@@ -1390,7 +1466,7 @@ async def build_worker_packages(
     packages: list[dict[str, Any]] = []
     for language_code in ("vi", "ne"):
         briefing = finalize_tts_package(client, language_code, result.get(language_code))
-        validate_contract_schema(briefing, "worker-briefing-v2.schema.json")
+        validate_worker_briefing(briefing, language_code, session_id, version, state)
         packages.append(briefing)
     return packages
 
@@ -1522,7 +1598,7 @@ def validate_confirm(draft: WorkDraft, payload: DraftConfirmRequest) -> None:
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "revision": settings.app_revision}
 
 
 @app.get("/ready")
@@ -1530,29 +1606,38 @@ async def ready() -> dict[str, str]:
     if not settings.supabase_configured or not settings.auth_configured or not settings.public_web_configured or not settings.public_api_configured or not provider_ready():
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "Supabase 또는 AI 제공자가 준비되지 않았습니다.")
     try:
-        db_client().table("work_sessions").select("id").limit(1).execute()
+        client = db_client()
+        readiness = row_data(client.rpc("p0_readiness").execute())
+        if not readiness or readiness[0].get("ready") is not True:
+            raise RuntimeError("p0 migration not ready")
+        client.table("worker_briefing_packages").select("work_version_id").limit(1).execute()
     except Exception:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "Supabase 또는 AI 제공자가 준비되지 않았습니다.")
-    return {"status": "ready"}
+    return {"status": "ready", "revision": settings.app_revision}
 
 
 @app.post("/api/v1/owner/session", status_code=201, response_model=OwnerSession)
 async def issue_owner_session(payload: PinLoginRequest, request: Request, response: Response) -> OwnerSession:
     require_origin(request)
-    check_pin_rate_limit(request)
+    check_pin_rate_limit(request, payload.farm_code)
     if not settings.auth_configured:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
     try:
-        rows = row_data(db_client().rpc("authenticate_demo_owner", {"p_pin": payload.pin}).execute())
+        rows = row_data(
+            db_client().rpc(
+                "authenticate_farm_owner",
+                {"p_farm_code": payload.farm_code, "p_pin": payload.pin},
+            ).execute()
+        )
     except Exception:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
     if not rows:
-        record_pin_failure(request)
+        record_pin_failure(request, payload.farm_code)
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
     owner = rows[0]
     expires_at = now_utc() + timedelta(seconds=settings.owner_session_ttl_seconds)
     identity = OwnerIdentity(str(owner["owner_id"]), str(owner["farm_id"]), int(expires_at.timestamp()))
-    clear_pin_failures(request)
+    clear_pin_failures(request, payload.farm_code)
     expires_at = datetime.fromtimestamp(identity.expires_at, timezone.utc)
     response.set_cookie(
         COOKIE_NAME,
@@ -1563,7 +1648,44 @@ async def issue_owner_session(payload: PinLoginRequest, request: Request, respon
         samesite="none",
         path="/",
     )
-    return OwnerSession(expires_at=expires_at)
+    return OwnerSession(
+        expires_at=expires_at,
+        farm=OwnerFarm(code=str(owner["farm_code"]), display_name=str(owner["farm_name"])),
+    )
+
+
+@app.get("/api/v1/owner/session", response_model=OwnerSession)
+async def current_owner_session(
+    batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> OwnerSession:
+    owner = require_owner(batmeori_owner_session)
+    try:
+        farm = one_row(
+            db_client().table("farms").select("slug,display_name").eq("id", owner.farm_id).limit(1).execute(),
+            "UNAUTHORIZED",
+        )
+    except ApiError as exc:
+        if exc.code == "UNAUTHORIZED":
+            raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
+        raise
+    return OwnerSession(
+        expires_at=datetime.fromtimestamp(owner.expires_at, timezone.utc),
+        farm=OwnerFarm(code=str(farm["slug"]), display_name=str(farm["display_name"])),
+    )
+
+
+@app.delete("/api/v1/owner/session", status_code=204)
+async def delete_owner_session(request: Request, response: Response) -> Response:
+    require_origin(request)
+    response.delete_cookie(
+        COOKIE_NAME,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+    )
+    response.status_code = 204
+    return response
 
 
 @app.post("/api/v1/work-sessions/drafts/from-audio", response_model=WorkDraft)
@@ -1612,6 +1734,24 @@ async def draft_from_audio(
             await audio.close()
         except Exception:
             pass
+
+
+@app.get("/api/v1/work-sessions/drafts/{draftId}", response_model=WorkDraft)
+async def get_draft(
+    draftId: str,
+    response: Response,
+    batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> WorkDraft:
+    owner = require_owner(batmeori_owner_session)
+    row = one_row(
+        db_client().table("work_drafts").select("*").eq("id", draftId).eq("farm_id", owner.farm_id).limit(1).execute()
+    )
+    if utc_datetime(row["expires_at"]) <= now_utc():
+        raise ApiError(404, "NOT_FOUND", "찾을 수 없습니다.")
+    if row.get("confirmed_session_id") is not None:
+        raise ApiError(409, "VERSION_CONFLICT", "작업이 이미 변경됐습니다. 최신 내용을 다시 확인해주세요.")
+    response.headers["Cache-Control"] = "no-store"
+    return parse_draft(row)
 
 
 @app.post("/api/v1/work-sessions/drafts/{draftId}/supplement", response_model=WorkDraft)
@@ -1690,41 +1830,53 @@ async def confirm_draft(
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
-    draft = parse_draft(
-        one_row(client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute())
+    draft_row = one_row(
+        client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute()
     )
-    validate_confirm(draft, payload)
     issued: list[IssuedWorkerLink] = []
-    session_id = str(uuid.uuid4())
-    try:
-        state_json = structure_v2_state_json(draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities)
-        packages = await build_worker_packages(
-            client, session_id, 1, draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities
-        )
-        rpc_result = client.rpc(
-            "publish_work_version_with_packages",
-            {
-                "p_farm_id": owner.farm_id,
-                "p_draft_id": draft_id,
-                "p_session_id": session_id,
-                "p_expected_version": 0,
-                "p_state_json": state_json,
-                "p_packages": packages,
-                "p_decision": payload.decision,
-                "p_ambiguity_override": payload.ambiguity_override,
-                "p_override_reason": payload.override_reason,
-            },
-        ).execute()
-        session_id = str(one_row(rpc_result)["session_id"])
-    except ApiError:
-        raise
-    except AiProviderError:
-        raise
-    except Exception:
-        raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
+    session_id = str(draft_row.get("confirmed_session_id") or "")
+    if not session_id:
+        draft = parse_draft(draft_row)
+        validate_confirm(draft, payload)
+        session_id = str(uuid.uuid4())
+        try:
+            state_json = structure_v2_state_json(draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities)
+            packages = await build_worker_packages(
+                client, session_id, 1, draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities
+            )
+            rpc_result = client.rpc(
+                "publish_work_version_with_packages",
+                {
+                    "p_farm_id": owner.farm_id,
+                    "p_draft_id": draft_id,
+                    "p_session_id": session_id,
+                    "p_expected_version": 0,
+                    "p_state_json": state_json,
+                    "p_packages": packages,
+                    "p_decision": payload.decision,
+                    "p_ambiguity_override": payload.ambiguity_override,
+                    "p_override_reason": payload.override_reason,
+                },
+            ).execute()
+            published = row_data(rpc_result)
+            if published:
+                session_id = str(published[0]["session_id"])
+            else:
+                confirmed = one_row(
+                    client.table("work_drafts").select("confirmed_session_id").eq("id", draft_id).eq("farm_id", owner.farm_id).execute()
+                ).get("confirmed_session_id")
+                if not confirmed:
+                    raise ApiError(409, "VERSION_CONFLICT", "작업이 이미 변경됐습니다. 최신 내용을 다시 확인해주세요.")
+                session_id = str(confirmed)
+        except ApiError:
+            raise
+        except AiProviderError:
+            raise
+        except Exception:
+            raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
     session_row = one_row(client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
     version_row = one_row(
-        client.table("work_versions").select("*").eq("work_session_id", session_id).eq("version", 1).execute()
+        client.table("work_versions").select("*").eq("work_session_id", session_id).eq("version", session_row["current_version"]).execute()
     )
     return InitialPublishResponse(
         work_session=owner_session_response(client, session_row, version_row),
@@ -1922,58 +2074,35 @@ async def create_today_team(
         client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
     )
     created = not rows
-    team_row = rows[0] if rows else {"id": str(uuid.uuid4())}
-    team_id = str(team_row["id"])
-    token = hmac.new(
-        settings.owner_session_secret.encode(),
-        f"today-team:{team_id}:{issue_key}".encode(),
-        hashlib.sha256,
-    ).hexdigest()
-    invite = {
-        "id": team_id,
-        "farm_id": owner.farm_id,
-        "work_date": work_date,
-        "invite_token_hash": hash_link_token(token),
-        "invite_issue_idempotency_key": issue_key,
-        "issued_at": now_utc().isoformat(),
-        "expires_at": expires_at.isoformat(),
-    }
-    try:
-        if created:
+    if created:
+        team_id = str(uuid.uuid4())
+        token = today_team_token(team_id, issue_key)
+        invite = {
+            "id": team_id,
+            "farm_id": owner.farm_id,
+            "work_date": work_date,
+            "invite_token_hash": hash_link_token(token),
+            "invite_issue_idempotency_key": issue_key,
+            "issued_at": now_utc().isoformat(),
+            "expires_at": expires_at.isoformat(),
+        }
+        try:
             result = client.table("today_work_teams").insert(invite).select("*").execute()
             team_row = one_row(result)
-        elif team_row.get("invite_issue_idempotency_key") == issue_key:
-            token = hmac.new(
-                settings.owner_session_secret.encode(),
-                f"today-team:{team_id}:{issue_key}".encode(),
-                hashlib.sha256,
-            ).hexdigest()
-        else:
-            result = client.table("today_work_teams").update(invite).eq("id", team_id).eq("farm_id", owner.farm_id).select("*").execute()
-            team_row = one_row(result)
-    except Exception:
-        if not created:
-            raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
-        team_row = one_row(
-            client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
-        )
-        team_id = str(team_row["id"])
-        token = hmac.new(
-            settings.owner_session_secret.encode(),
-            f"today-team:{team_id}:{issue_key}".encode(),
-            hashlib.sha256,
-        ).hexdigest()
-        result = client.table("today_work_teams").update(
-            {**invite, "id": team_id, "invite_token_hash": hash_link_token(token)}
-        ).eq("id", team_id).eq("farm_id", owner.farm_id).select("*").execute()
-        team_row = one_row(result)
+        except Exception:
+            created = False
+            team_row = one_row(
+                client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+            )
+    else:
+        team_row = rows[0]
     response.status_code = 201 if created else 200
-    public_web_base_url = settings.public_web_base_url or request.headers["origin"].rstrip("/")
-    return today_team_response(client, team_row, f"{public_web_base_url}/team/{token}")
+    return today_team_response(client, team_row, today_team_join_url(team_row, request))
 
 
 @app.get("/api/v1/work-teams/today", response_model=TodayWorkTeam)
 async def get_today_team(
+    request: Request,
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
     owner = require_owner(batmeori_owner_session)
@@ -1982,7 +2111,38 @@ async def get_today_team(
     team_row = one_row(
         client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
     )
-    return today_team_response(client, team_row)
+    return today_team_response(client, team_row, today_team_join_url(team_row, request))
+
+
+@app.post("/api/v1/work-teams/today/invite/rotate", response_model=TodayWorkTeam)
+async def rotate_today_team(
+    request: Request,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
+) -> TodayWorkTeam:
+    owner = require_owner(batmeori_owner_session)
+    require_origin(request)
+    issue_key = require_idempotency(idempotency_key)
+    client = db_client()
+    work_date, expires_at = today_seoul()
+    team_row = one_row(
+        client.table("today_work_teams").select("id").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+    )
+    token = today_team_token(str(team_row["id"]), issue_key)
+    team_row = one_row(
+        client.rpc(
+            "rotate_today_work_team_invite",
+            {
+                "p_farm_id": owner.farm_id,
+                "p_work_date": work_date,
+                "p_idempotency_key": issue_key,
+                "p_invite_token_hash": hash_link_token(token),
+                "p_issued_at": now_utc().isoformat(),
+                "p_expires_at": expires_at.isoformat(),
+            },
+        ).execute()
+    )
+    return today_team_response(client, team_row, today_team_join_url(team_row, request))
 
 
 @app.post("/api/v1/work-team-invites/{token}/join", status_code=201, response_model=TeamMember)
@@ -1992,6 +2152,7 @@ async def join_today_team(
     request: Request,
     response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    batmeori_team_member: str | None = Cookie(default=None, alias=TEAM_MEMBER_COOKIE_NAME),
 ) -> TeamMember:
     check_team_join_rate_limit(request)
     join_key = require_idempotency(idempotency_key)
@@ -2007,14 +2168,27 @@ async def join_today_team(
     expires_at = utc_datetime(team_row["expires_at"])
     if expires_at <= now_utc():
         raise ApiError(410, "LINK_EXPIRED", "참여 시간이 끝났습니다. QR을 다시 열어주세요.")
-    rows = row_data(
-        client.table("today_work_team_members")
-        .select("*")
-        .eq("team_id", team_row["id"])
-        .eq("join_idempotency_key", join_key)
-        .limit(1)
-        .execute()
-    )
+    member_identity = verify_team_member(batmeori_team_member)
+    rows = []
+    if member_identity and member_identity[0] == str(team_row["id"]):
+        rows = row_data(
+            client.table("today_work_team_members")
+            .select("*")
+            .eq("id", member_identity[1])
+            .eq("team_id", team_row["id"])
+            .eq("farm_id", team_row["farm_id"])
+            .limit(1)
+            .execute()
+        )
+    if not rows:
+        rows = row_data(
+            client.table("today_work_team_members")
+            .select("*")
+            .eq("team_id", team_row["id"])
+            .eq("join_idempotency_key", join_key)
+            .limit(1)
+            .execute()
+        )
     if rows:
         member_row = rows[0]
     else:

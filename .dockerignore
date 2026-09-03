@@ -7,3 +7,9 @@ node_modules
 dist
 test-results
 supabase/.temp
+ai/evals
+ai/manifests
+ai/references/*
+!ai/references/dialect-v2.json
+!ai/references/delivery-policy-v2.json
+ai/tests

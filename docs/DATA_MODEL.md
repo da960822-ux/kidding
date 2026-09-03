@@ -12,7 +12,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `work_drafts`
 
-`id`, non-null `farm_id`, `draft_revision`, `summary_ko`, `transcript`, `interpretation`, `state_json`, `ambiguities`, `contract_version`, `ontology_version`, `confirmed_session_id`, `created_at`, `updated_at`, `expires_at`를 저장한다. supplement마다 revision을 증가시키고 expected revision을 원자 비교한다. raw audio는 저장하지 않는다.
+`id`, non-null `farm_id`, `draft_revision`, `summary_ko`, `transcript`, `interpretation`, `state_json`, `ambiguities`, `contract_version`, `ontology_version`, `confirmed_session_id`, `created_at`, `updated_at`, `expires_at`를 저장한다. supplement마다 revision을 증가시키고 expected revision을 원자 비교한다. raw audio는 저장하지 않는다. owner draft 조회는 같은 Farm의 `structure-v2`이고 `expires_at`이 현재보다 뒤이며 `confirmed_session_id`가 null인 row만 허용한다.
 
 ## `work_versions`
 
@@ -36,7 +36,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `today_work_teams` / `today_work_team_members` / `today_work_assignments`
 
-`today_work_teams`는 `id`, Asia/Seoul `work_date`(unique), `invite_token_hash`, `invite_issue_idempotency_key`, `issued_at`, `expires_at`, `created_at`를 가진다. raw QR token은 응답에서만 URL로 반환하고 DB에는 hash만 둔다. 같은 idempotency key는 같은 QR을 다시 반환한다.
+`today_work_teams`는 `id`, `farm_id`, Asia/Seoul `work_date`, `invite_token_hash`, `invite_issue_idempotency_key`, `issued_at`, `expires_at`, `created_at`를 가진다. `(farm_id, work_date)`는 unique다. raw QR token은 DB에 저장하지 않고, owner API가 저장된 발급 키로 같은 Farm·작업일의 URL을 재구성한다. 명시적 재발급만 발급 키와 hash를 교체한다.
 
 `today_work_team_members`는 `id`, `team_id`, `display_name`, `language_code`(`vi|ne`), `joined_at`, `join_idempotency_key`를 가진다. `(team_id, join_idempotency_key)`는 unique다. 영구 worker profile, 전화번호, 국적, 로그인 credential은 저장하지 않는다.
 
@@ -58,7 +58,13 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## owner PIN session과 공개 경계
 
-P0는 별도 owner session table 없이 service-role 전용 `authenticate_demo_owner(p_pin)`이 active `demo_owners` hash를 검증해 반환한 `owner_id`, `farm_id`, expiry를 담아 server secret으로 서명한 짧은 cookie를 사용한다. `pin_hash`는 Python·client response에 노출하지 않는다. `seed_demo_owner(farm_slug, p_pin)`은 deployment secret input만 받아 salted `pgcrypto` hash를 upsert한다. `HttpOnly`, `Secure`, `SameSite=None`, exact Origin 검증을 유지하며 static CSRF header는 없다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 24시간 임시 roster용으로만 저장한다.
+P0는 별도 owner session table 없이 Farm access code로 Farm을 선택하고, service-role 전용 `authenticate_farm_owner(farm_code, pin)`이 해당 Farm의 active credential hash를 검증한다. 반환한 `owner_id`, `farm_id`, expiry는 server secret으로 서명한 짧은 cookie에만 둔다. `pin_hash`는 Python·client response에 노출하지 않는다. provisioning RPC는 운영자 입력으로 Farm과 salted `pgcrypto` hash를 원자적으로 생성하거나 갱신한다. `HttpOnly`, `Secure`, exact Origin 검증을 유지하며 static CSRF header는 없다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 당일 임시 roster용으로만 저장한다.
+
+농장 코드 인증 전환은 expand/contract 순서를 따른다. 먼저 새 provisioning·인증 RPC를 추가하고 배포된 BE 전환과 농장 provisioning을 검증할 때까지 기존 PIN-only 인증 RPC를 유지한다. 전환 완료 뒤 후속 migration에서 기존 인증·seed RPC와 현재 BE가 호출하지 않는 legacy publish·link RPC를 삭제한다. 저장된 legacy WorkVersion과 읽기 경로는 이 RPC 정리의 대상이 아니다.
+
+### 빈 데이터베이스 설치
+
+적용된 migration은 수정하지 않는다. 빈 Supabase 데이터베이스는 chronological migration 실행 전에 [clean-install-bootstrap.sql](../supabase/clean-install-bootstrap.sql)을 한 번 적용한다. 이 prelude는 `public` schema에 table이 이미 있으면 실패하고, historical `009`가 권한을 회수하는 5인자 `publish_quantity_change` overload만 항상 오류를 반환하는 임시 함수로 생성한다. `012`가 이를 drop한 뒤 당시 구현으로 교체하고 최종 legacy RPC cleanup migration이 제거하므로 current schema에는 bootstrap 함수가 남지 않는다. 기존 데이터베이스나 부분 적용 데이터베이스에는 이 prelude를 실행하지 않는다.
 
 raw audio는 즉시 삭제하고 transcript는 owner 감사용 version에만 남긴다. remote worker 응답에는 transcript, token hash, secret을 반환하지 않는다. 모든 timestamp는 UTC다.
 

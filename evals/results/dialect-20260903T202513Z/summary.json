@@ -1,0 +1,22 @@
+{
+  "total": 4,
+  "passed": 3,
+  "failed": [
+    "audio-spoken-07"
+  ],
+  "excluded_negative_family": [],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "021ab2ff6ba582f3860e1e9e42a714047c3c793a",
+  "prompt_sha256": "00801651556321940c3b88ab6a634b482ed91d1b485b261fcdae8ff5a2a15673",
+  "dataset_sha256": {
+    "tmp/dialect-spoken-20260904-run1/manifest.jsonl": "c73fc3af38803dfcb2e3e0982de67f8a2771fe4f99af43c5c6e3c34903b0bc22"
+  },
+  "audio_count": 4,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review.",
+  "context_sha256": {
+    "ai\\references\\delivery-policy-v2.json": "7aa23e3d61cf9df4ee35d98b09806c69fe44e6a99381376ef1208867a287aee2",
+    "ai\\references\\dialect-v2.json": "678aa255828001bc84548721f185aec02f7edf552407a3fd007e7a7526634b64",
+    "ai\\references\\structure-parsing-v1.json": "bba3dbceda622b4dd316f31eb4d8823bfbc9ec2de33cdf220c1d62fb4afb1ce4"
+  }
+}

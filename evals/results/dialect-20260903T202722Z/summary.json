@@ -1,0 +1,22 @@
+{
+  "total": 6,
+  "passed": 5,
+  "failed": [
+    "context-holdout-05"
+  ],
+  "excluded_negative_family": [],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "021ab2ff6ba582f3860e1e9e42a714047c3c793a",
+  "prompt_sha256": "4ef974da8a3e041c9a407b2752bca33237223fc4ea32d3b0c684a0fe476fe203",
+  "dataset_sha256": {
+    "evals/dialect-context-holdout-20260904.jsonl": "69c15b3ca4a882af2afb2c58e48f70061d1cf57d57e96c08fd25a737157c9f84"
+  },
+  "audio_count": 0,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review.",
+  "context_sha256": {
+    "ai\\references\\delivery-policy-v2.json": "7aa23e3d61cf9df4ee35d98b09806c69fe44e6a99381376ef1208867a287aee2",
+    "ai\\references\\dialect-v2.json": "678aa255828001bc84548721f185aec02f7edf552407a3fd007e7a7526634b64",
+    "ai\\references\\structure-parsing-v1.json": "bba3dbceda622b4dd316f31eb4d8823bfbc9ec2de33cdf220c1d62fb4afb1ce4"
+  }
+}

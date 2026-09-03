@@ -1,0 +1,19 @@
+{
+  "total": 4,
+  "passed": 1,
+  "failed": [
+    "audio-spoken-01",
+    "audio-spoken-02",
+    "audio-spoken-07"
+  ],
+  "excluded_negative_family": [],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "021ab2ff6ba582f3860e1e9e42a714047c3c793a",
+  "prompt_sha256": "0215756d39f26587bcf8f6a1e6ca7fbb4f50af50408a946eb07b1fd864a8e1af",
+  "dataset_sha256": {
+    "tmp/dialect-spoken-20260904-run1/manifest.jsonl": "c73fc3af38803dfcb2e3e0982de67f8a2771fe4f99af43c5c6e3c34903b0bc22"
+  },
+  "audio_count": 4,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review."
+}

@@ -43,6 +43,22 @@ test('low-confidence transcription is accepted only when independent verificatio
   assert.equal(requests[1].get('prompt'), transcriptionPrompt.trim());
 });
 
+test('low-confidence split UTF-8 tokens trigger verification instead of silently losing an action', async () => {
+  let callCount = 0;
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionReviewPrompt, fetchImpl: async () => {
+    callCount += 1;
+    if (callCount === 1) return { ok: true, json: async () => ({ text: '두 번 밭 양파 서른두 망 해서 창고로 옮겨.', logprobs: [
+      { token: ' 양', logprob: -0.01, bytes: [32, 236, 150, 145] },
+      { token: ' �', logprob: -0.67, bytes: [32, 235, 176] },
+      { token: '�', logprob: -0.01, bytes: [173] },
+    ] }) };
+    if (callCount === 2) return { ok: true, json: async () => ({ text: '두 번 밭 양파 서른두 망 캐서 창고로 옮겨.' }) };
+    return { ok: true, json: async () => ({ output_text: '{"choice":"UNCLEAR"}' }) };
+  } });
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '' });
+  assert.equal(callCount, 3);
+});
+
 test('low-confidence disagreement uses contextual candidate selection without hardcoded correction', async () => {
   let callCount = 0;
   let reviewRequest;

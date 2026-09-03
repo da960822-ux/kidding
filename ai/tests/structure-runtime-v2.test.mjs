@@ -8,10 +8,23 @@ test('validateStructureV2 accepts a schema-complete executable v2 structure', ()
   assert.deepEqual(validateStructureV2(valid), { ok: true });
 });
 
-test('validateStructureV2 rejects wrong version, family mismatch, and empty executable steps', () => {
+test('validateStructureV2 rejects wrong version, family mismatch, and unguarded empty steps', () => {
   assert.equal(validateStructureV2({ ...valid, contract_version: 'structure-v1' }).ok, false);
   assert.equal(validateStructureV2({ ...valid, task_family: 'STRAWBERRY' }).ok, false);
   assert.equal(validateStructureV2({ ...valid, steps: [] }).ok, false);
+});
+
+test('validateStructureV2 accepts empty steps only as a blocking task ambiguity draft', () => {
+  const blockingDraft = {
+    ...valid,
+    interpretation: 'AMBIGUOUS',
+    steps: [],
+    ambiguities: [{ field: 'task', message: '작업을 알 수 없습니다.', blocking: true, kind: 'TASK' }],
+  };
+  assert.deepEqual(validateStructureV2(blockingDraft), { ok: true });
+  assert.equal(validateStructureV2({ ...blockingDraft, interpretation: 'UNSUPPORTED' }).ok, false);
+  assert.equal(validateStructureV2({ ...blockingDraft, ambiguities: [{ ...blockingDraft.ambiguities[0], blocking: false }] }).ok, false);
+  assert.equal(validateStructureV2({ ...blockingDraft, ambiguities: [{ ...blockingDraft.ambiguities[0], kind: 'LOCATION' }] }).ok, false);
 });
 
 test('validateStructureV2 rejects invalid consumed nested schema fields', () => {
@@ -22,7 +35,6 @@ test('validateStructureV2 rejects invalid consumed nested schema fields', () => 
     { ...valid, location: { ...valid.location, extra: true } },
     { ...valid, steps: [{ ...valid.steps[0], extra: true }] },
     { ...valid, steps: [{ ...valid.steps[0], unsupported_reason: 'not allowed' }] },
-    { ...valid, interpretation: 'AMBIGUOUS', steps: [] }
   ];
   for (const candidate of cases) assert.equal(validateStructureV2(candidate).ok, false);
 });

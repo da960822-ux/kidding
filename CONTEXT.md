@@ -2,6 +2,19 @@
 
 밭머리는 농장주의 구두지시를 근로자가 실행할 수 있는 최신 작업상태로 바꾸는 맥락이다. 이 문서는 제품 용어만 정의하며 구현 세부사항은 다루지 않는다.
 
+## 농장주 접근
+
+**Farm**
+작업, 당일 팀, 농장주 접근 권한이 서로 섞이지 않는 운영 경계.
+
+**Farm access code**
+농장주가 어느 Farm에 접근하려는지 선택하는 공개 가능한 짧은 코드. 비밀정보가 아니며 Owner PIN과 함께 사용한다.
+_Avoid_: owner ID, farm ID, PIN
+
+**Owner PIN**
+선택한 Farm의 농장주임을 확인하는 비밀 번호. TodayWorkTeam QR이나 WorkerLink를 만드는 재료로 사용하지 않는다.
+_Avoid_: account password, team code, QR code
+
 ## 작업
 
 **WorkSession**  
@@ -90,6 +103,10 @@ WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 
 
 **TodayWorkTeam**
 Asia/Seoul의 오늘 날짜에만 유효한 익명 작업팀. 농장주가 QR 하나를 열고, 참가자는 같은 QR에서 별명과 `vi|ne`만 제출한다. 영구 근로자 명부나 계정이 아니다.
+
+**TodayWorkTeam QR**
+Farm의 TodayWorkTeam에 참여하는 당일 초대장. 같은 Farm과 같은 작업일에는 다시 열어도 동일하며, 농장주가 명시적으로 재발급할 때만 이전 초대장이 폐기된다.
+_Avoid_: Owner PIN QR, worker account QR
 
 **TeamMember**
 TodayWorkTeam에 속한 임시 참가자. 별명·선택 언어·참가 시각만 가지며, 해당 브라우저의 서명 cookie로만 자기 배정을 읽는다.

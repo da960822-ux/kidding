@@ -1,0 +1,37 @@
+{
+  "total": 42,
+  "passed": 40,
+  "failed": [
+    "resume-deictic-field#r2",
+    "resume-fused-unit#r2"
+  ],
+  "excluded_negative_family": [],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "021ab2ff6ba582f3860e1e9e42a714047c3c793a",
+  "prompt_sha256": "19dd7cd7261a52c51aba2cc94c8731991d2d41cb4eac79f8e548f16d8104aacb",
+  "dataset_sha256": {
+    "evals/dialect-resume-regression-20260904.jsonl": "ca5e6535aded25710e7b318099d069baf474dd4538559bd8161e14f37cd541f3"
+  },
+  "audio_count": 0,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review.",
+  "context_sha256": {
+    "ai\\references\\delivery-policy-v2.json": "7aa23e3d61cf9df4ee35d98b09806c69fe44e6a99381376ef1208867a287aee2",
+    "ai\\references\\dialect-v2.json": "0d0411d2a5e3f4c68ed0a7468d56a0a2b108e6b075411483057334653f4d90a4",
+    "ai\\references\\structure-parsing-v1.json": "bba3dbceda622b4dd316f31eb4d8823bfbc9ec2de33cdf220c1d62fb4afb1ce4"
+  },
+  "dialect_context": false,
+  "repetitions": 3,
+  "source_sha256_before": {
+    "ai\\prompts\\prompt-quantity-change-001.md": "caabeadd63e869a1675d4187e08d01748aec695b2ca1fe794f1519d89afbfefe",
+    "ai\\prompts\\prompt-structure-005.md": "19dd7cd7261a52c51aba2cc94c8731991d2d41cb4eac79f8e548f16d8104aacb",
+    "ai\\prompts\\prompt-structure-supplement-002.md": "245e052dec834789b6e8c90d0a2a9338e6310119cc56eb2cfc324f83f3fa242b",
+    "ai\\prompts\\prompt-transcription-002.md": "ebc60def478525aa83bc9ba3351c5aa0dcbcf074af6d7abe6bb636f306836d0c",
+    "ai\\prompts\\prompt-transcription-review-001.md": "63980c4fc75ccafdd7f81c704c2281cdf268c0918c7d0559bcca93567983e4b3",
+    "ai\\references\\dialect-v2.json": "0d0411d2a5e3f4c68ed0a7468d56a0a2b108e6b075411483057334653f4d90a4",
+    "ai\\index.mjs": "e3d14b03b6c891e4ec6416334f5ec7046854c8cf2c0487eb02a332893829266c",
+    "ai\\lib\\openai-provider.mjs": "c06dbc2cd99dbbb98b2118caa51b9951315600d6383da3d0fcc7ab5094a166c0",
+    "backend\\app\\main.py": "1277a8cd5eaa62b1d3b5b43c37fd9e38ef3282dc4012a2fbd0614676d131d223"
+  },
+  "source_changed_during_run": false
+}

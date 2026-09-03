@@ -55,6 +55,14 @@ change-audio preview는 저장하지 않고 `READY|AMBIGUOUS`, quantity/null, am
 
 `id`, `work_session_id`, `language_code`, `token_hash`, `issued_at`, `expires_at`, `revoked_at?`, `issue_idempotency_key`를 저장한다. 익명 language-specific link row가 P0 remote delivery다. `expires_at = issued_at + 24h`; raw token은 DB에 저장하지 않는다. raw URL은 단일 create/reissue 응답에서 한 번만 반환하며 regular owner read에는 반환하지 않는다. 유효 링크 resolve는 매번 최신 `PUBLISHED` version이다. 같은 session/language 재발급은 기존 active link를 revoke하고 새 24h link를 만든다.
 
+### `work_teams` / `work_team_invites` / `work_team_members`
+
+`work_teams`: `id`, `work_date`, `status`(`ACTIVE|CLOSED`), `created_at`, `closed_at?`. P0는 demo owner session당 같은 업무일의 active team 하나만 허용한다. `work_date` 경계는 `Asia/Seoul`이다.
+
+`work_team_invites`: `id`, `work_team_id`, `token_hash`, `token_ciphertext`, `issued_at`, `expires_at`, `revoked_at?`, `issue_idempotency_key`. raw token은 DB·로그에 평문 저장하지 않는다. `token_ciphertext`는 서버 전용 키로 암호화해 owner-authenticated 오늘 팀 조회에서 QR URL을 복원할 때만 사용한다. 만료는 발급 후 24시간과 업무일 종료 중 빠른 시각이다.
+
+`work_team_members`: `id`, `work_team_id`, `display_name`, `nationality_code`, `language_code`, `joined_at`. `display_name`은 trim 후 1~30자이며 계정 식별자가 아니다. `nationality_code`는 `VN|PH|LA|KH|TH|NP|MM|MN`, `language_code`는 P0 안내 언어 `vi|ne`다. 국적과 안내 언어를 자동 동일시하지 않는다. owner 조회의 members는 `joined_at` 오름차순이다.
+
 ### `guide_phrases` / `guide_translations`
 
 `guide_phrases`: `phrase_key`, `category`(`WORK_TERM|WORK_INSTRUCTION|SAFETY`), `canonical_ko`, `phrase_type`.
@@ -73,9 +81,9 @@ P0 허용 provenance는 `AI_GENERATED_PREGENERATED`; 6개 task_code 모두 사�
 
 영상은 FE `public/videos`에 둔 정적 `video/*` 자산이며 배포 플랫폼 CDN으로 제공한다. 모바일 재생 가능한 크기와 `captions_text`를 가져야 하고 runtime 생성·별도 object storage는 P0에 두지 않는다.
 
-### owner PIN session
+### demo owner session
 
-P0는 별도 session table 없이 서버 secret으로 서명한 짧은 만료 cookie를 쓴다. cookie는 `HttpOnly`, `Secure`, `SameSite=None`이며 모든 owner mutation은 exact Origin/credentials를 요구한다. CSRF는 exact `Origin` 검증으로 막고 별도 CSRF header는 두지 않는다. PIN 원문과 cookie는 DB·로그에 저장하지 않는다. P1 회원가입/계정관리는 이 모델 범위 밖이다.
+P0는 로그인 입력과 별도 session table 없이 농장주 역할 선택 시 서버 secret으로 서명한 짧은 만료 cookie를 발급한다. cookie는 `HttpOnly`, `Secure`, `SameSite=None`이며 모든 owner mutation은 exact Origin/credentials를 요구한다. CSRF는 exact `Origin` 검증으로 막고 별도 CSRF header는 두지 않는다. cookie는 DB·로그에 저장하지 않는다. P1 회원가입/계정관리는 이 모델 범위 밖이다.
 
 ## 보존·공개 경계
 
@@ -87,6 +95,7 @@ raw audio는 STT 처리 중 임시 저장만 하고 성공·실패 무관 즉시
 
 - `work_sessions 1—N work_versions`; session별 `(work_session_id, version)` unique.
 - `work_sessions 1—N worker_links`; link는 하나의 `language_code`를 가지며 재발급 시 같은 language의 기존 row를 revoke한다.
+- `work_teams 1—N work_team_members`, `work_teams 1—N work_team_invites`; team 종료 시 invite도 함께 무효화한다.
 - `guide_phrases 1—N guide_translations`; `(phrase_key, language_code)` unique.
 - `visual_assets.task_code`는 6개 ontology code만 참조한다.
 - BE가 schema·migration·transaction을 소유하고, AI는 검수된 guide/asset manifest만 제공한다. FE는 DB에 직접 접근하지 않고 `openapi.yaml`만 사용한다.

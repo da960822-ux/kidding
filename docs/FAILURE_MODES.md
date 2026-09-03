@@ -15,14 +15,20 @@
 | HIGH/UNKNOWN risk 또는 HIGH 영상 | `PUBLISHED` 거부 | 텍스트 fallback 또는 차단 표시 | Safety Policy assessment gate, HIGH/UNKNOWN 절대 게시 금지 | AI: 위험 등급 검수 |
 | 영상 없음/재생 실패 | 텍스트+TTS fallback | fallback 렌더 | asset URL health 확인 | FE: 접근성 |
 | TTS 실패 | 텍스트 유지 | 재생 버튼 비활성·텍스트 표시 | audio optional | AI: provider retry |
-| owner 인증 없음 | mutation `401` | PIN 재입력 | 쿠키 검증 | BE |
-| `CO_PRESENT` owner 인증 없음 | briefing 차단, PIN 재입력 | PIN 재입력 | cookie 검증 | BE |
+| demo owner session 없음·만료 | mutation `401` | 자동 재연결 후 1회 재시도, 실패 시 역할 선택으로 이동 | 쿠키 검증·재발급 | BE |
+| `CO_PRESENT` owner session 없음 | briefing 차단 | 자동 재연결 후 재시도 | cookie 검증 | BE |
+| 최신 작업 재조회 실패 | 이전 정상 화면 유지 + 최신 확인 실패 | 현지어 경고·큰 재시도 | 오류 envelope | FE/BE |
 | `REMOTE` token 만료 | 외부 일반 접근 불가 + 재발급 안내 | 안내 화면 | 24시간 expiry 검사 | BE |
 | `REMOTE` 재생성 | raw URL은 단일 create/reissue 응답에서만 한 번 표시 | owner 전달 UI | 기존 link revoke 후 새 24h hash 저장 | BE |
 | `REMOTE` token invalid | 외부 일반 접근 불가 | 안내 화면 | 내부 사유 노출 금지 | BE |
 | concurrent quantity change | `409`, 최신 version 재조회 | before/after 재확인 | version/idempotency 검사 | BE |
-| delivery version 증가 | `CO_PRESENT`·`REMOTE` 모두 5초 polling 또는 focus 복귀 즉시 조회 | 화면/TTS 교체 | 최신 `PUBLISHED` 반환 | BE/FE |
+| delivery version 증가 | `CO_PRESENT`·`REMOTE` 모두 5초 polling 또는 focus 복귀 즉시 조회 | 재생 중지·첫 단계 이동·현지어 `aria-live` 알림 | 최신 `PUBLISHED` 반환 | BE/FE |
 | API/DB 일시 장애 | 재시도·데모 fallback | 마지막 표시 상태와 오류 구분 | `/health`, `/ready` | BE |
+| 팀 QR 카메라 미지원·권한 거부 | 스캔 불가 | 참여 링크 직접 입력 유지 | 해당 없음 | FE |
+| 팀 초대 만료·잘못된 QR | `404 ACCESS_DENIED` 또는 `410 LINK_EXPIRED` | 기존 팀 정보 없이 재발급 안내 | token hash·expiry 검증 | BE |
+| 별명·국적·안내 언어 누락 | `422 SCHEMA_INVALID` | 해당 입력에 현지어 오류 | allowlist·길이 검증 | BE |
+| 동일 참여 요청 재전송 | 같은 `Idempotency-Key`면 기존 Team member 반환 | 완료 화면 유지 | 중복 row 생성 금지 | BE |
+| 오늘 작업팀 없음 | owner 조회 `404 NOT_FOUND` | 팀 열기 화면 표시 | 임의 팀 자동 생성 금지 | BE |
 
 ## 원칙
 

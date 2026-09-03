@@ -16,14 +16,8 @@ paths:
   /api/v1/owner/session:
     post:
       tags: [Owner]
-      summary: Issue short demo PIN session cookie
+      summary: Issue short automatic demo-owner session cookie
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/PinLoginRequest' }
-            example: { pin: '1234' }
       responses:
         '201':
           description: Session issued.
@@ -34,7 +28,6 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OwnerSession' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
   /api/v1/work-sessions/drafts/from-audio:
     post:
@@ -256,7 +249,9 @@ paths:
         No owner cookie. Every valid request resolves latest PUBLISHED version,
         never a pinned version. Worker response excludes transcript, raw audio,
         token hash, and owner-only risk assessment. Step translations are the
-        canonical segment provenance; ambiguity and safety badges are visible.
+        canonical segment provenance; ambiguity and safety badges are typed.
+        Every worker-visible string is already localized to language_code;
+        clients must never fall back to owner-only Korean fields.
       security: []
       parameters: [{ $ref: '#/components/parameters/WorkerToken' }]
       responses:
@@ -270,21 +265,68 @@ paths:
                 session_id: ws_1
                 version: 2
                 lifecycle: PUBLISHED
-                state:
-                  task_family: ONION
-                  location: { raw_text: 저짝, kind: DEICTIC, canonical_name: null }
-                  quantity: { value: 15, unit: 망 }
-                  location_display: 농장주가 가리킨 장소 · 현장 확인 필요
-                  deadline: null
+                context:
+                  location_display: Khu vực chủ trang trại chỉ định · cần xác nhận tại chỗ
+                  quantity_display: 15 bao
+                  deadline_display: Trước 11 giờ sáng
                   safety: []
                   notes: null
-                  steps: [{ sequence: 1, task_code: ONION_HARVEST, title_ko: 양파 수확, description_ko: 양파를 수확한다, video: null, audio_url: null, delivery_mode: TEXT_TTS, unsupported_reason: null, translations: [] }]
-                badges: [확인이 필요한 지시]
+                steps:
+                  - sequence: 1
+                    task_code: ONION_HARVEST
+                    title: Thu hoạch hành tây
+                    description: Nhổ hành tây nhẹ nhàng để không làm dập củ.
+                    video: null
+                    audio_url: null
+                    delivery_mode: TEXT_TTS
+                    unsupported_reason: null
+                    segments: []
+                badge_codes: [NEEDS_CONFIRMATION]
         '404': { $ref: '#/components/responses/AccessDenied' }
         '410':
           description: Expired token; issue a new link.
           content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: LINK_EXPIRED, message: 접근할 수 없습니다. 링크를 다시 발급받으세요. } } }
         '500': { $ref: '#/components/responses/ServerError' }
+  /api/v1/work-teams/today:
+    post:
+      tags: [Owner]
+      summary: Create or return today's temporary work team and QR join URL
+      security: [{ ownerSession: [] }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      responses:
+        '201': { description: Today's active team., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
+        '200': { description: Existing active team for today's Asia/Seoul work date., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+    get:
+      tags: [Owner]
+      summary: Read today's active team and joined members
+      security: [{ ownerSession: [] }]
+      responses:
+        '200': { description: Today's active team. Members are ordered by joined_at ascending., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/v1/work-team-invites/{token}/join:
+    post:
+      tags: [Worker]
+      summary: Join today's work team without creating an account
+      description: Repeating the same request with the same Idempotency-Key returns the same member and never creates a duplicate row.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/TeamInviteToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/JoinTeamRequest' }
+            example: { display_name: Nguyen, nationality_code: VN, language_code: vi }
+      responses:
+        '201': { description: Temporary team member created., content: { application/json: { schema: { $ref: '#/components/schemas/TeamMember' } } } }
+        '404': { $ref: '#/components/responses/AccessDenied' }
+        '410': { description: Invite expired., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+        '422': { $ref: '#/components/responses/Unprocessable' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
   /api/v1/brief:
     get:
       tags: [Owner]
@@ -329,6 +371,7 @@ components:
     DraftId: { in: path, name: draftId, required: true, schema: { type: string } }
     SessionId: { in: path, name: sessionId, required: true, schema: { type: string } }
     WorkerToken: { in: path, name: token, required: true, schema: { type: string, minLength: 32 } }
+    TeamInviteToken: { in: path, name: token, required: true, schema: { type: string, minLength: 32 } }
     IdempotencyKey: { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 8 } }
   responses:
     Unauthorized: { description: Owner authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/Error' }, example: { code: UNAUTHORIZED, message: 인증이 필요합니다. } } } }
@@ -348,14 +391,50 @@ components:
         message: { type: string }
         request_id: { type: string, description: Redacted correlation ID safe to show to the caller. }
         details: { type: object, additionalProperties: true }
-    PinLoginRequest:
-      type: object
-      required: [pin]
-      properties: { pin: { type: string, minLength: 4, maxLength: 32, writeOnly: true } }
     OwnerSession:
       type: object
       required: [authenticated, expires_at]
       properties: { authenticated: { type: boolean, const: true }, expires_at: { type: string, format: date-time } }
+    NationalityCode:
+      type: string
+      enum: [VN, PH, LA, KH, TH, NP, MM, MN]
+    TeamMember:
+      type: object
+      additionalProperties: false
+      required: [member_id, display_name, nationality_code, language_code, joined_at]
+      properties:
+        member_id: { type: string }
+        display_name: { type: string, minLength: 1, maxLength: 30 }
+        nationality_code: { $ref: '#/components/schemas/NationalityCode' }
+        language_code: { type: string, enum: [vi, ne] }
+        joined_at: { type: string, format: date-time }
+    TodayWorkTeam:
+      type: object
+      additionalProperties: false
+      required: [team_id, work_date, status, join_url, expires_at, members]
+      properties:
+        team_id: { type: string }
+        work_date: { type: string, format: date, description: Work date calculated in Asia/Seoul. }
+        status: { type: string, const: ACTIVE }
+        join_url: { type: string, format: uri, description: Owner-authenticated invite URL. The client renders the QR; the API does not return image data. }
+        expires_at: { type: string, format: date-time, description: Earlier of 24 hours after issue and the end of work_date in Asia/Seoul, serialized in UTC. }
+        members: { type: array, items: { $ref: '#/components/schemas/TeamMember' } }
+      example:
+        team_id: team_01
+        work_date: '2026-09-03'
+        status: ACTIVE
+        join_url: https://app.example.invalid/team/example-token-at-least-32-characters
+        expires_at: '2026-09-03T15:00:00Z'
+        members:
+          - { member_id: member_01, display_name: Nguyen, nationality_code: VN, language_code: vi, joined_at: '2026-09-03T00:10:00Z' }
+    JoinTeamRequest:
+      type: object
+      additionalProperties: false
+      required: [display_name, nationality_code, language_code]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 30, description: Trimmed nickname or display name; not an account identifier. }
+        nationality_code: { $ref: '#/components/schemas/NationalityCode' }
+        language_code: { type: string, enum: [vi, ne] }
     Quantity:
       type: object
       required: [value, unit]
@@ -570,31 +649,54 @@ components:
       type: object
       required: [items]
       properties: { items: { type: array, items: { $ref: '#/components/schemas/OwnerWorkSession' } } }
+    LocalizedWorkerContext:
+      type: object
+      additionalProperties: false
+      required: [location_display, quantity_display, deadline_display, safety, notes]
+      properties:
+        location_display: { type: string, minLength: 1 }
+        quantity_display: { type: string, minLength: 1 }
+        deadline_display: { type: [string, 'null'] }
+        safety: { type: array, items: { type: string, minLength: 1 } }
+        notes: { type: [string, 'null'] }
+    WorkerStep:
+      type: object
+      additionalProperties: false
+      required: [sequence, task_code, title, description, video, audio_url, delivery_mode, unsupported_reason, segments]
+      properties:
+        sequence: { type: integer, minimum: 1 }
+        task_code: { type: [string, 'null'] }
+        title: { type: string, minLength: 1 }
+        description: { type: string, minLength: 1 }
+        video: { anyOf: [{ $ref: '#/components/schemas/VideoAsset' }, { type: 'null' }] }
+        audio_url: { type: [string, 'null'], format: uri }
+        delivery_mode: { type: string, enum: [VIDEO, TEXT_TTS, TEXT] }
+        unsupported_reason: { type: [string, 'null'] }
+        segments:
+          type: array
+          items: { $ref: '#/components/schemas/SegmentTranslation' }
+          description: Contains only the response language and retains segment-level provenance.
     WorkerAssignment:
       type: object
-      required: [language_code, session_id, version, lifecycle, state, badges]
+      required: [language_code, session_id, version, lifecycle, context, steps, badge_codes]
       properties:
         language_code: { type: string, enum: [vi, ne] }
         session_id: { type: string }
         version: { type: integer, minimum: 1 }
         lifecycle: { type: string, const: PUBLISHED }
-        state:
-          allOf: [{ $ref: '#/components/schemas/PublishedWorkState' }]
-          description: Latest published state; each step contains only translations for this link's language_code.
-        badges: { type: array, items: { type: string } }
+        context: { $ref: '#/components/schemas/LocalizedWorkerContext' }
+        steps: { type: array, minItems: 1, items: { $ref: '#/components/schemas/WorkerStep' } }
+        badge_codes: { type: array, items: { type: string, enum: [NEEDS_CONFIRMATION, DEMO_FALLBACK] } }
     Briefing:
       type: object
-      required: [session_id, version, language_code, steps]
+      required: [session_id, version, language_code, context, steps, badge_codes]
       properties:
         session_id: { type: string }
         version: { type: integer, minimum: 1 }
         language_code: { type: string, enum: [vi, ne] }
-        steps:
-          type: array
-          minItems: 1
-          description: Latest published steps filtered to the requested language_code.
-          items: { $ref: '#/components/schemas/Step' }
-        demo_badge: { type: [string, 'null'], enum: [DEMO FALLBACK, null] }
+        context: { $ref: '#/components/schemas/LocalizedWorkerContext' }
+        steps: { type: array, minItems: 1, items: { $ref: '#/components/schemas/WorkerStep' } }
+        badge_codes: { type: array, items: { type: string, enum: [NEEDS_CONFIRMATION, DEMO_FALLBACK] } }
     Health:
       type: object
       required: [status]

@@ -10,12 +10,16 @@
 - 전달 언어: `vi`, `ne`
 - 변경: 수량 변경만 자동 반영. 예: `20망`에서 `15망`.
 - 영상: AI가 사전 생성하고 사람이 검수한 파일만 사용. 생성 시 `provenance`, `review_status`, `safety_level` 기록. `HIGH`는 게시 금지.
-- 화면: 농장주 음성 입력·확인·전달, `CO_PRESENT` owner 폰 briefing, `REMOTE` 익명 개인 링크.
+- 화면: 랜딩 다음 역할 선택, 오늘 작업팀 QR 생성·참여·팀원 목록, 농장주 음성 입력·확인·전달, `CO_PRESENT` owner 폰 briefing, `REMOTE` 익명 개인 링크. 로그인 화면은 없다.
 - 배포 전제: React/Vite/Tailwind, FastAPI, PostgreSQL(Supabase 가능), Vercel(프론트), Railway(API).
 
 P1: 농장주 회원가입/계정관리, SMS, 질문, 추가 작물·언어, 오프라인 캐시, 통계, 급여·출퇴근.
 
 ## 핵심 흐름
+
+역할 선택 뒤 농장주는 오늘 작업팀 참여 QR을 생성할 수 있다. 근로자 참여 UI는 첫 화면에서 QR 스캔 또는 참여 링크와 국적만 받고, 다음 화면에서 이름 또는 별명을 받는다. 국적은 베트남(`VN`)·필리핀(`PH`)·라오스(`LA`)·캄보디아(`KH`)·태국(`TH`)·네팔(`NP`)·미얀마(`MM`)·몽골(`MN`) 중 하나다. 안내 언어는 랜딩에서 선택한 지원 언어 `vi|ne`를 이어받으며 국적이 안내 언어를 자동 결정하지 않는다. 최종 참여 요청은 별명·국적·안내 언어를 함께 보낸다. 참여 정보는 오늘 작업팀 범위에만 존재하며 개인 계정을 만들지 않는다. 농장주 화면은 참여자를 별명·국적·안내 언어로 표시한다.
+
+랜딩 이후 역할 선택과 웹앱 화면의 모든 글자는 랜딩보다 3pt 크게 표시한다.
 
 1. 농장주가 음성을 녹음한다.
 2. STT가 transcript를 반환한다.
@@ -23,11 +27,11 @@ P1: 농장주 회원가입/계정관리, SMS, 질문, 추가 작물·언어, 오
 4. 농장주가 한국어 요약과 `ambiguities[]`를 확인하고 필요한 보완을 audio-only로 말한다. 빈 `steps`는 blocking `TASK` draft로 남기며 게시할 수 없다. [Safety Policy](SAFETY_POLICY.md)에 따라 LOW 비안전 미지원 작업만 reason을 남겨 전달할 수 있다. `SAFETY` ambiguity, HIGH·UNKNOWN 위험, schema invalid, 실행 단계 없음은 override할 수 없다.
 5. 정부 가이드 공식 번역 HIT는 `OFFICIAL_GUIDE`; 일반 작업표현 MISS는 `AI_TRANSLATION` fallback으로 표시한다. 각 언어별 번역에는 검수된 source snapshot을 보존한다. 안전표현은 검수된 source가 없거나 위험도가 높으면 자동 게시하지 않는다.
 6. `APPROVED`이고 `safety_level: LOW`인 AI 사전 생성 영상을 단계에 매칭한다. 영상이 없으면 텍스트+TTS를 사용한다.
-7. owner confirm 뒤 delivery branch를 고른다. `CO_PRESENT`는 `vi|ne` 선택 후 owner PIN cookie briefing에서 video+TTS를 재생한다. `REMOTE`는 `vi|ne` 선택 후 익명 24시간 링크를 한 번 발급한다.
+7. 역할 선택에서 농장주를 고르면 자동 데모 세션이 발급된다. owner confirm 뒤 delivery branch를 고른다. `CO_PRESENT`는 `vi|ne` 선택 후 demo owner session briefing에서 video+TTS를 재생한다. `REMOTE`는 `vi|ne` 선택 후 익명 24시간 링크를 한 번 발급한다.
 8. remote link는 발급 24시간 후 만료된다. 유효 링크와 owner briefing은 고정 버전이 아니라 최신 `PUBLISHED`를 매번 조회한다. 두 화면은 5초 polling하고 visibility/focus 복귀 시 즉시 재조회한다. 응답 `version` 증가 시 화면과 TTS를 교체한다.
 9. 수량 변경 audio parse는 저장하지 않고 `READY|AMBIGUOUS`, 수량 후보, `expected_version`을 반환한다. 별도 proposal record를 만들지 않는다. 농장주가 READY 후보와 `expected_version`을 직접 확인할 때만 새 immutable version을 저장한다. 최초 확인은 immutable `v1` `PUBLISHED`, 변경 확인은 `v2`를 만든다. 최신 버전만 근로자에게 보인다.
 
-10. confirm은 link를 만들지 않는다. remote link는 owner의 단일 create/reissue API에서만 raw URL을 한 번 반환한다. 24시간 뒤 만료된 화면은 재발급 안내를 보이고, `CO_PRESENT` briefing은 PIN cookie로 최신 상태를 읽는다.
+10. confirm은 link를 만들지 않는다. remote link는 owner의 단일 create/reissue API에서만 raw URL을 한 번 반환한다. 24시간 뒤 만료된 화면은 재발급 안내를 보이고, `CO_PRESENT` briefing은 demo owner session cookie로 최신 상태를 읽는다. 근로자 응답은 장소·수량·마감·안전·메모·단계·배지를 선택 언어로만 반환하며 한국어 fallback을 금지한다.
 
 ## AI 원칙과 ambiguity
 

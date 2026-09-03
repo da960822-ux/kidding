@@ -1,0 +1,12 @@
+{
+  "ready": {
+    "status": "ready",
+    "revision": "a12aca0b059f2e57c37ee04d663188e8abdf3962"
+  },
+  "frontend_revision": "36f90e1cc16d000727beac4e93058754b91e9454",
+  "health": {
+    "status": "ok",
+    "revision": "a12aca0b059f2e57c37ee04d663188e8abdf3962"
+  },
+  "frontend_url": "https://batmeori.vercel.app"
+}

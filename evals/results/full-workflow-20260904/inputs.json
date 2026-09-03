@@ -1,0 +1,10 @@
+{
+  "synthetic": true,
+  "provider": "Windows System.Speech",
+  "voice": "Microsoft Heami Desktop",
+  "change_transcript": "열다섯 망 말고 열 망으로 해.",
+  "change_sha256": "107eaceda8690970a590e7004f84293c9fa462acfa0cefab67a0670f3964515c",
+  "origin": "https://batmeori.vercel.app",
+  "session_id": "da9713c7-404a-41b2-87be-96aebac843c1",
+  "team_id": "558d31bb-e5f0-46cf-abaa-4db326abb5b1"
+}

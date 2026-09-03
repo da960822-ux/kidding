@@ -1,0 +1,18 @@
+[
+  {
+    "version": 1,
+    "status": "SUPERSEDED",
+    "quantity": {
+      "unit": "망",
+      "value": 15
+    }
+  },
+  {
+    "version": 2,
+    "status": "PUBLISHED",
+    "quantity": {
+      "unit": "망",
+      "value": 10
+    }
+  }
+]

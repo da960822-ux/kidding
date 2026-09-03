@@ -1,0 +1,47 @@
+[
+  {
+    "name": "record-STT-structure",
+    "status": "PASS",
+    "duration_ms": 20013
+  },
+  {
+    "name": "owner-corrects-before-publish",
+    "status": "PASS",
+    "duration_ms": 12197
+  },
+  {
+    "name": "owner-confirms-and-publishes-v1",
+    "status": "PASS",
+    "duration_ms": 18935
+  },
+  {
+    "name": "vi-ne-storyboards-video-and-TTS",
+    "status": "PASS",
+    "duration_ms": 7653
+  },
+  {
+    "name": "remote-link-and-team-QR-access",
+    "status": "PASS",
+    "duration_ms": 12273
+  },
+  {
+    "name": "individual-assignment-notification-explicit-ack",
+    "status": "PASS",
+    "duration_ms": 22272
+  },
+  {
+    "name": "open-boards-before-quantity-change",
+    "status": "PASS",
+    "duration_ms": 20375
+  },
+  {
+    "name": "quantity-preview-does-not-publish",
+    "status": "PASS",
+    "duration_ms": 59753
+  },
+  {
+    "name": "all-open-boards-latest-version-and-reack",
+    "status": "PASS",
+    "duration_ms": 42031
+  }
+]

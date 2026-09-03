@@ -1,0 +1,1 @@
+{"id": "workflow-quantity-ten", "file": "quantity-ten.wav", "transcript": "열다섯 망 말고 열 망으로 해.", "synthetic": true, "provider": "Windows System.Speech", "voice": "Microsoft Heami Desktop", "duration_seconds": 2.9039909297052153, "sha256": "107eaceda8690970a590e7004f84293c9fa462acfa0cefab67a0670f3964515c", "expected_quantity": {"value": 10, "unit": "망"}}

@@ -69,7 +69,7 @@ P0 task_code는 양파의 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `O
 
 LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구조화 JSON만 반환하고 BE가 검수 manifest와 TTS 결과를 결합해 `openapi.yaml`의 DraftState/PublishedWorkState를 만든다.
 
-한 지시에 두 작물의 실행 작업이 있으면 `AMBIGUOUS`, 빈 `steps`, blocking `TASK`로 작물 선택/분리를 요청한다. required `task_family`에는 원문에 있는 첫 실행 작물을 임시 표현하되 게시 가능한 선택으로 취급하지 않는다. 부정문에만 등장한 작물은 제외한다. 명시적으로 수량을 모른다고 하거나 결정하지 않았다고 한 경우는 수량 자체를 생략한 경우와 구분하며, unknown과 blocking `QUANTITY`를 함께 보존한다.
+한 지시에 두 작물의 실행 작업이 있으면 `AMBIGUOUS`, 빈 `steps`, blocking `TASK`로 작물 선택/분리를 요청한다. required `task_family`에는 원문에 있는 첫 실행 작물을 임시 표현하되 게시 가능한 선택으로 취급하지 않는다. 부정문에만 등장한 작물은 제외한다. 명시적으로 수량을 모른다고 하거나 결정하지 않았다고 한 경우는 수량 자체를 생략한 경우와 구분하며, unknown과 blocking `QUANTITY`를 함께 보존한다. 숫자 없는 용기 명사·이미 완료된 동작의 관형형은 수량 요구가 아니다. 명확한 숫자+용기 단위는 수확·운반 목표량이 될 수 있으며 별도 포장 동작이나 용기별 용량 확인을 요구하지 않는다.
 
 ## 수량 변경 `quantity-change-v1`
 

@@ -21,3 +21,11 @@ archives; no v1 publish or active v1 runtime exists. The active visual input is
 [`assets/asset_manifest.csv`](../assets/asset_manifest.csv).
 
 Run `node --test ai/tests/*.test.mjs` for the active runtime contract suite.
+
+For a controlled paid evaluation, run `backend/evaluate_dialect.py` with the
+same dataset and `--repeat 3`, then repeat with `--without-dialect`. Both arms
+use the production runtime with one bridge attempt; the evaluation-only
+`scripts/eval-without-dialect.mjs` injects a null advisory reference. Production
+bridge payloads expose no dictionary toggle. The latest audit, raw results,
+limitations, and reproduction commands are in
+[`dialect-resume-review.md`](../evals/results/2026-09-04-dialect-resume-review.md).

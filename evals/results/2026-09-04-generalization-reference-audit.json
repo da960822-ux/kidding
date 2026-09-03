@@ -1,0 +1,173 @@
+[
+  {
+    "id": "novel-sort-onion",
+    "held_out_expression": "분리해 놓으랑께",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": []
+    }
+  },
+  {
+    "id": "novel-move-onion",
+    "held_out_expression": "들어다가",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": []
+    }
+  },
+  {
+    "id": "novel-inspect-berry",
+    "held_out_expression": "들여다보랑께",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": []
+    }
+  },
+  {
+    "id": "novel-pack-berry",
+    "held_out_expression": "채워 놓으랑께",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": [
+        {
+          "task_family": "STRAWBERRY",
+          "task_code": "STRAWBERRY_PACKING",
+          "matched_forms": [
+            "포장"
+          ],
+          "semantic_candidates": [
+            "put strawberries into packaging or pack them"
+          ],
+          "context_prerequisites": [
+            "an explicit packing or placing-in-packaging action is required"
+          ],
+          "counterexamples": [
+            "packing does not imply transport to another destination"
+          ],
+          "review_status": "PENDING",
+          "evidence_status": "OBSERVED_OFFICIAL_SOURCE",
+          "provenance": "unverified advisory"
+        }
+      ]
+    }
+  },
+  {
+    "id": "novel-trim-onion",
+    "held_out_expression": "잘라 놓으씨요",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": []
+    }
+  },
+  {
+    "id": "novel-harvest-berry",
+    "held_out_expression": "따불씨요",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": [
+        {
+          "task_family": "STRAWBERRY",
+          "task_code": "STRAWBERRY_HARVEST",
+          "matched_forms": [
+            "따"
+          ],
+          "semantic_candidates": [
+            "harvest strawberries"
+          ],
+          "context_prerequisites": [
+            "an explicit picking or harvest action is required"
+          ],
+          "counterexamples": [
+            "a strawberry word alone is not a harvest action"
+          ],
+          "review_status": "PENDING",
+          "evidence_status": "OBSERVED_OFFICIAL_SOURCE",
+          "provenance": "unverified advisory"
+        }
+      ]
+    }
+  },
+  {
+    "id": "novel-unknown-task",
+    "held_out_expression": "거시기 해 놓으랑께",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": []
+    }
+  },
+  {
+    "id": "novel-unresolved-quantity",
+    "held_out_expression": "할랑가는 아직 못 정했는디",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": [
+        {
+          "task_family": null,
+          "task_code": null,
+          "matched_forms": [
+            "자루"
+          ],
+          "semantic_candidates": [
+            "quantity unit followed by a separate action stem"
+          ],
+          "context_prerequisites": [
+            "keep a quantity unit separate from an adjacent action; preserve both meanings when supported"
+          ],
+          "counterexamples": [
+            "do not merge a unit with an adjacent action stem into one unit"
+          ],
+          "review_status": "PENDING",
+          "evidence_status": "SELF_AUTHORED_CANDIDATE",
+          "provenance": "unverified advisory"
+        },
+        {
+          "task_family": "ONION",
+          "task_code": "ONION_HARVEST",
+          "matched_forms": [
+            "캐"
+          ],
+          "semantic_candidates": [
+            "harvest or dig up onions"
+          ],
+          "context_prerequisites": [
+            "an explicit harvest action is required"
+          ],
+          "counterexamples": [
+            "a quantity or crop word alone is not a harvest action"
+          ],
+          "review_status": "PENDING",
+          "evidence_status": "SELF_AUTHORED_CANDIDATE",
+          "provenance": "unverified advisory"
+        }
+      ]
+    }
+  },
+  {
+    "id": "novel-quantity-change",
+    "held_out_expression": "맞춰불씨요",
+    "absent_from_reference": true,
+    "selected_context": {
+      "matches": [
+        {
+          "task_family": null,
+          "task_code": null,
+          "matched_forms": [
+            "자루"
+          ],
+          "semantic_candidates": [
+            "quantity unit followed by a separate action stem"
+          ],
+          "context_prerequisites": [
+            "keep a quantity unit separate from an adjacent action; preserve both meanings when supported"
+          ],
+          "counterexamples": [
+            "do not merge a unit with an adjacent action stem into one unit"
+          ],
+          "review_status": "PENDING",
+          "evidence_status": "SELF_AUTHORED_CANDIDATE",
+          "provenance": "unverified advisory"
+        }
+      ]
+    }
+  }
+]

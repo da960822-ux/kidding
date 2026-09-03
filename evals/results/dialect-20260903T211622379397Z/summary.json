@@ -1,0 +1,51 @@
+{
+  "total": 50,
+  "passed": 49,
+  "failed": [
+    "v2-04#r1"
+  ],
+  "excluded_negative_family": [
+    "v2-27",
+    "v2-28"
+  ],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "57e2037c3038fbdaacec3eabc153b67a5df26f88",
+  "prompt_sha256": "383aa5b52c858e93a548c53b803dd38db24b0d9de7c69aabcb0f4cf0470054c2",
+  "dataset_sha256": {
+    "ai/evals/transcript-v2.jsonl": "aec07657b034321df1b8d4bcebd403f77421ab3a8850a7add1cc4cea627f8eca",
+    "ai/evals/transcript-jeolla-v2.jsonl": "08226641095d78263b2866d9b7f3f83378b94684638ded487bf7fb7fa69b49fc",
+    "evals/dialect-holdout-20260904.jsonl": "ee060d4d3bb89503498e7c8044b29837b996a62859e8a87996c94cf872789310",
+    "evals/audio/manifest.jsonl": "25f9a8c662d2d2618c1f530f1c45140c1aa5705278de2f8606ac2789bd66597d"
+  },
+  "audio_count": 3,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review.",
+  "context_sha256": {
+    "ai\\references\\delivery-policy-v2.json": "7aa23e3d61cf9df4ee35d98b09806c69fe44e6a99381376ef1208867a287aee2",
+    "ai\\references\\dialect-v2.json": "0d0411d2a5e3f4c68ed0a7468d56a0a2b108e6b075411483057334653f4d90a4",
+    "ai\\references\\structure-parsing-v1.json": "bba3dbceda622b4dd316f31eb4d8823bfbc9ec2de33cdf220c1d62fb4afb1ce4"
+  },
+  "dialect_context": true,
+  "repetitions": 1,
+  "attempts_per_case": 1,
+  "source_sha256_before": {
+    "ai\\prompts\\prompt-quantity-change-001.md": "caabeadd63e869a1675d4187e08d01748aec695b2ca1fe794f1519d89afbfefe",
+    "ai\\prompts\\prompt-structure-005.md": "383aa5b52c858e93a548c53b803dd38db24b0d9de7c69aabcb0f4cf0470054c2",
+    "ai\\prompts\\prompt-structure-supplement-002.md": "b3f76fbf579b0506937ab6975a2c53c4f126bb63ef20d1ca8675ad771fbe11f8",
+    "ai\\prompts\\prompt-transcription-002.md": "ebc60def478525aa83bc9ba3351c5aa0dcbcf074af6d7abe6bb636f306836d0c",
+    "ai\\prompts\\prompt-transcription-review-001.md": "63980c4fc75ccafdd7f81c704c2281cdf268c0918c7d0559bcca93567983e4b3",
+    "ai\\lib\\dialect-reference.mjs": "9ce3983a8e3818e54fdeeab29dda3fe1dd47615373bc3e3ebac4325059e37fb0",
+    "ai\\lib\\ontology-v2.mjs": "f0b19d79b0eb8c2712ba203264cdacbdb0a10bfae1a029a2c4e100ecb8977dd5",
+    "ai\\lib\\openai-provider.mjs": "c06dbc2cd99dbbb98b2118caa51b9951315600d6383da3d0fcc7ab5094a166c0",
+    "ai\\lib\\openai-requests.mjs": "cd3d4304e36a4a3bcdead44573564123d98175e6232840ff1b44a1fb28bfb6a7",
+    "ai\\lib\\structure-v2-contract.mjs": "6ebfe827e2cb6e6ba0795f0bdedd1d2806f71694b30edc1f46f9b1242f1c8df3",
+    "ai\\lib\\visual-match.mjs": "b7f88280fb8028c378a0c8c6621ff12edd7b5613a21cb5e94c6d0f2eb787ee30",
+    "ai\\lib\\worker-briefing-v2.mjs": "3132fd93d4a7183595d165fa1d0d7f18044496e92f4f4207066f5be094859f57",
+    "ai\\references\\dialect-v2.json": "0d0411d2a5e3f4c68ed0a7468d56a0a2b108e6b075411483057334653f4d90a4",
+    "ai\\index.mjs": "e3d14b03b6c891e4ec6416334f5ec7046854c8cf2c0487eb02a332893829266c",
+    "ai\\scripts\\eval-without-dialect.mjs": "c0250c9768e621439c1403ca462ad1622e683ea5e3ab0c17994ce665e27e1186",
+    "backend\\app\\main.py": "1277a8cd5eaa62b1d3b5b43c37fd9e38ef3282dc4012a2fbd0614676d131d223",
+    "backend\\evaluate_dialect.py": "b26278000070967f6fc3b0a42069a47d9718cee27057c5283639a15368d39376"
+  },
+  "source_changed_during_run": false
+}

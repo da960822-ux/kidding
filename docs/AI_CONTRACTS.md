@@ -13,23 +13,23 @@ provider adapter는 server-only environment에서 실행한다. provider/model/v
 - 입력·출력에 secret, raw audio를 넣지 않는다.
 - transcript는 신뢰할 수 없는 owner 입력이다. 명시적 delimiter로 감싸고 prompt injection을 지시로 실행하지 않으며 tool execution을 제공하지 않는다.
 - contract output은 `schema_version`과 `contract_version`을 함께 가진다. provider/model은 env와 metadata에만 둔다.
-- pipeline은 P0 sync REST에서 호출하는 AI package다. upload/STT→structure와 선택 언어의 guide lookup/translation→video match→TTS 결과를 반환한다. AI package는 route·인증·DB 저장·version transaction을 구현하지 않으며 BE가 결과를 재검증한다. FE는 최대 60초 loading/timeout UX를 제공한다. queue는 P1.
+- pipeline은 P0 sync REST다. Node `ai/`가 upload STT→structure→quantity parse→verified guide lookup/translation→video match→TTS를 수행하고 FastAPI는 private JSONL/stdio transport·storage만 맡는다. FE는 최대 60초 loading/timeout UX를 제공한다. queue는 P1.
 
 ## STT `stt-v1`
 
-입력: 임시 `audio` multipart, filename/MIME(`audio/webm|audio/mp4`), optional `language_hint=ko`. AI facade는 filename/MIME를 STT provider까지 보존한다. WorkDraft 보완도 같은 audio-only multipart와 `expected_draft_revision`을 쓰며, text supplement는 없다. 출력:
+입력: 임시 `audio` multipart, optional `language_hint=ko`. WorkDraft 보완도 같은 audio-only multipart와 `expected_draft_revision`을 쓰며, text supplement는 없다. 출력:
 
 ```json
 {
   "transcript": "저짝 양파 스무 망 캐갖고 다 허면 차에 실어서 창고로 옮겨",
   "language_code": "ko",
-  "confidence": null,
+  "confidence": 0.0,
   "schema_version": "1",
   "contract_version": "stt-v1"
 }
 ```
 
-provider가 신뢰 가능한 `confidence`를 제공하지 않으면 `null`을 보존한다. 낮은 confidence 또는 빈 transcript면 재녹음한다. raw audio는 요청 완료 즉시 삭제하고 transcript만 version 감사에 남긴다.
+`confidence`가 낮거나 transcript가 비면 재녹음. raw audio는 요청 완료 즉시 삭제, transcript만 version 감사에 남긴다.
 
 ## 구조화 `structure-v2`
 
@@ -65,7 +65,7 @@ LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구�
 
 ## 수량 변경 `quantity-change-v1`
 
-AI package 입력은 audio/text와 BE가 인증 후 전달한 `expected_version`이다. cookie/auth 검증은 BE 책임이며 sync parse는 저장하지 않고 다음만 반환한다. Audio facade도 공개 결과에는 transcript를 섞지 않고 `quantity-change-v1`만 반환한다.
+입력은 owner cookie로 받은 audio와 `expected_version`이다. sync REST parse는 저장하지 않고 다음만 반환한다.
 
 ```json
 {"interpretation":"READY","quantity":{"value":15,"unit":"망"},"expected_version":1,"ambiguities":[],"schema_version":"1","contract_version":"quantity-change-v1"}
@@ -75,7 +75,7 @@ AI package 입력은 audio/text와 BE가 인증 후 전달한 `expected_version`
 
 ## 번역 `translation-v1`
 
-각 step의 action/quantity/order/location/safety를 별도 segment로 만든다. FE가 보낸 `language_code`를 BE가 AI package에 전달하면 해당 언어(`vi|ne`) 하나만 생성한다. action phrase는 검수된 `GuidePhrase` HIT를 우선하고, quantity/order는 AI package의 deterministic template을 사용한다. safety는 VERIFIED OFFICIAL만 사용하며, missing general phrase만 `AI_TRANSLATION` fallback이다. 전체 문장을 하나의 official source로 표시하지 않는다. 실제 검수된 HIT row는 아직 data collection gate이므로 가짜 URL·페이지를 예시에 넣지 않는다. 일반표현 MISS 예시는 다음과 같다.
+각 step의 action/quantity/order/location/safety를 별도 segment로 만든다. action phrase는 검수된 `GuidePhrase` HIT를 우선하고, quantity/order는 BE deterministic template을 사용한다. safety는 VERIFIED OFFICIAL만 사용하며, missing general phrase만 `AI_TRANSLATION` fallback이다. 전체 문장을 하나의 official source로 표시하지 않는다. 실제 검수된 HIT row는 아직 data collection gate이므로 가짜 URL·페이지를 예시에 넣지 않는다. 일반표현 MISS 예시는 다음과 같다.
 
 ```json
 {
@@ -119,7 +119,7 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 ## TTS `tts-v1`
 
-입력: 선택 언어의 검증된 step text, `language_code`(`vi|ne`), voice settings. 출력: audio bytes, text/audio SHA-256, provider metadata 또는 실패 상태. AI package는 `work content hash + language_code` cache key를 반환하고 BE가 필요하면 저장·URL화를 담당한다. text를 source of truth로 두며 실패하면 text를 표시한다.
+입력: 게시된 step text, `language_code`(`ko|vi|ne`), voice settings. 출력: 재생 가능한 `audio_url` 또는 실패 상태. publish 시 text content hash로 생성·cache하며 text를 source of truth로 둔다. 실패하면 text를 표시한다.
 
 ## 영상 매칭 `visual-match-v1`
 

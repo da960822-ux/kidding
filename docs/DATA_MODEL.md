@@ -50,7 +50,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `visual_assets`
 
-`id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`를 가진다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`만 게시한다. DB constraint는 historical asset code를 남겨 existing version 참조를 보존하고, 새 `structure-v2` publish는 current 8개 code만 사용한다. legacy asset code는 reset·삭제·자동 변환하지 않는다.
+`id`, `task_code`, `asset_type`, `content_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`, `reviewed_at`, `checksum_md5`, `is_current`를 가진다. `assets/asset_manifest.csv`가 current 8개 P0 asset의 유일한 release input이며 service-role `import_visual_assets_v2` RPC가 row 전체를 먼저 검증한 뒤 한 transaction으로 insert한다. 같은 `id`·checksum 재실행은 no-op이고 checksum 불일치는 아무 row도 쓰지 않는다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`·`is_current:true`만 게시하며 current 8개 code별 eligible asset은 최대 하나다. DB constraint는 historical asset code를 남겨 existing version 참조를 보존하고, 새 `structure-v2` publish는 current 8개 code만 사용한다. legacy asset code는 reset·삭제·자동 변환하지 않는다.
 
 ## `tts_assets`
 

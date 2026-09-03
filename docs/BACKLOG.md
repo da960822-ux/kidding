@@ -6,7 +6,7 @@
 |---|---|---|---|---|---|
 | P0-01 | P0 | 양파·딸기 ontology 8코드 | family 일치 allowlist·JSON Schema·BE semantic validation 일치 | 없음 | AI |
 | P0-01a | P0 | current contract/legacy preservation | `structure-v2`/`ontology-v2` current 8-code family validation; immutable `structure-v1` legacy version read; never reset·rewrite·remap | P0-01 | BE |
-| P0-02 | P0 | AI 사전생성 LOW 영상 8개 | 8개 후보의 provenance·사람 검수 `APPROVED` manifest, FE static asset | P0-01 | AI |
+| P0-02 | P0 | AI 사전생성 LOW 영상 8개 | 8개 후보의 provenance·사람 검수 `APPROVED` manifest, worker-delivery URL | P0-01 | AI |
 | P0-03 | P0 | PIN session/CORS/CSRF | Secure cookie, exact Origin, rate limit; static CSRF header 없음 | 없음 | BE |
 | P0-04 | P0 | audio→WorkDraft sync | 10MiB/60초, schema/risk reject | P0-01,P0-03 | BE |
 | P0-05 | P0 | structure/translation | unknown 보존, source, vi/ne | P0-01 | AI |

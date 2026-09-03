@@ -30,8 +30,8 @@ P1: 농장주 회원가입/계정관리, SMS, 질문, 양파·딸기 이외 작�
 4. AI는 모르는 값을 `UNSPECIFIED` 또는 `null`로 보존한다. 농장주는 요약과 모호함을 확인하고 필요한 보완을 음성으로 추가한다.
 5. 정부 가이드 공식 번역 HIT는 `OFFICIAL_GUIDE`, 일반 작업표현 MISS는 `AI_TRANSLATION`으로 표시한다. 안전표현은 검수된 출처가 없으면 게시하지 않는다.
 6. `APPROVED`이고 `safety_level: LOW`인 사전 생성 영상을 매칭한다. 영상이 없으면 텍스트+TTS를 사용한다.
-7. 농장주가 `CONFIRM` 또는 허용된 `PUBLISH_AS_IS`를 선택하면 검증된 `structure-v2`/`ontology-v2` WorkVersion v1과 `vi`·`ne` WorkerBriefing package를 원자적으로 `PUBLISHED`한다. confirm은 전달 방식·언어·raw URL을 만들지 않는다.
-8. 게시 뒤 `CO_PRESENT`는 owner PIN briefing에서 `vi|ne`를 골라 재생한다. `REMOTE`는 별도 create/reissue API에서 선택 언어의 익명 24시간 `/w/{token}` browser 링크를 한 번 발급하며, browser가 JSON assignment endpoint를 호출한다. 여러 사람에게 서로 다른 작업을 줄 때는 농장주가 오늘 작업팀 QR을 열고, 참가 roster에 각 WorkSession을 배정한다.
+7. 농장주가 `CONFIRM` 또는 허용된 `PUBLISH_AS_IS`를 선택하면 검증된 `structure-v2`/`ontology-v2` WorkVersion v1과 `vi`·`ne` WorkerBriefing package를 원자적으로 `PUBLISHED`한다. confirm request는 delivery 방식·언어·worker 정보를 받지 않으며 익명 링크도 만들지 않는다.
+8. 게시 뒤 `CO_PRESENT`는 owner PIN briefing에서 `vi|ne`를 골라 재생한다. `REMOTE`는 별도 발급 API에서 언어를 골라 24시간 익명 `/w/{token}` browser 링크를 만든다. TodayWorkTeam은 QR join에서 worker가 별명·`vi|ne`를 직접 고르고, 농장주는 roster에 각 WorkSession을 하나 이상 배정한다.
 9. 유효한 remote 링크는 고정 버전이 아니라 항상 최신 `PUBLISHED` WorkVersion을 읽는다. 링크 만료·재발급 시 기존 링크를 폐기한다.
 10. 수량 변경 audio parse는 저장하지 않는다. 농장주가 `quantity`와 `expected_version`을 직접 확인할 때만 새 immutable version을 만든다.
 

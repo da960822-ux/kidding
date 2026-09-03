@@ -10,13 +10,24 @@
     "location": {"$ref": "#/$defs/location"},
     "task_family": {"enum": ["ONION", "STRAWBERRY"]},
     "quantity": {"anyOf": [{"$ref": "#/$defs/quantity"}, {"const": "UNSPECIFIED"}, {"type": "null"}]},
-    "deadline": {"type": ["string", "null"]}, "safety": {"type": "array", "items": {"type": "string", "minLength": 1}}, "notes": {"type": ["string", "null"]},
-    "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/step"}}, "ambiguities": {"type": "array", "items": {"$ref": "#/$defs/ambiguity"}},
-    "schema_version": {"const": "2"}, "contract_version": {"const": "structure-v2"}, "ontology_version": {"const": "ontology-v2"}
+    "deadline": {"type": ["string", "null"]},
+    "safety": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "notes": {"type": ["string", "null"]},
+    "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/step"}},
+    "ambiguities": {"type": "array", "items": {"$ref": "#/$defs/ambiguity"}},
+    "schema_version": {"const": "2"},
+    "contract_version": {"const": "structure-v2"},
+    "ontology_version": {"const": "ontology-v2"}
   },
   "allOf": [
-    {"if": {"properties": {"task_family": {"const": "ONION"}}}, "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"anyOf": [{"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT"]}, {"type": "null"}]}}}}}}},
-    {"if": {"properties": {"task_family": {"const": "STRAWBERRY"}}}, "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"anyOf": [{"enum": ["STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING"]}, {"type": "null"}]}}}}}}}
+    {
+      "if": {"properties": {"task_family": {"const": "ONION"}}},
+      "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"anyOf": [{"enum": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT"]}, {"type": "null"}]}}}}}}
+    },
+    {
+      "if": {"properties": {"task_family": {"const": "STRAWBERRY"}}},
+      "then": {"properties": {"steps": {"items": {"properties": {"task_code": {"anyOf": [{"enum": ["STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING"]}, {"type": "null"}]}}}}}}
+    }
   ],
   "$defs": {
     "location": {"type": "object", "additionalProperties": false, "required": ["raw_text", "kind", "canonical_name"], "properties": {"raw_text": {"type": ["string", "null"]}, "kind": {"enum": ["DEICTIC", "NAMED", "UNSPECIFIED"]}, "canonical_name": {"type": ["string", "null"]}}},

@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Pretendard, "Noto Sans KR", "Noto Sans Devanagari", Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #223024;
+  background: #FAF8F1;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 84px;
+}
+
+body {
+  min-width: 320px;
+  margin: 0;
+  background: #FAF8F1;
+}
+
+/* 웹앱은 야외·노령 사용자 가독성을 위해 랜딩보다 모든 글자를 정확히 3pt(4px) 키운다. */
+.batmeori-webapp { font-size: 20px; }
+.batmeori-webapp .text-xs { font-size: 16px !important; }
+.batmeori-webapp .text-sm { font-size: 18px !important; }
+.batmeori-webapp .text-base { font-size: 20px !important; }
+.batmeori-webapp .text-lg { font-size: 22px !important; }
+.batmeori-webapp .text-xl { font-size: 24px !important; }
+.batmeori-webapp .text-2xl { font-size: 28px !important; }
+.batmeori-webapp .text-3xl { font-size: 34px !important; }
+.batmeori-webapp .text-4xl { font-size: 40px !important; }
+
+@media (min-width: 640px) {
+  .batmeori-webapp [class~="sm:text-lg"] { font-size: 22px !important; }
+  .batmeori-webapp [class~="sm:text-2xl"] { font-size: 28px !important; }
+  .batmeori-webapp [class~="sm:text-3xl"] { font-size: 34px !important; }
+  .batmeori-webapp [class~="sm:text-4xl"] { font-size: 40px !important; }
+}
+
+button,
+a,
+select,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.farm-rows {
+  background-image: repeating-linear-gradient(
+    104deg,
+    rgba(76, 116, 57, 0) 0,
+    rgba(76, 116, 57, 0) 46px,
+    rgba(76, 116, 57, 0.36) 48px,
+    rgba(76, 116, 57, 0.36) 58px,
+    rgba(255, 239, 155, 0.28) 60px,
+    rgba(255, 239, 155, 0.28) 80px
+  );
+  transform: perspective(480px) rotateX(56deg) scale(1.22);
+  transform-origin: center bottom;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>밭머리 아주 쉽게 이해하기</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, "Malgun Gothic", sans-serif; color: #17324d; background: #f5f8fb; }
+    body { max-width: 960px; margin: 0 auto; padding: 28px 18px 56px; }
+    h1 { font-size: clamp(2rem, 6vw, 4rem); margin: 8px 0; }
+    h2 { font-size: clamp(1.5rem, 4vw, 2.4rem); margin-top: 48px; }
+    p, li { font-size: clamp(1.1rem, 2.6vw, 1.45rem); line-height: 1.55; }
+    .card { background: white; border: 3px solid #d9e5ef; border-radius: 24px; padding: 22px; margin: 20px 0; box-shadow: 0 8px 24px #17324d12; }
+    .flow { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin: 28px 0; }
+    .box { min-width: 150px; text-align: center; border-radius: 20px; padding: 22px 14px; font-size: 1.35rem; font-weight: 800; }
+    .farmer { background: #ffe39a; }
+    .session { background: #bcebd0; }
+    .worker { background: #c9e4ff; }
+    .arrow { font-size: 2.5rem; font-weight: 900; }
+    .small { color: #567089; font-size: 1rem; }
+    .yes { border-color: #39a96b; background: #f0fff6; }
+    .no { border-color: #e58a8a; background: #fff6f6; }
+    .tag { display: inline-block; padding: 6px 12px; border-radius: 999px; background: #eaf1f7; margin: 4px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <h1>밭머리는 어떤 서비스일까?</h1>
+  <p>아주 쉽게 말하면, <strong>농장주가 선생님</strong>이고 <strong>근로자가 학생</strong>인 작업 전달 도구예요.</p>
+
+  <div class="flow">
+    <div class="box farmer">농장주<br>“양파 20망 해줘”</div>
+    <div class="arrow">→</div>
+    <div class="box session">오늘 작업 공책<br>WorkSession</div>
+    <div class="arrow">→</div>
+    <div class="box worker">근로자별 초대장<br>WorkerLink</div>
+  </div>
+
+  <div class="card yes">
+    <h2>추천하는 모습</h2>
+    <p>농장주가 오늘 작업을 하나 만들어요.</p>
+    <p>근로자 A, B, C에게 각각 비밀 초대장(URL)을 보내요.</p>
+    <p>세 사람은 같은 작업을 보지만, 자기 언어로 봐요.</p>
+  </div>
+
+  <div class="card">
+    <h2>URL은 오픈카톡방일까?</h2>
+    <p><strong>아니에요.</strong> URL은 “작업표를 보는 열쇠”에 가까워요.</p>
+    <span class="tag">채팅 없음</span>
+    <span class="tag">검색 없음</span>
+    <span class="tag">답장 없음</span>
+    <span class="tag">24시간 후 만료</span>
+    <p class="small">누구나 들어오는 방이 아니라, 초대받은 사람이 오늘 작업을 보는 화면입니다.</p>
+  </div>
+
+  <div class="card">
+    <h2>작업표를 사람마다 복사할까?</h2>
+    <p><strong>같은 일을 하면 복사하지 않아요.</strong></p>
+    <p>칠판에 “오늘 양파 20망”이라고 한 번 쓰고, 모두가 그 칠판을 봅니다.</p>
+    <p>사람마다 다른 양·작업이 필요할 때만 나중에 개인 작업표를 추가해요.</p>
+  </div>
+
+  <div class="card">
+    <h2>개인정보 DB가 필요할까?</h2>
+    <p>처음에는 이름표만 있으면 돼요.</p>
+    <ul>
+      <li>공개용 가명: 근로자 A</li>
+      <li>언어: 베트남어 또는 네팔어</li>
+      <li>활성 여부</li>
+    </ul>
+    <p class="small">전화번호, 주민번호, 실명, SMS는 처음부터 모으지 않습니다.</p>
+  </div>
+
+  <div class="card no">
+    <h2>공공기관은 언제 넣을까?</h2>
+    <p>지금은 학교를 직접 운영하는 단계가 아니라, 선생님이 학생에게 공책을 나눠주는 단계예요.</p>
+    <p>나중에 공공기관이 농장과 근로자를 연결해 주면, 그때 기관용 계정·권한·개인정보 관리를 붙이면 됩니다.</p>
+  </div>
+
+  <div class="card yes">
+    <h2>한 줄 결론</h2>
+    <p><strong>지금은 “농장주 1명 → 오늘 작업 1개 → 근로자별 URL”로 만들면 됩니다.</strong></p>
+    <p>현재 DB의 WorkSession, WorkVersion, Worker, WorkerLink가 바로 이 구조예요.</p>
+  </div>
+</body>
+</html>

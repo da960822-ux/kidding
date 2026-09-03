@@ -15,7 +15,8 @@
 | 안전 수준 HIGH 영상 | 게시 금지 | text fallback/차단 | gate | 영상 검수 |
 | 영상·TTS 실패 | text fallback | 재시도·텍스트 | 상태 반환 | provider retry |
 | owner 인증 없음 | mutation `401` | PIN 재입력 | cookie 검증 | - |
-| confirm에 decision·override 값 누락 또는 허용값 외 입력 | `422 SCHEMA_INVALID` | confirm 사유를 다시 선택 | `CONFIRM|PUBLISH_AS_IS`와 override reason 검증 | - |
+| confirm에 delivery mode/language가 들어감 | `422 SCHEMA_INVALID` | publish 뒤 전달 화면에서 선택 | confirm은 공용 `vi`·`ne` package만 publish | - |
+| REMOTE link issue 또는 CO_PRESENT briefing의 언어 누락/허용값 외 입력 | `422 SCHEMA_INVALID` | `vi|ne`를 다시 선택 | 별도 link/briefing endpoint 검증 | - |
 | remote link 만료 | `410`, 재발급 안내 | 안내 화면 | expiry 검사 | - |
 | remote token invalid/revoked | 일반화된 `404` | 접근 불가 화면 | 내부 사유 비공개 | - |
 | today-team QR invalid/revoked | 일반화된 `404` | 접근 불가·QR 재표시 | token hash·expiry 검사 | - |

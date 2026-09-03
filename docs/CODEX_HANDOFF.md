@@ -23,7 +23,7 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 - P0 작물은 양파·딸기만 지원한다. task code와 팀 영향은 `docs/TEAM_UPDATE_ONION_STRAWBERRY_P0.md`를 따른다.
 - 전달 언어는 베트남어(`vi`)와 네팔어(`ne`)만 지원한다.
 - 전달 방식은 `CO_PRESENT`(농장주와 함께 보기), `REMOTE`(익명 링크), 또는 TodayWorkTeam의 개인 배정이다.
-- P0에는 영구 근로자 등록·계정, 전화번호, 국적, SMS, 개인 프로필, 채팅이 없다. TodayWorkTeam은 별명·`vi|ne`만 가진 Asia/Seoul 당일 임시 QR roster이며 자정에 만료된다.
+- P0에는 영구 근로자 등록·계정, 전화번호, 국적, SMS, 개인 프로필, 채팅이 없다. 새 TodayWorkTeam은 별명·`vi|ne`만 가진 임시 QR roster이며 첫 작업 확정 후 24시간에 만료된다. 작업 추가·변경으로 만료 시각을 연장하지 않는다. 기존 농장 방식의 팀만 Asia/Seoul 자정 만료 규칙을 유지한다.
 - `REMOTE` 링크는 언어 하나를 선택하며 발급 후 24시간 뒤 만료된다.
 - 링크는 항상 최신 `PUBLISHED` WorkVersion을 보여준다.
 - 안전 위험이 `HIGH` 또는 `UNKNOWN`이면 게시할 수 없다.
@@ -39,6 +39,7 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 - 운영 Supabase에 `018` additive migration 적용과 이력 등록, service-role readiness를 확인했다. 기존 `001`~`016`과 함께 적용됐으며 `017` 삭제 migration은 여전히 적용하지 않았다.
 - AI unit 55개, Python 87개, 브라우저 46개, frontend fixture 4개, manifest/dataset·proxy·contract·build 검사 통과. PGlite 전체 migration replay와 PIN·만료·rollback·stale/foreign acknowledgement 검사 통과. 느린 polling 응답 폐기 문제를 수정하고 6초 지연 브라우저 검사로 확인했다.
 - 배포 후 `backend/live_e2e.py`를 실행하면 새 팀 시작·첫 게시·관리 PIN 복귀·QR·개인 배정·확인 기록과 실제 browser cookie를 함께 검증한다. 테스트가 자체 임시 팀을 만들므로 사전 발급 농장 코드·PIN은 필요하지 않다.
+- 운영 Vercel과 Render에 `a12aca0b059f2e57c37ee04d663188e8abdf3962`를 배포했다. API `/health`·`/ready`에서 같은 revision을 확인했다. 실제 STT·게시·영상·수량 변경·QR·개인 배정·버전별 확인과 농장주 receipt 조회가 통과했다. 최초 통합 실행의 마지막 browser 단계는 Vercel 배포 전 구화면에서 PIN 입력을 찾지 못해 실패했다. 화면 배포 완료 후 같은 테스트 팀으로 `check-live-browser-sessions.mjs`만 재실행해 관리 PIN 복귀·owner/member cookie 유지·역할 격리 PASS를 확인했다. 추가 AI 호출은 하지 않았다.
 
 - `backend/app/main.py`: FastAPI API, PIN/member cookie 인증, draft/version/link/team 흐름, BE schema/risk/guide/video gate
 - `backend/app/ai.py`: Node AI runtime으로 연결하는 private JSONL/stdio transport. Provider 구현과 선택은 Node runtime과 server-only 환경변수가 소유한다.

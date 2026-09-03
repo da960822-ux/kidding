@@ -12,11 +12,15 @@
 - 영상: AI가 사전 생성하고 사람이 검수한 파일만 사용. `safety_level: HIGH`는 게시 금지
 - 전달 방식: `CO_PRESENT` 또는 `REMOTE`
 - `CO_PRESENT`: 농장주 PIN 세션의 owner 폰에서 언어를 골라 함께 보기
-- `REMOTE`: 언어를 하나 골라 로그인 없는 24시간 익명 링크 발급
+- `REMOTE`: 언어를 하나 골라 로그인 없는 24시간 익명 browser 링크 `${PUBLIC_WEB_BASE_URL}/w/{token}` 발급. 해당 route는 JSON assignment endpoint로 Latest Published를 읽는다.
 - 오늘 작업팀: 농장주가 오늘의 QR 하나를 열고, 근로자는 별명과 `vi|ne`만 제출한다. 농장주는 roster를 보고 사람별로 하나 이상 WorkSession을 배정할 수 있다. 참가자 브라우저는 자기 배정의 Latest Published만 읽는다.
 - 제외: 영구 근로자 등록·계정, 전화번호, SMS, 개인 프로필, 채팅, 국적 수집
 
 P1: 농장주 회원가입/계정관리, SMS, 질문, 양파·딸기 이외 작물·추가 언어, 오프라인 캐시, 통계, 급여·출퇴근, 기관 매칭 관리.
+
+## 배포·보안 경계
+
+배포 FE는 `VITE_API_BASE_URL`로 API를 지정한다. browser mock은 `VITE_USE_MOCK_API=true`인 명시적 개발 선택일 뿐, URL 미설정의 production fallback이 아니다. BE의 `PUBLIC_WEB_BASE_URL`은 `DEMO_FALLBACK=1`이 아닌 환경에서 필수이며 `/ready`와 REMOTE 발급을 차단하는 deployment gate다. owner mutation은 active demo owner의 PIN으로 발급된 farm-scoped signed cookie와 `FRONTEND_ORIGINS` exact Origin으로만 보호하며, 정적 CSRF header는 사용하지 않는다.
 
 ## 핵심 흐름
 
@@ -26,8 +30,8 @@ P1: 농장주 회원가입/계정관리, SMS, 질문, 양파·딸기 이외 작�
 4. AI는 모르는 값을 `UNSPECIFIED` 또는 `null`로 보존한다. 농장주는 요약과 모호함을 확인하고 필요한 보완을 음성으로 추가한다.
 5. 정부 가이드 공식 번역 HIT는 `OFFICIAL_GUIDE`, 일반 작업표현 MISS는 `AI_TRANSLATION`으로 표시한다. 안전표현은 검수된 출처가 없으면 게시하지 않는다.
 6. `APPROVED`이고 `safety_level: LOW`인 사전 생성 영상을 매칭한다. 영상이 없으면 텍스트+TTS를 사용한다.
-7. 농장주가 `CONFIRM` 또는 허용된 `PUBLISH_AS_IS`를 선택하고, 전달 방식과 언어를 고른다.
-8. `CO_PRESENT`는 owner PIN briefing에서 바로 재생한다. `REMOTE`는 선택 언어의 익명 24시간 링크 하나를 발급한다. 여러 사람에게 서로 다른 작업을 줄 때는 농장주가 오늘 작업팀 QR을 열고, 참가 roster에 각 WorkSession을 배정한다.
+7. 농장주가 `CONFIRM` 또는 허용된 `PUBLISH_AS_IS`를 선택하면 검증된 `structure-v2`/`ontology-v2` WorkVersion v1과 `vi`·`ne` WorkerBriefing package를 원자적으로 `PUBLISHED`한다. confirm request는 delivery 방식·언어·worker 정보를 받지 않으며 익명 링크도 만들지 않는다.
+8. 게시 뒤 `CO_PRESENT`는 owner PIN briefing에서 `vi|ne`를 골라 재생한다. `REMOTE`는 별도 발급 API에서 언어를 골라 24시간 익명 `/w/{token}` browser 링크를 만든다. TodayWorkTeam은 QR join에서 worker가 별명·`vi|ne`를 직접 고르고, 농장주는 roster에 각 WorkSession을 하나 이상 배정한다.
 9. 유효한 remote 링크는 고정 버전이 아니라 항상 최신 `PUBLISHED` WorkVersion을 읽는다. 링크 만료·재발급 시 기존 링크를 폐기한다.
 10. 수량 변경 audio parse는 저장하지 않는다. 농장주가 `quantity`와 `expected_version`을 직접 확인할 때만 새 immutable version을 만든다.
 
@@ -51,3 +55,7 @@ P1: 농장주 회원가입/계정관리, SMS, 질문, 양파·딸기 이외 작�
 ## 성공 기준
 
 공개 HTTPS와 두 폰에서 3회 연속: 음성→스토리보드→`CO_PRESENT` 언어 briefing→`REMOTE` 언어 링크 또는 오늘 작업팀 QR join·개별 배정→`20망`에서 `15망` 변경→각 화면 최신 버전 확인.
+
+## current publish와 legacy 읽기
+
+새 WorkDraft와 publish는 current two-crop `structure-v2`/`ontology-v2`만 사용한다. `structure-v1` immutable WorkVersion은 읽기·표시·감사만 허용하며 수량 preview·confirm은 `422 LEGACY_READ_ONLY`다. migration은 legacy data와 asset reference를 reset·drop·rewrite·자동 remap하지 않는다. 수량 변경도 새 state와 `vi`·`ne` package를 모두 다시 만든 뒤 하나의 transaction으로 게시한다.

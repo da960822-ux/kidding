@@ -1,228 +1,348 @@
 import asyncio
 import base64
-import json
 import unittest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
+
+from fastapi import Request
 
 from app.main import (
     ApiError,
+    DraftConfirmRequest,
+    QuantityChangeConfirmRequest,
+    OwnerWorkSession,
     RiskAssessment,
-    cache_published_tts,
-    demo_structure,
-    enrich_draft_state,
-    localized_worker_state,
-    parse_quantity_output,
-    parse_quantity_text,
+    Location,
+    Step,
+    WorkState,
+    build_worker_packages,
+    confirm_draft,
+    confirm_quantity_change,
+    current_assets,
+    issue_link,
     parse_structure_output,
+    parse_version,
+    private_tts_bytes,
     settings,
-    sign_team_member,
-    synthesize_tts,
-    validate_state,
-    verify_team_member,
+    structure_v2_state_json,
+    validate_contract_schema,
 )
+from app.p0_runtime import OwnerIdentity
 
 
-class BackendContractTests(unittest.TestCase):
-    def test_temporary_team_cookie_is_signed_and_bound_to_member(self):
-        original_secret = settings.owner_session_secret
-        original_pin = settings.owner_pin
-        try:
-            settings.owner_session_secret = "test-secret"
-            settings.owner_pin = "1234"
-            cookie = sign_team_member("team-1", "member-1", datetime.now(timezone.utc) + timedelta(minutes=1))
-            self.assertEqual(verify_team_member(cookie), ("team-1", "member-1"))
-            self.assertIsNone(verify_team_member(f"x{cookie}"))
-        finally:
-            settings.owner_session_secret = original_secret
-            settings.owner_pin = original_pin
+def structure(task_code="ONION_HARVEST"):
+    return {
+        "interpretation": "READY",
+        "summary_ko": "양파를 수확합니다.",
+        "location": {"raw_text": "A밭", "kind": "NAMED", "canonical_name": "A밭"},
+        "task_family": "ONION",
+        "quantity": {"value": 20, "unit": "망"},
+        "deadline": None,
+        "safety": [],
+        "notes": None,
+        "steps": [{"sequence": 1, "task_code": task_code, "title_ko": "양파 수확", "description_ko": "양파를 수확한다", "unsupported_reason": None}],
+        "ambiguities": [],
+        "schema_version": "2",
+        "contract_version": "structure-v2",
+        "ontology_version": "ontology-v2",
+    }
 
-    def test_deictic_location_is_preserved_as_ambiguous(self):
-        state, ambiguities = demo_structure("저짝 밭에서 양파 스무 망을 수확해.")
 
-        self.assertEqual(state.location.kind, "DEICTIC")
-        self.assertIsNone(state.location.canonical_name)
-        self.assertEqual(len(ambiguities), 1)
-        self.assertFalse(ambiguities[0].blocking)
+class BackendP0Tests(unittest.TestCase):
+    def test_package_build_sends_exact_structure_and_keeps_tts_bytes_private(self):
+        text_hash = "a" * 64
+        briefing = {
+            "session_id": "session-1", "version": 1, "contract_version": "worker-briefing-v2", "ontology_version": "ontology-v2", "language_code": "vi",
+            "context": {"task_family": "ONION", "location_display": "A", "quantity": {"value": 20, "unit": "bao"}, "deadline": None, "notes": None},
+            "badges": [], "steps": [{"sequence": 1, "task_code": "ONION_HARVEST", "title": "Thu hoạch", "description": "Thu hoạch", "delivery_mode": "TEXT_TTS"}],
+            "source_detail": [], "tts": {"status": "READY", "text_hash": text_hash, "audio_url": None}, "video": [],
+        }
+        bridge_result = {
+            language: {"briefing": {**briefing, "language_code": language}, "tts_transport": {"status": "READY", "text_hash": text_hash, "audio_url": None, "audio_bytes_base64": base64.b64encode(b"audio").decode()}}
+            for language in ("vi", "ne")
+        }
+        sent = {}
 
-    def test_quantity_change_uses_new_quantity(self):
-        quantity = parse_quantity_text("스무 망 말고 열다섯 망으로 해.")
-
-        self.assertIsNotNone(quantity)
-        self.assertEqual(quantity.value, 15)
-        self.assertEqual(quantity.unit, "망")
-
-    def test_quantity_preview_rejects_model_version_mismatch(self):
-        raw = {
-            "interpretation": "READY",
-            "quantity": {"value": 15, "unit": "망"},
-            "expected_version": 2,
-            "ambiguities": [],
-            "schema_version": "1",
-            "contract_version": "quantity-change-v1",
+        guide = {
+            "canonical_ko": "양파를 수확한다",
+            "language_code": "vi",
+            "translated_text": "검수된 양파 수확 안내",
+            "phrase_key": "onion-harvest",
+            "source_page": 1,
+            "source_url": "https://guide.example.test/1",
+            "license": "CC-BY",
+            "verified": True,
+        }
+        asset = {
+            "id": "asset-1", "task_code": "ONION_HARVEST", "asset_type": "VIDEO", "content_type": "video/mp4",
+            "public_path": "https://video.example.test/asset-1.mp4", "provenance": "AI_GENERATED_PREGENERATED",
+            "review_status": "APPROVED", "safety_level": "LOW", "is_current": True, "captions_text": "양파 수확",
         }
 
-        with self.assertRaises(ApiError) as raised:
-            parse_quantity_output(raw, expected_version=1)
-        self.assertEqual(raised.exception.code, "SCHEMA_INVALID")
+        async def fake_bridge(_operation, payload):
+            sent["work"] = payload["work"]
+            sent["guides"] = payload["guides"]
+            sent["assets"] = payload["assets"]
+            return bridge_result
 
-    def test_supplement_structure_applies_deterministic_risk_gate(self):
-        raw = {
-            "interpretation": "READY",
-            "summary_ko": "양파를 수확합니다.",
-            "location": {"raw_text": None, "kind": "UNSPECIFIED", "canonical_name": None},
-            "task_family": "ONION",
-            "quantity": {"value": 20, "unit": "망"},
-            "deadline": None,
-            "safety": [],
-            "notes": None,
-            "steps": [{
-                "sequence": 1,
-                "task_code": "ONION_HARVEST",
-                "title_ko": "양파 수확",
-                "description_ko": "양파를 수확한다",
-                "unsupported_reason": None,
-            }],
-            "ambiguities": [],
-            "schema_version": "1",
-            "contract_version": "structure-v1",
-        }
+        class Table:
+            def upsert(self, row, **_):
+                sent.setdefault("audio", []).append(row)
+                return self
 
-        with self.assertRaises(ApiError) as raised:
-            asyncio.run(parse_structure_output(raw, "트랙터를 운전해서 양파를 옮겨."))
-        self.assertEqual(raised.exception.code, "OVERRIDE_NOT_ALLOWED")
-
-    def test_structure_task_code_must_match_its_task_family(self):
-        raw = {
-            "interpretation": "READY",
-            "summary_ko": "딸기를 수확합니다.",
-            "location": {"raw_text": None, "kind": "UNSPECIFIED", "canonical_name": None},
-            "task_family": "STRAWBERRY",
-            "quantity": {"value": 20, "unit": "상자"},
-            "deadline": None,
-            "safety": [],
-            "notes": None,
-            "steps": [{
-                "sequence": 1,
-                "task_code": "ONION_HARVEST",
-                "title_ko": "양파 수확",
-                "description_ko": "양파를 수확한다",
-                "unsupported_reason": None,
-            }],
-            "ambiguities": [],
-            "schema_version": "1",
-            "contract_version": "structure-v1",
-        }
-
-        with self.assertRaises(ApiError) as raised:
-            asyncio.run(parse_structure_output(raw, "딸기를 수확해."))
-        self.assertEqual(raised.exception.code, "SCHEMA_INVALID")
-
-        raw["steps"][0]["task_code"] = "STRAWBERRY_HARVEST"
-        state, _, _ = asyncio.run(parse_structure_output(raw, "딸기를 수확해."))
-        self.assertEqual(state.task_family, "STRAWBERRY")
-
-    def test_enrichment_prefers_reviewed_guide_and_low_video(self):
-        state, _ = demo_structure("저짝 밭에서 양파 스무 망을 수확해.")
-
-        class Query:
-            def __init__(self, table): self.table = table
-            def select(self, *_): return self
-            def in_(self, *_): return self
-            def eq(self, *_): return self
-            def limit(self, *_): return self
             def execute(self):
-                if self.table == "guide_phrases":
-                    return type("Result", (), {"data": [{"phrase_key": "onion-harvest", "source_page": 1, "source_url": "https://guide.example/1", "license": "CC"}]})()
-                if self.table == "guide_translations":
-                    return type("Result", (), {"data": [{"translated_text": "검수 번역"}]})()
-                return type("Result", (), {"data": [{"id": "video-1", "task_code": "ONION_HARVEST", "public_path": "/videos/onion.mp4", "provenance": "AI_GENERATED_PREGENERATED", "review_status": "APPROVED", "safety_level": "LOW", "captions_text": "caption"}] if self.table == "visual_assets" else []})()
-
-        class Client:
-            def table(self, table): return Query(table)
-
-        enriched = asyncio.run(enrich_draft_state(Client(), state))
-
-        self.assertEqual(enriched.steps[0].video.asset_id, "video-1")
-        self.assertEqual(enriched.steps[0].delivery_mode, "VIDEO")
-        self.assertEqual(enriched.steps[0].translations[0].source, "OFFICIAL_GUIDE")
-
-    def test_worker_state_excludes_risk_assessment(self):
-        state, _ = demo_structure("창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.")
-        worker_state = localized_worker_state(state, "vi")
-
-        self.assertFalse(hasattr(worker_state, "risk_assessment"))
-
-    def test_unknown_risk_cannot_be_published(self):
-        state, _ = demo_structure("창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.")
-        unsafe_state = state.model_copy(
-            update={
-                "risk_assessment": RiskAssessment(
-                    level="UNKNOWN",
-                    reasons=["INSUFFICIENT_CONTEXT"],
-                )
-            }
-        )
-
-        with self.assertRaises(ApiError) as raised:
-            validate_state(unsafe_state, allow_unsupported=True, for_publish=True)
-        self.assertEqual(raised.exception.code, "OVERRIDE_NOT_ALLOWED")
-
-    def test_worker_tts_uses_cached_language_audio_or_text_fallback(self):
-        state, _ = demo_structure("창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.")
-
-        class Result:
-            data = [{"audio_bytes": base64.b64encode(b"mp3").decode()}]
-
-        class Query:
-            def select(self, *_): return self
-            def eq(self, *_): return self
-            def limit(self, *_): return self
-            def execute(self): return Result()
+                return type("Result", (), {"data": []})()
 
         class Client:
             def table(self, name):
-                self.table_name = name
-                return Query()
+                self.name = name
+                return Table()
 
-        with_audio = localized_worker_state(state, "vi", Client())
-        self.assertTrue(with_audio.steps[0].audio_url.startswith("data:audio/mpeg;base64,"))
-        self.assertEqual(with_audio.steps[0].delivery_mode, "TEXT_TTS")
+        state = WorkState(
+            task_family="ONION", location=Location(raw_text="A", kind="NAMED", canonical_name="A"), location_display="A",
+            quantity={"value": 20, "unit": "망"}, deadline=None, safety=[], notes=None,
+            steps=[Step(sequence=1, task_code="ONION_HARVEST", title_ko="양파 수확", description_ko="양파를 수확한다", unsupported_reason=None)],
+            risk_assessment=RiskAssessment(level="LOW", reasons=[]),
+        )
+        with (
+            patch("app.main.current_assets", return_value=[asset]),
+            patch("app.main.current_verified_guides", return_value=[guide]),
+            patch("app.main.bridge_call", new=AsyncMock(side_effect=fake_bridge)),
+            patch.object(settings, "public_api_base_url", "https://api.example.test", create=True),
+        ):
+            packages = asyncio.run(build_worker_packages(Client(), "session-1", 1, state, "READY", "양파 수확", []))
 
-    def test_tts_uses_server_model_and_returns_audio(self):
-        class Response:
-            def __enter__(self): return self
-            def __exit__(self, *_): return None
-            def read(self): return b"mp3"
+        self.assertEqual(set(sent["work"]), {"session_id", "version", "interpretation", "summary_ko", "location", "task_family", "quantity", "deadline", "safety", "notes", "steps", "ambiguities", "schema_version", "contract_version", "ontology_version"})
+        self.assertNotIn("risk_assessment", sent["work"])
+        self.assertNotIn("location_display", sent["work"])
+        self.assertEqual(len(sent["audio"]), 2)
+        self.assertTrue(all(row["audio_bytes"] == r"\x617564696f" for row in sent["audio"]))
+        self.assertEqual(private_tts_bytes(sent["audio"][0]["audio_bytes"]), b"audio")
+        self.assertEqual(sent["guides"], [guide])
+        self.assertEqual(sent["assets"], [asset])
+        self.assertTrue(all(item["tts"]["status"] == "READY" for item in packages))
+        self.assertTrue(all(item["tts"]["audio_url"].startswith("https://api.example.test/api/v1/tts/") for item in packages))
+        self.assertNotIn("audio_bytes_base64", str(packages))
 
-        original_key = settings.openai_api_key
-        try:
-            settings.openai_api_key = "test-key"
-            with patch("app.main.urllib.request.urlopen", return_value=Response()) as request:
-                self.assertEqual(synthesize_tts("Thu hoạch hành."), b"mp3")
-            payload = json.loads(request.call_args.args[0].data)
-            self.assertEqual(payload["model"], settings.openai_tts_model)
-        finally:
-            settings.openai_api_key = original_key
-
-    def test_tts_failure_does_not_block_published_state(self):
-        state, _ = demo_structure("창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.")
-
-        class Result:
-            data = []
+    def test_current_assets_keeps_node_matcher_columns(self):
+        selected = []
 
         class Query:
-            def select(self, *_): return self
-            def eq(self, *_): return self
-            def limit(self, *_): return self
-            def upsert(self, *_ , **__): return self
-            def execute(self): return Result()
+            def select(self, columns):
+                selected.append(columns)
+                return self
+
+            def eq(self, *_args):
+                return self
+
+            def execute(self):
+                return type("Result", (), {"data": []})()
 
         class Client:
-            def table(self, _): return Query()
+            def table(self, _name):
+                return Query()
 
-        with patch("app.main.synthesize_tts", side_effect=RuntimeError("provider unavailable")):
-            cache_published_tts(Client(), state)
+        self.assertEqual(current_assets(Client()), [])
+        for column in ("asset_type", "content_type", "provenance", "review_status", "safety_level", "is_current"):
+            self.assertIn(column, selected[0])
+
+    def test_new_structure_is_v2_only(self):
+        state, _, interpretation = asyncio.run(parse_structure_output(structure(), "양파 20망 수확"))
+
+        self.assertEqual(interpretation, "READY")
+        self.assertEqual(state.contract_version, "structure-v2")
+        self.assertEqual(state.ontology_version, "ontology-v2")
+
+    def test_confirm_publishes_exact_structure_v2_snapshot(self):
+        state, ambiguities, interpretation = asyncio.run(parse_structure_output(structure(), "양파 20망 수확"))
+        summary_ko = "양파를 수확합니다."
+        state_json = structure_v2_state_json(state, interpretation, summary_ko, ambiguities)
+        draft_row = {
+            "id": "draft-1", "draft_revision": 0, "summary_ko": summary_ko, "interpretation": interpretation,
+            "state_json": state_json, "ambiguities": [], "transcript": "양파 20망 수확",
+            "contract_version": "structure-v2", "ontology_version": "ontology-v2",
+        }
+        version_row = {
+            "version": 1, "status": "PUBLISHED", "state_json": state_json,
+            "ambiguity_override": False, "override_reason": None, "transcript": None,
+        }
+        sent = {}
+
+        class Query:
+            def __init__(self, name):
+                self.name = name
+
+            def select(self, *_args):
+                return self
+
+            def eq(self, *_args):
+                return self
+
+            def order(self, *_args, **_kwargs):
+                return self
+
+            def execute(self):
+                data = {
+                    "work_drafts": [draft_row],
+                    "work_sessions": [{"id": "session-1", "current_version": 1, "contract_version": "structure-v2", "ontology_version": "ontology-v2"}],
+                    "work_versions": [version_row],
+                    "worker_links": [],
+                }.get(self.name, [])
+                return type("Result", (), {"data": data})()
+
+        class Client:
+            def table(self, name):
+                return Query(name)
+
+            def rpc(self, name, args):
+                sent["rpc_name"] = name
+                sent["rpc_args"] = args
+                return type("Rpc", (), {"execute": lambda _self: type("Result", (), {"data": [{"session_id": "session-1", "version": 1}]})()})()
+
+        request = Request({"type": "http", "method": "POST", "headers": []})
+        owner = OwnerIdentity("owner-1", "farm-1", 4_102_444_800)
+        with (
+            patch("app.main.db_client", return_value=Client()),
+            patch("app.main.require_owner", return_value=owner),
+            patch("app.main.require_origin"),
+            patch("app.main.require_idempotency", return_value="idempotency-key"),
+            patch("app.main.build_worker_packages", new=AsyncMock(return_value=[])) as build,
+        ):
+            response = asyncio.run(
+                confirm_draft(
+                    "draft-1", DraftConfirmRequest(expected_version=0, decision="CONFIRM"), request, "idempotency-key", "cookie"
+                )
+            )
+
+        self.assertEqual(response.work_session.current_version, 1)
+        self.assertEqual(sent["rpc_name"], "publish_work_version_with_packages")
+        validate_contract_schema(sent["rpc_args"]["p_state_json"], "structure-v2.schema.json")
+        self.assertEqual(sent["rpc_args"]["p_state_json"], state_json)
+        self.assertEqual(build.call_args.args[4:], ("READY", summary_ko, []))
+
+    def test_quantity_confirm_reuses_prior_structure_metadata_in_atomic_snapshot(self):
+        state, ambiguities, interpretation = asyncio.run(parse_structure_output(structure(), "양파 20망 수확"))
+        state_json = structure_v2_state_json(state, interpretation, "양파 20망을 수확합니다.", ambiguities)
+        previous = {
+            "version": 1,
+            "status": "PUBLISHED",
+            "state_json": state_json,
+            "ambiguity_override": False,
+            "override_reason": None,
+            "confirmation_decision": "CONFIRM",
+            "transcript": None,
+        }
+        sent = {}
+
+        class Query:
+            def __init__(self, client, name):
+                self.client = client
+                self.name = name
+
+            def select(self, *_args):
+                return self
+
+            def eq(self, *_args):
+                return self
+
+            def order(self, *_args, **_kwargs):
+                return self
+
+            def execute(self):
+                self.client.calls[self.name] = self.client.calls.get(self.name, 0) + 1
+                if self.name == "work_sessions":
+                    current_version = 1 if self.client.calls[self.name] == 1 else 2
+                    data = [{"id": "session-1", "current_version": current_version, "status": "PUBLISHED", "contract_version": "structure-v2", "ontology_version": "ontology-v2"}]
+                elif self.name == "work_versions":
+                    data = [previous] if self.client.calls[self.name] == 1 else [{**previous, "version": 2, "state_json": sent["rpc_args"]["p_state_json"]}]
+                else:
+                    data = []
+                return type("Result", (), {"data": data})()
+
+        class Client:
+            def __init__(self):
+                self.calls = {}
+
+            def table(self, name):
+                return Query(self, name)
+
+            def rpc(self, name, args):
+                sent["rpc_name"] = name
+                sent["rpc_args"] = args
+                return type("Rpc", (), {"execute": lambda _self: type("Result", (), {"data": [{"session_id": "session-1", "version": 2}]})()})()
+
+        request = Request({"type": "http", "method": "POST", "headers": []})
+        owner = OwnerIdentity("owner-1", "farm-1", 4_102_444_800)
+        with (
+            patch("app.main.db_client", return_value=Client()),
+            patch("app.main.require_owner", return_value=owner),
+            patch("app.main.require_origin"),
+            patch("app.main.require_idempotency", return_value="idempotency-key"),
+            patch("app.main.build_worker_packages", new=AsyncMock(return_value=[])) as build,
+        ):
+            response = asyncio.run(
+                confirm_quantity_change(
+                    "session-1",
+                    QuantityChangeConfirmRequest(expected_version=1, quantity={"value": 15, "unit": "망"}),
+                    request,
+                    "idempotency-key",
+                    "cookie",
+                )
+            )
+
+        self.assertEqual(response.current_version, 2)
+        self.assertEqual(sent["rpc_name"], "publish_work_version_with_packages")
+        validate_contract_schema(sent["rpc_args"]["p_state_json"], "structure-v2.schema.json")
+        self.assertEqual(sent["rpc_args"]["p_state_json"]["quantity"], {"value": 15, "unit": "망"})
+        self.assertEqual(sent["rpc_args"]["p_state_json"]["interpretation"], "READY")
+        self.assertEqual(build.call_args.args[4], "READY")
+        self.assertIn("15망", build.call_args.args[5])
+
+    def test_family_mismatch_is_rejected_before_publish(self):
+        with self.assertRaises(ApiError) as raised:
+            asyncio.run(parse_structure_output(structure("STRAWBERRY_HARVEST"), "양파 수확"))
+
+        self.assertEqual(raised.exception.code, "SCHEMA_INVALID")
+
+    def test_legacy_version_reads_stored_code_without_remap(self):
+        version = parse_version(
+            {
+                "version": 1,
+                "status": "PUBLISHED",
+                "state_json": {
+                    "task_family": "ONION",
+                    "location": {"raw_text": None, "kind": "UNSPECIFIED", "canonical_name": None},
+                    "location_display": "장소 미지정",
+                    "quantity": {"value": 20, "unit": "망"},
+                    "deadline": None,
+                    "safety": [],
+                    "notes": None,
+                    "steps": [{"sequence": 1, "task_code": "ONION_COLLECT", "title_ko": "모으기", "description_ko": "모은다", "unsupported_reason": None, "video": None, "audio_url": None, "delivery_mode": "TEXT", "translations": []}],
+                    "risk_assessment": {"level": "LOW", "reasons": []},
+                },
+            }
+        )
+
+        self.assertEqual(version.state.steps[0].task_code, "ONION_COLLECT")
+
+    def test_remote_link_is_real_worker_browser_route(self):
+        with patch.object(settings, "public_web_base_url", "https://worker.example.test", create=True):
+            _, issued = issue_link("ne")
+
+        self.assertRegex(issued.url, r"^https://worker\.example\.test/w/[A-Za-z0-9_-]+$")
+
+    def test_owner_response_exposes_only_contract_markers(self):
+        owner_view = OwnerWorkSession.model_validate(
+            {
+                "session_id": "s1",
+                "current_version": 1,
+                "contract_version": "structure-v2",
+                "ontology_version": "ontology-v2",
+                "version": {"version": 1, "lifecycle": "PUBLISHED", "state": {"task_family": "ONION", "location": {"raw_text": None, "kind": "UNSPECIFIED", "canonical_name": None}, "location_display": "장소 미지정", "quantity": None, "deadline": None, "safety": [], "notes": None, "steps": [], "risk_assessment": {"level": "LOW", "reasons": []}}},
+            }
+        )
+
+        self.assertEqual(owner_view.contract_version, "structure-v2")
+        self.assertEqual(owner_view.ontology_version, "ontology-v2")
 
 
 if __name__ == "__main__":

@@ -1,12 +1,10 @@
 # 영상 자산
 
-P0 영상은 AI가 사전 생성하고 사람이 검수한 worker delivery용 URL만 사용한다.
-`asset_manifest.csv`에 provenance, review_status, safety_level, reviewer,
-captions_text를 기록한다. 생성 provider·prompt version·생성 시각을 확인할 수 없으면
-그 값은 비워 두며 지어내지 않는다.
-
-private Storage 후보의 파일 매칭과 사람 검수 항목은
-[`CANDIDATE_REVIEW.md`](CANDIDATE_REVIEW.md)에 기록한다. 사람 검수 전 후보는 `PENDING`이며
-`asset_manifest.csv` 또는 `visual_assets`에 `APPROVED`로 옮기기 전에는 전달하지 않는다.
+P0 영상은 AI가 사전 생성하고 사람이 검수한 정적 worker-delivery URL만 사용한다.
+`asset_manifest.csv`는 release manifest 하나이며 8개 P0 task code별 current
+`VIDEO`/`video/mp4`, provenance, review status, safety level, reviewer, captions,
+reviewed timestamp, MD5 checksum을 기록한다. 모든 현재 row는 OWNER가 검수한
+`APPROVED`/`LOW` 자산이다.
 
 `safety_level: HIGH` 또는 `review_status`가 `APPROVED`가 아닌 자산은 게시하지 않는다.
+검증 불일치나 runtime 조회 실패 시에는 text+TTS fallback을 사용한다.

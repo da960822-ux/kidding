@@ -3,23 +3,26 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import urllib.error
 import urllib.request
 import uuid
 
-from app.main import settings
+BASE_URL = os.getenv("LIVE_API_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+ORIGIN = os.getenv("LIVE_FRONTEND_ORIGIN", "http://127.0.0.1:5173")
 
 
-BASE_URL = "http://127.0.0.1:8000"
-ORIGIN = "http://127.0.0.1:5173"
-
-
-def request(path: str, body: bytes | None = None, headers: dict[str, str] | None = None):
-    request_headers = {"Origin": ORIGIN, "X-CSRF-Token": "batmeori-demo"}
+def request(
+    path: str,
+    body: bytes | None = None,
+    headers: dict[str, str] | None = None,
+    method: str | None = None,
+):
+    request_headers = {"Origin": ORIGIN}
     request_headers.update(headers or {})
     response_request = urllib.request.Request(
-        f"{BASE_URL}{path}", data=body, headers=request_headers, method="POST" if body is not None else "GET"
+        f"{BASE_URL}{path}", data=body, headers=request_headers, method=method or ("POST" if body is not None else "GET")
     )
     try:
         with urllib.request.urlopen(response_request, timeout=60) as response:
@@ -46,10 +49,13 @@ def multipart_audio(path: pathlib.Path, fields: dict[str, str]) -> tuple[bytes, 
 
 
 def main() -> None:
-    if not settings.owner_pin:
-        raise RuntimeError("OWNER_PIN is required")
+    if os.getenv("LIVE_E2E") != "1":
+        raise RuntimeError("set LIVE_E2E=1 to run the paid live flow")
+    owner_pin = os.getenv("LIVE_DEMO_OWNER_PIN")
+    if not owner_pin:
+        raise RuntimeError("LIVE_DEMO_OWNER_PIN for an already seeded demo owner is required")
     status, headers, _ = request(
-        "/api/v1/owner/session", json.dumps({"pin": settings.owner_pin}).encode(), {"Content-Type": "application/json"}
+        "/api/v1/owner/session", json.dumps({"pin": owner_pin}).encode(), {"Content-Type": "application/json"}
     )
     assert status == 201
     cookie = next(value for name, value in headers.items() if name.lower() == "set-cookie").split(";", 1)[0]
@@ -63,19 +69,25 @@ def main() -> None:
         body,
         {"Content-Type": content_type, "Cookie": cookie, "Idempotency-Key": f"live-draft-{uuid.uuid4().hex}"},
     )
-    assert status == 200 and draft["state"]["steps"] and all(step["translations"] for step in draft["state"]["steps"]), draft
+    assert status == 200 and draft["state"]["steps"], draft
 
     status, _, published = request(
         f"/api/v1/work-sessions/drafts/{draft['draft_id']}/confirm",
-        json.dumps({"expected_version": 0, "decision": "PUBLISH_AS_IS", "delivery_mode": "REMOTE", "language_code": "vi", "ambiguity_override": True, "override_reason": "IN_PERSON_BRIEFING"}).encode(),
+        json.dumps({"expected_version": 0, "decision": "PUBLISH_AS_IS", "ambiguity_override": True, "override_reason": "IN_PERSON_BRIEFING"}).encode(),
         {"Content-Type": "application/json", "Cookie": cookie, "Idempotency-Key": f"live-confirm-{uuid.uuid4().hex}"},
     )
     assert status == 201
     session_id = published["work_session"]["session_id"]
-    worker_url = published["issued_worker_links"][0]["url"]
-    with urllib.request.urlopen(worker_url, timeout=30) as response:
-        worker = json.loads(response.read())
-    assert "transcript" not in json.dumps(worker) and "risk_assessment" not in worker["state"]
+    status, _, issued = request(
+        f"/api/v1/work-sessions/{session_id}/worker-links",
+        json.dumps({"language_code": "vi"}).encode(),
+        {"Content-Type": "application/json", "Cookie": cookie, "Idempotency-Key": f"live-link-{uuid.uuid4().hex}"},
+    )
+    assert status == 201 and issued["issued_worker_links"], issued
+    worker_url = issued["issued_worker_links"][0]["url"]
+    worker_token = worker_url.rsplit("/", 1)[-1]
+    status, _, worker = request(f"/api/v1/worker-links/{worker_token}/assignment")
+    assert status == 200 and "transcript" not in json.dumps(worker) and "risk_assessment" not in json.dumps(worker), worker
 
     body, content_type = multipart_audio(fixture_dir / "02-quantity-change.wav", {"expected_version": "1"})
     status, _, preview = request(
@@ -90,9 +102,57 @@ def main() -> None:
         {"Content-Type": "application/json", "Cookie": cookie, "Idempotency-Key": f"live-quantity-{uuid.uuid4().hex}"},
     )
     assert status == 201 and version_two["current_version"] == 2
-    with urllib.request.urlopen(worker_url, timeout=30) as response:
-        latest = json.loads(response.read())
-    assert latest["version"] == 2 and latest["state"]["quantity"]["value"] == 15
+    status, _, latest = request(f"/api/v1/worker-links/{worker_token}/assignment")
+    assert status == 200 and latest["version"] == 2 and latest["context"]["quantity"]["value"] == 15, latest
+
+    # A separate CO_PRESENT draft must produce an owner-only latest briefing,
+    # not an anonymous worker link.
+    body, content_type = multipart_audio(fixture_dir / "03-deictic-location.wav", {"language_hint": "ko"})
+    status, _, co_present_draft = request(
+        "/api/v1/work-sessions/drafts/from-audio",
+        body,
+        {"Content-Type": content_type, "Cookie": cookie, "Idempotency-Key": f"live-co-draft-{uuid.uuid4().hex}"},
+    )
+    assert status == 200, co_present_draft
+    status, _, co_present = request(
+        f"/api/v1/work-sessions/drafts/{co_present_draft['draft_id']}/confirm",
+        json.dumps({"expected_version": 0, "decision": "PUBLISH_AS_IS", "ambiguity_override": True, "override_reason": "IN_PERSON_BRIEFING"}).encode(),
+        {"Content-Type": "application/json", "Cookie": cookie, "Idempotency-Key": f"live-co-confirm-{uuid.uuid4().hex}"},
+    )
+    assert status == 201 and not co_present["issued_worker_links"], co_present
+    co_session_id = co_present["work_session"]["session_id"]
+    status, _, briefing = request(
+        f"/api/v1/brief?session_id={co_session_id}&language_code=ne",
+        headers={"Cookie": cookie},
+    )
+    assert status == 200 and briefing["version"] == 1 and briefing["language_code"] == "ne", briefing
+
+    # A joined anonymous team browser sees only its assigned session's latest
+    # published version; this verifies the QR/team delivery path end to end.
+    status, _, team = request(
+        "/api/v1/work-teams/today",
+        headers={"Cookie": cookie, "Idempotency-Key": f"live-team-{uuid.uuid4().hex}"},
+        method="POST",
+    )
+    assert status in {200, 201} and team["join_url"], team
+    team_token = team["join_url"].rsplit("/", 1)[-1]
+    status, headers, member = request(
+        f"/api/v1/work-team-invites/{team_token}/join",
+        json.dumps({"display_name": "live-e2e", "language_code": "vi"}).encode(),
+        {"Content-Type": "application/json", "Idempotency-Key": f"live-team-join-{uuid.uuid4().hex}"},
+    )
+    assert status == 201, member
+    member_cookie = next(value for name, value in headers.items() if name.lower() == "set-cookie").split(";", 1)[0]
+    status, _, assignment = request(
+        f"/api/v1/work-teams/today/members/{member['member_id']}/assignments",
+        json.dumps({"work_session_id": session_id}).encode(),
+        {"Content-Type": "application/json", "Cookie": cookie, "Idempotency-Key": f"live-team-assign-{uuid.uuid4().hex}"},
+    )
+    assert status == 201 and assignment["work_session_id"] == session_id, assignment
+    status, _, assignments = request("/api/v1/work-team-members/me/assignments", headers={"Cookie": member_cookie})
+    assert status == 200 and len(assignments["assignments"]) == 1, assignments
+    team_assignment = assignments["assignments"][0]
+    assert team_assignment["session_id"] == session_id and team_assignment["version"] == 2, team_assignment
     print(json.dumps({"live_e2e": "PASS", "session_id": session_id}))
 
 

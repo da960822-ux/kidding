@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "ontology_version": "ontology-v2",
+  "task_families": ["ONION", "STRAWBERRY"],
+  "task_codes_by_family": {
+    "ONION": ["ONION_HARVEST", "ONION_TRIMMING", "ONION_SORTING", "ONION_TRANSPORT"],
+    "STRAWBERRY": ["STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING"]
+  },
+  "task_family_by_code": {
+    "ONION_HARVEST": "ONION",
+    "ONION_TRIMMING": "ONION",
+    "ONION_SORTING": "ONION",
+    "ONION_TRANSPORT": "ONION",
+    "STRAWBERRY_HARVEST": "STRAWBERRY",
+    "STRAWBERRY_SORTING": "STRAWBERRY",
+    "STRAWBERRY_INSPECTION": "STRAWBERRY",
+    "STRAWBERRY_PACKING": "STRAWBERRY"
+  }
+}

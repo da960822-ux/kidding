@@ -15,16 +15,19 @@
 | 안전 수준 HIGH 영상 | 게시 금지 | text fallback/차단 | gate | 영상 검수 |
 | 영상·TTS 실패 | text fallback | 재시도·텍스트 | 상태 반환 | provider retry |
 | owner 인증 없음 | mutation `401` | PIN 재입력 | cookie 검증 | - |
-| delivery mode/language 없음 | `422` | 선택 요구 | 입력 검증 | - |
+| confirm에 delivery mode/language가 들어감 | `422 SCHEMA_INVALID` | publish 뒤 전달 화면에서 선택 | confirm은 공용 `vi`·`ne` package만 publish | - |
+| REMOTE link issue 또는 CO_PRESENT briefing의 언어 누락/허용값 외 입력 | `422 SCHEMA_INVALID` | `vi|ne`를 다시 선택 | 별도 link/briefing endpoint 검증 | - |
 | remote link 만료 | `410`, 재발급 안내 | 안내 화면 | expiry 검사 | - |
 | remote token invalid/revoked | 일반화된 `404` | 접근 불가 화면 | 내부 사유 비공개 | - |
 | today-team QR invalid/revoked | 일반화된 `404` | 접근 불가·QR 재표시 | token hash·expiry 검사 | - |
 | today-team QR 만료 | `410`, 새 QR 안내 | 농장주에게 QR 재열기 안내 | Asia/Seoul work date/expiry 검사 | - |
 | 팀 배정 없음 | `200` 빈 assignments | 배정 대기 화면 | member cookie 범위만 조회 | - |
 | concurrent quantity change | `409` | 최신 version 재확인 | transaction/version 검사 | - |
+| legacy v1 WorkVersion quantity preview/confirm | `422 LEGACY_READ_ONLY` | legacy version은 읽기 전용 안내 | remap·mutation 없이 차단 | version contract |
 | worker version 증가 | 5초 polling/focus 즉시 조회 | 화면/TTS 교체 | 최신 PUBLISHED 반환 | - |
 | API/DB 일시 장애 | 재시도·demo fallback | 마지막 상태와 오류 구분 | `/health`, `/ready` | - |
+| production public web URL 없음 | `/ready` `503`, REMOTE 발급 차단 | 배포 설정 안내 | `PUBLIC_WEB_BASE_URL` 확인 | - |
 
 ## 원칙
 
-`AI는 추측하지 않는다. 결정은 농장주가 한다.` raw audio는 즉시 삭제하고 transcript는 owner 감사용으로만 보관한다. P0는 영구 근로자 개인정보·계정·채팅을 저장하지 않는다. TodayWorkTeam은 별명·언어만 가진 24시간 임시 roster다. `CO_PRESENT`, `REMOTE`, team assignment는 모두 같은 최신 WorkVersion을 읽는다.
+`AI는 추측하지 않는다. 결정은 농장주가 한다.` raw audio는 즉시 삭제하고 transcript는 owner 감사용으로만 보관하며 anonymous worker API에는 절대 반환하지 않는다. P0는 영구 근로자 개인정보·계정·채팅을 저장하지 않는다. TodayWorkTeam은 별명·언어만 가진 24시간 임시 roster다. `CO_PRESENT`, `REMOTE`, team assignment는 모두 같은 최신 WorkVersion을 읽는다. REMOTE URL은 browser `/w/{token}` route이고 owner mutation은 PIN cookie와 exact Origin만 사용한다.

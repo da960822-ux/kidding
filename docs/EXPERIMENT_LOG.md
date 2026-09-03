@@ -23,7 +23,7 @@
 
 ## E-003 prompt 버전 비교
 
-- 후보: `prompt-structure-001`, `prompt-structure-002`; 둘 다 같은 `structure-v1` output contract를 지킨다.
+- 후보: 새 publish는 current two-crop `structure-v2`/`ontology-v2`를 지키는 prompt pair를 비교한다. historical prompt와 retired-code stored-version fixture는 legacy preservation regression용이며 새 publish 후보가 아니다.
 - 고정: 동일 dataset, decoding 설정, provider/model 환경값, 평가자 rubric.
 - 측정: valid JSON rate, field exact match, task_code accuracy, ambiguity preservation, token usage, latency.
 - 결정: 승자는 정확도·안전 gate를 모두 통과하고 비용/지연이 허용되는 버전. 결과 전에는 기본값을 선언하지 않는다.
@@ -40,3 +40,5 @@
 ## 변경·재현 규칙
 
 결과 없는 항목은 `미실행`으로 남기고 추정 점수를 쓰지 않는다. production/수집 원음은 저장하지 않으며 입력은 비식별 텍스트/정답 구조만 보관한다. `evals/audio/`의 PII 없는 합성 TTS WAV만 재현 fixture로 보관한다. FE는 동일 run의 화면 캡처를, BE는 request/version ID를, AI는 prompt·provider 환경값을 넘겨야 한 실험으로 인정한다.
+
+current runs record `structure-v2`/`ontology-v2`; retired-code fixtures remain preservation fixtures, not new publish data. Migration regression은 legacy data/asset reference가 reset·rewrite·자동 remap 없이 queryable임을 기록한다.

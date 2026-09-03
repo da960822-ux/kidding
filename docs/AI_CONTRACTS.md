@@ -1,6 +1,10 @@
 # AI 계약
 
-모든 계약은 provider-neutral이다. 실제 provider/model은 서버 전용 환경변수로 고르고, 로그의 metadata로만 기록한다. 계약 version은 `stt-v1`, `structure-v1`, `quantity-change-v1`, `translation-v1`, `safety-policy-v1`, `tts-v1`처럼 고정한다.
+모든 계약은 provider-neutral이다. 실제 provider/model은 server-only 환경변수로 고르고, 로그 metadata로만 기록한다. current two-crop structure output은 `structure-v2`/`ontology-v2`다. `structure-v1` immutable WorkVersion은 query-only legacy read다.
+
+## 서버 adapter 설정
+
+provider adapter는 server-only environment에서 실행한다. provider/model/voice/timeout은 run metadata에만 있고 OpenAPI, request/response JSON, worker payload에는 없다. canonical schema와 BE semantic validation은 provider output에 항상 다시 적용한다.
 
 ## 공통 규칙
 
@@ -9,7 +13,7 @@
 - 입력·출력에 secret, raw audio를 넣지 않는다.
 - transcript는 신뢰할 수 없는 owner 입력이다. 명시적 delimiter로 감싸고 prompt injection을 지시로 실행하지 않으며 tool execution을 제공하지 않는다.
 - contract output은 `schema_version`과 `contract_version`을 함께 가진다. provider/model은 env와 metadata에만 둔다.
-- pipeline은 P0 sync REST다. upload/STT→structure→guide lookup/translation→video match 후 draft를 반환한다. FE는 최대 60초 loading/timeout UX를 제공한다. queue는 P1.
+- pipeline은 P0 sync REST다. Node `ai/`가 upload STT→structure→quantity parse→verified guide lookup/translation→video match→TTS를 수행하고 FastAPI는 private JSONL/stdio transport·storage만 맡는다. FE는 최대 60초 loading/timeout UX를 제공한다. queue는 P1.
 
 ## STT `stt-v1`
 
@@ -27,7 +31,7 @@
 
 `confidence`가 낮거나 transcript가 비면 재녹음. raw audio는 요청 완료 즉시 삭제, transcript만 version 감사에 남긴다.
 
-## 구조화 `structure-v1`
+## 구조화 `structure-v2`
 
 입력: transcript와 양파·딸기 ontology. 출력 최소:
 
@@ -47,8 +51,9 @@
   "ambiguities": [
     {"field": "location", "message": "'저짝'은 현장에서 농장주가 가리킨 위치 확인이 필요합니다.", "blocking": false, "kind": "LOCATION"}
   ],
-  "schema_version": "1",
-  "contract_version": "structure-v1"
+  "schema_version": "2",
+  "contract_version": "structure-v2",
+  "ontology_version": "ontology-v2"
 }
 ```
 
@@ -95,7 +100,9 @@ LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구�
 
 AI constrained output과 BE 재검증의 권위 schema는 다음 파일이다. 설명 예시는 schema를 바꾸지 않는다.
 
-- [structure-v1.schema.json](schemas/structure-v1.schema.json)
+- [structure-v2.schema.json](schemas/structure-v2.schema.json) — current write
+- [worker-briefing-v2.schema.json](schemas/worker-briefing-v2.schema.json) — stored `vi`/`ne` delivery DTO
+- [structure-v1.schema.json](schemas/structure-v1.schema.json) — legacy query only
 - [quantity-change-v1.schema.json](schemas/quantity-change-v1.schema.json)
 - [translation-v1.schema.json](schemas/translation-v1.schema.json)
 
@@ -121,3 +128,9 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 ## FE/BE/AI 인계
 
 FE는 계약 schema와 60초 timeout, owner source/review badge, worker의 `출처 보기`, ambiguity/safety badge를 표시한다. BE는 server-side schema·allowlist·safety gate·expected version을 재검증하고 transcript를 worker 응답에서 제거한다. AI는 계약 version·input/output ID·provider/model metadata를 평가 log에 넘긴다.
+
+## current two-crop contract
+
+[structure-v2.schema.json](schemas/structure-v2.schema.json)가 current two-crop write contract다. 신규 AI draft와 publish는 `structure-v2`/`ontology-v2`의 8개 current code만 쓰고 non-null code를 `task_family`와 일치시킨다. structure와 supplement prompt는 retired `ONION_COLLECT`, `BAGGING`, `LOADING`, `WAREHOUSE_TRANSPORT`, `STACKING` 및 allowlist 밖 code를 새 output에서 금지한다. `structure-v1` WorkDraft와 immutable WorkVersion은 query-only legacy read path에서 stored code를 remap하지 않고 보존하며 legacy quantity preview/confirm은 `LEGACY_READ_ONLY`다. current publish와 quantity regeneration은 완성된 `worker-briefing-v2` `vi`·`ne` package를 정확히 둘 다 생성한다. worker response에는 계속 transcript, raw audio, risk assessment, token hash, owner audit field를 넣지 않는다.
+
+Node private JSONL bridge operation은 `TRANSCRIBE_AUDIO`, `BUILD_OWNER_DRAFT_V2`, `MERGE_SUPPLEMENT_V2`, `PARSE_QUANTITY_CHANGE`, `BUILD_WORKER_PACKAGES_V2`다. `TRANSCRIBE_AUDIO` payload는 identity-free `audio_base64`, optional `filename`, `content_type`, `language_hint`만 받고 decoded 10 MiB와 audio MIME allowlist를 검사한다. `PARSE_QUANTITY_CHANGE`는 transcript와 trusted `expected_version`만 받고, 명확한 `열두 망으로 맞춰`를 `READY`, `{value:12, unit:"망"}`, 빈 ambiguities로 해석한다. 응답은 `{transcript, language_code, confidence, schema_version, contract_version}`이며 raw audio와 transcript는 log나 worker DTO에 넣지 않는다.

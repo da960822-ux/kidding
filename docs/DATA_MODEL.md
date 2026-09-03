@@ -2,19 +2,31 @@
 
 PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constraint를 유지한다.
 
+## current write와 legacy read
+
+현재 P0 write 계약은 `structure-v2`/`ontology-v2`다. current two-crop code는 양파 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`와 딸기 `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. 신규 draft와 publish는 이 code만 허용하고 `task_family`와 일치시킨다. `structure-v1`/`ontology-v1` row는 immutable read-only다. migration은 legacy version 또는 asset code를 삭제·reset·rewrite·remap하지 않는다.
+
 ## `work_sessions`
 
-`id` UUID primary key, `location` JSONB, `task_family`(`ONION|STRAWBERRY`), `status`(`PUBLISHED`), `current_version` integer, `created_at`, `updated_at`를 가진다. 확인 전 데이터는 WorkDraft에만 존재한다.
+`id` UUID primary key, non-null `farm_id`, `location` JSONB, `task_family`(`ONION|STRAWBERRY`), `status`(`PUBLISHED`), `current_version` integer, immutable `contract_version`, `ontology_version`, `created_at`, `updated_at`를 가진다. 확인 전 데이터는 WorkDraft에만 존재한다.
 
 ## `work_drafts`
 
-`id`, `draft_revision`, `summary_ko`, `transcript`, `interpretation`, `state_json`, `ambiguities`, `contract_version`, `created_at`, `updated_at`, `expires_at`를 저장한다. supplement마다 revision을 증가시키고 expected revision을 원자 비교한다. raw audio는 저장하지 않는다.
+`id`, non-null `farm_id`, `draft_revision`, `summary_ko`, `transcript`, `interpretation`, `state_json`, `ambiguities`, `contract_version`, `ontology_version`, `confirmed_session_id`, `created_at`, `updated_at`, `expires_at`를 저장한다. supplement마다 revision을 증가시키고 expected revision을 원자 비교한다. raw audio는 저장하지 않는다.
 
 ## `work_versions`
 
 `id`, `work_session_id`, `version`, `status`(`PUBLISHED|SUPERSEDED`), `state_json`, `transcript`, `confirmed_at`, `confirmation_decision`, `ambiguity_override`, `override_reason`, `overridden_at`, `created_at`를 저장한다. session별 `(work_session_id, version)`은 unique이며 PUBLISHED는 하나만 허용한다. WorkVersion content는 수정하지 않고 새 version을 만든다.
 
-`state_json.steps[]`는 `{sequence, task_code, title_ko, description_ko, video, audio_url, delivery_mode, unsupported_reason, translations}`다. non-null `task_code`는 8개 two-crop ontology만 허용하며 같은 state의 `task_family`와 일치해야 한다. null은 LOW 비안전 미지원 작업을 owner가 승인한 경우에만 허용한다.
+`state_json`은 `structure-v2` snapshot이다. 새 쓰기의 non-null `task_code`는 8개 current two-crop code만 허용하며 같은 state의 `task_family`와 일치해야 한다. null은 LOW 비안전 미지원 작업을 owner가 승인한 경우에만 허용한다.
+
+### Ontology migration and immutable history
+
+기존 WorkVersion은 저장된 `state_json`과 retired code를 그대로 보존해 읽는다. migration은 WorkVersion을 reset, delete, rewrite하거나 retired code를 새 code로 remap하지 않는다. legacy v1 version은 read-only이며 신규 publish는 `structure-v2`/`ontology-v2`의 current 8개 two-crop code만 쓴다.
+
+## `worker_briefing_packages`와 원자 게시
+
+각 WorkVersion에는 immutable `worker-briefing-v2` JSON package가 `vi`, `ne` 각각 하나씩 있다. `publish_work_version_with_packages` RPC는 farm/session/draft 및 expected version을 lock하고, v2 state와 두 package를 먼저 insert한 뒤 기존 PUBLISHED를 `SUPERSEDED`로 바꾼다. 어떤 validation, package insert, version conflict가 실패해도 transaction 전체가 rollback된다. 기존 `structure-v1` session/draft는 `legacy_read_only`다.
 
 ## `worker_links`
 
@@ -38,7 +50,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `visual_assets`
 
-`id`, `task_code`, `asset_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`를 가진다. `provenance`는 필수이고, 과거 생성물에서 확인할 수 없는 `generator_provider`·`prompt_version`·`generated_at`은 추측하지 않고 `null`로 남긴다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`만 게시한다.
+`id`, `task_code`, `asset_type`, `content_type`, `public_path`, `provenance`, `generator_provider`, `prompt_version`, `generated_at`, `reviewer`, `review_status`, `safety_level`, `purpose`, `captions_text`, `reviewed_at`, `checksum_md5`, `is_current`를 가진다. `assets/asset_manifest.csv`가 current 8개 P0 asset의 유일한 release input이며 service-role `import_visual_assets_v2` RPC가 row 전체를 먼저 검증한 뒤 한 transaction으로 insert한다. 같은 `id`·checksum 재실행은 no-op이고 checksum 불일치는 아무 row도 쓰지 않는다. P0는 `AI_GENERATED_PREGENERATED`·`APPROVED`·`LOW`·`is_current:true`만 게시하며 current 8개 code별 eligible asset은 최대 하나다. DB constraint는 historical asset code를 남겨 existing version 참조를 보존하고, 새 `structure-v2` publish는 current 8개 code만 사용한다. legacy asset code는 reset·삭제·자동 변환하지 않는다.
 
 ## `tts_assets`
 
@@ -46,7 +58,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## owner PIN session과 공개 경계
 
-P0는 별도 owner session table 없이 server secret으로 서명한 짧은 cookie를 사용한다. `HttpOnly`, `Secure`, `SameSite=None`, exact Origin/CSRF 검증을 유지한다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 24시간 임시 roster용으로만 저장한다.
+P0는 별도 owner session table 없이 service-role 전용 `authenticate_demo_owner(p_pin)`이 active `demo_owners` hash를 검증해 반환한 `owner_id`, `farm_id`, expiry를 담아 server secret으로 서명한 짧은 cookie를 사용한다. `pin_hash`는 Python·client response에 노출하지 않는다. `seed_demo_owner(farm_slug, p_pin)`은 deployment secret input만 받아 salted `pgcrypto` hash를 upsert한다. `HttpOnly`, `Secure`, `SameSite=None`, exact Origin 검증을 유지하며 static CSRF header는 없다. P0에는 worker profile, phone, nationality, SMS, worker login을 저장하지 않는다. TodayWorkTeam의 표시 별명은 24시간 임시 roster용으로만 저장한다.
 
 raw audio는 즉시 삭제하고 transcript는 owner 감사용 version에만 남긴다. remote worker 응답에는 transcript, token hash, secret을 반환하지 않는다. 모든 timestamp는 UTC다.
 
@@ -57,4 +69,4 @@ raw audio는 즉시 삭제하고 transcript는 owner 감사용 version에만 남
 - `today_work_teams 1—N today_work_team_members 1—N today_work_assignments`
 - `today_work_assignments N—1 work_sessions`
 - `guide_phrases 1—N guide_translations`
-- `visual_assets.task_code`는 8개 two-crop ontology code만 참조
+- `visual_assets.task_code`는 historical code와 current 8개 two-crop code를 모두 보존; 새 `structure-v2` write는 current code만 사용

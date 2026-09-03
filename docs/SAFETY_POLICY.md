@@ -2,6 +2,10 @@
 
 이 정책은 AI가 위험을 추측해 낮추지 못하게 하는 publish gate다. BE는 AI extraction과 deterministic rule을 합친다. 하나라도 HIGH면 HIGH, HIGH 없이 하나라도 UNKNOWN이면 UNKNOWN, 모두 LOW일 때만 LOW다.
 
+## current contract guard
+
+`structure-v2`/`ontology-v2` current-code family/task-code mismatch, retired 또는 unknown code를 새 write에 쓰는 경우, schema invalidity, HIGH/UNKNOWN risk, no executable step은 publish blocker다. `structure-v1`은 read-only다. Worker response에는 risk assessment를 포함하지 않으며 video metadata는 APPROVED/LOW만 허용한다.
+
 ## `risk_assessment`
 
 | field | type | rule |

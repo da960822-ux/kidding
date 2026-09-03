@@ -1,0 +1,30 @@
+{"id":"v2-01","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 수확해","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_HARVEST"}}
+{"id":"v2-02","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 캐라","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_HARVEST"}}
+{"id":"v2-03","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 잎 손질해","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_TRIMMING"}}
+{"id":"v2-04","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"캔 양파 다듬어","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_TRIMMING"}}
+{"id":"v2-05","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 큰 것 작은 것 골라","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_SORTING"}}
+{"id":"v2-06","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 분류해","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_SORTING"}}
+{"id":"v2-07","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파를 창고로 손수 옮겨","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_TRANSPORT"}}
+{"id":"v2-08","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 자루를 창고로 나르자","expected":{"interpretation":"READY","task_family":"ONION","task_code":"ONION_TRANSPORT"}}
+{"id":"v2-09","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 따","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_HARVEST"}}
+{"id":"v2-10","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"익은 딸기 수확해","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_HARVEST"}}
+{"id":"v2-11","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 크기별로 골라","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_SORTING"}}
+{"id":"v2-12","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 분류해","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_SORTING"}}
+{"id":"v2-13","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 멍든 것 검사해","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_INSPECTION"}}
+{"id":"v2-14","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 상태 확인해","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_INSPECTION"}}
+{"id":"v2-15","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 상자에 포장해","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_PACKING"}}
+{"id":"v2-16","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 담아 포장하자","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"STRAWBERRY_PACKING"}}
+{"id":"v2-17","dataset_version":"transcript-v2","kind":"QUANTITY_CHANGE","transcript":"스무 망으로 바꿔","expected":{"interpretation":"READY","quantity":{"value":20,"unit":"망"}}}
+{"id":"v2-18","dataset_version":"transcript-v2","kind":"QUANTITY_CHANGE","transcript":"열다섯 망으로 변경해","expected":{"interpretation":"READY","quantity":{"value":15,"unit":"망"}}}
+{"id":"v2-19","dataset_version":"transcript-v2","kind":"QUANTITY_CHANGE","transcript":"수량 10상자로 해","expected":{"interpretation":"READY","quantity":{"value":10,"unit":"상자"}}}
+{"id":"v2-20","dataset_version":"transcript-v2","kind":"QUANTITY_CHANGE","transcript":"다섯 바구니로 줄여","expected":{"interpretation":"READY","quantity":{"value":5,"unit":"바구니"}}}
+{"id":"v2-21","dataset_version":"transcript-v2","kind":"QUANTITY_CHANGE","transcript":"30개로 바꿔","expected":{"interpretation":"READY","quantity":{"value":30,"unit":"개"}}}
+{"id":"v2-22","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"저쪽 거 해","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"TASK","blocking":true}}
+{"id":"v2-23","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 좀 해","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"TASK","blocking":true}}
+{"id":"v2-24","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파를 저짝에서 수확해","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"LOCATION","blocking":false}}
+{"id":"v2-25","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"농약 뿌리고 딸기 따","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"SAFETY","blocking":true,"risk":"HIGH"}}
+{"id":"v2-26","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"트랙터로 양파 옮겨","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"SAFETY","blocking":true,"risk":"HIGH"}}
+{"id":"v2-27","dataset_version":"transcript-v2","kind":"NEGATIVE_FAMILY","transcript":"양파 수확","expected":{"interpretation":"READY","task_family":"ONION","task_code":"STRAWBERRY_HARVEST","family_match":false}}
+{"id":"v2-28","dataset_version":"transcript-v2","kind":"NEGATIVE_FAMILY","transcript":"딸기 포장","expected":{"interpretation":"READY","task_family":"STRAWBERRY","task_code":"ONION_TRIMMING","family_match":false}}
+{"id":"v2-29","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"양파 수확하고 딸기 포장해","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"TASK","blocking":true}}
+{"id":"v2-30","dataset_version":"transcript-v2","kind":"STRUCTURE","transcript":"딸기 수확할 건데 수량은 나중에","expected":{"interpretation":"AMBIGUOUS","ambiguity_kind":"QUANTITY","blocking":true}}

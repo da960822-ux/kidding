@@ -43,30 +43,21 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 - worker 응답에서는 `risk_assessment`를 제거한다.
 - `DEMO_FALLBACK=0`으로 실제 provider 경로를 사용한다. `backend/.env`의 OpenAI 설정은 채워져 있다.
 
-## 현재 검증 결과
+## 현재 로컬 검증 결과
 
-- Python compile 성공
-- backend unit tests 16개 통과
-- Supabase `tts_assets` migration 적용 확인
-- Supabase `202609030006_today_work_teams.sql` migration 적용 확인
-- 실제 OpenAI STT·structure·translation과 TodayWorkTeam QR join→개별 배정 E2E 통과
-- 프론트 TodayWorkTeam에서 사람별 게시 WorkSession 선택·배정, QR 참여 뒤 member-cookie 기반 내 작업 대기/최신 지시 화면 연결 완료
-- 프론트 draft 확정 화면에서 `CO_PRESENT`/`REMOTE`와 `vi|ne`를 먼저 선택한다. `REMOTE`는 initial publish 응답의 링크를 표시하고, 재발급은 이전 링크를 폐기한다.
-- 랜딩 문구도 양파·딸기·음성·`vi|ne`·수량 변경·TodayWorkTeam P0 범위로 정리했다. 글 입력·사진·다른 작물·작업 완료 추적·추가 언어 약속은 제거했다.
-- Supabase guide phrase·translation은 각각 100개이며, verified/provenance 누락 없이 vi·ne 가이드 조회를 확인했다. P0와 무관한 `씨앗`, `씨앗뿌리기`만 한 언어 번역이 없다.
-- `202609030007_expand_onion_strawberry_ontology.sql`의 양파·딸기 8코드, `task_family` DB constraint, publish RPC를 적용했다. retired code를 가진 기존 test draft/session/version/link/assignment는 reset했다.
-- `202609030008_allow_unknown_visual_provenance_details.sql`을 적용했다. 8개 `visual_assets`는 `AI_GENERATED_PREGENERATED`·OWNER `APPROVED`·`LOW`이며 public `visual-assets` URL을 사용한다. 확인할 수 없는 generator provider/prompt version/generated_at은 `null`이다.
-- 실제 OpenAI draft→REMOTE publish→worker link E2E에서 `ONION_HARVEST` public video URL이 worker state에 포함됨을 확인했다.
+- backend unit test 34개, Node AI test 36개, 브라우저 E2E 7개 통과
+- 8개 asset manifest의 schema/checksum 입력 검증과 frontend contract/production build 통과
+- confirm은 delivery 방식·언어 없이 공용 `vi`·`ne` package만 publish한다. 프론트 스토리보드에서 `CO_PRESENT` 언어를 고르거나 `REMOTE` 언어별 링크를 별도 발급하며, 재발급은 이전 링크를 폐기한다.
+- `202609030007_expand_onion_strawberry_ontology.sql`의 양파·딸기 8코드와 `task_family` DB constraint를 적용했다. retired code를 가진 기존 immutable version/link/asset은 reset·delete·rewrite·자동 remap 없이 legacy read-only로 보존한다.
 
-## 아직 해야 할 일
+## 배포 환경에서 남은 검증
 
-- Postman에서 `docs/openapi.yaml`을 import하고 현재 API base URL 환경 구성
-- 음성→draft→confirm→CO_PRESENT/REMOTE→수량 변경 전체 E2E를 공개 URL에서 실행
+- Supabase에 010까지 migration을 적용하고 `seed_demo_owner.py`, `import_visual_assets.py`를 실행한다.
+- 두 farm owner로 cross-farm isolation, 실제 Node provider와 audio→draft→confirm→CO_PRESENT/REMOTE/team→수량 변경 E2E를 실행한다.
 
 ## 주의
 
 - 실제 비밀값은 `backend/.env`에만 둔다. 저장소·프론트·Postman 예시에 넣지 않는다.
 - `202609030004_migrate_to_anonymous_language_links.sql`은 기존 worker registry를 최신 익명 링크 모델로 바꾸는 migration이다. 기존 worker 데이터가 있으면 실행 전에 백업한다.
-- `202609030007_expand_onion_strawberry_ontology.sql`은 immutable version의 retired code를 자동 변환하지 않는다. legacy data가 있는 다른 환경에서는 reset 또는 별도 보존 계획 후 적용한다.
-- `202609030008_allow_unknown_visual_provenance_details.sql`은 historical AI asset의 확인 불가능한 세부 생성 정보만 `null`로 허용한다. `provenance`, 사람 `review_status`, `safety_level` publish gate는 그대로 필수다.
-- `DEMO_FALLBACK=0`이고 실제 AI provider가 연결되지 않은 상태에서는 audio API가 `503 PROVIDER_UNAVAILABLE`을 반환한다. `DEMO_FALLBACK=1`은 checked-in 합성 fixture 전용이다.
+- `202609030007_expand_onion_strawberry_ontology.sql`은 immutable version의 retired code를 자동 변환하지 않는다. legacy data가 있는 환경에서도 reset 없이 v1 read-only로 보존한다.
+- Node AI provider가 연결되지 않으면 audio API는 `503 PROVIDER_UNAVAILABLE`을 반환한다. 합성 fixture STT/LLM runtime은 없다.

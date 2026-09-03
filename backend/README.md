@@ -21,6 +21,22 @@ registration, phone, SMS, or worker login. `CO_PRESENT` uses the owner's PIN
 session for an in-person briefing; `REMOTE` issues one anonymous language link
 that expires after 24 hours. Raw audio and token hashes are never exposed.
 
-With `DEMO_FALLBACK=1`, only the three checked-in synthetic WAV fixtures under
-`../evals/audio/` are accepted. This is a clearly marked demo path, not a live
-STT/LLM provider. Leave it at `0` until server-side providers are configured.
+The Node bridge needs its server-only provider environment (`OPENAI_API_KEY`,
+optional `OPENAI_MODEL`, and optional `OPENAI_TTS_VOICE`). `DEMO_FALLBACK=1`
+only permits local public URL defaults for the UI demo; it never replaces Node
+STT, structure, translation, visual matching, or TTS.
+
+## Deploy seed and visual assets
+
+After migrations, set `SUPABASE_URL`, `SUPABASE_SECRET_KEY`,
+`OWNER_SESSION_SECRET`, `PUBLIC_WEB_BASE_URL`, `PUBLIC_API_BASE_URL`, the Node
+provider environment, and deployment secret `DEMO_OWNER_PIN`, then run:
+
+```powershell
+python .\seed_demo_owner.py
+python .\import_visual_assets.py
+```
+
+The owner seed reads its PIN only from the environment and never prints it.
+`import_visual_assets.py --check` validates the checked-in manifest without a
+database call; normal execution makes one transaction-safe service-role RPC.

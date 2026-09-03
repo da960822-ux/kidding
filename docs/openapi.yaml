@@ -1,13 +1,15 @@
 openapi: 3.1.0
 info:
   title: Batmeori API
-  version: 1.2.0
+  version: 2.0.0
   description: >-
-    Provider-neutral P0 REST contract. P0 supports onion, vi/ne, quantity
+    Provider-neutral P0 REST contract. New P0 publishes use structure-v2 and
+    ontology-v2 for onion and strawberry, vi/ne, quantity
     changes, CO_PRESENT owner briefing, REMOTE anonymous language links, and
     a 24-hour anonymous today-team QR roster for person-specific assignments.
-    Every owner mutation requires an exact allowed Origin and the
-    X-CSRF-Token header; worker links require neither.
+    Every owner mutation requires an owner PIN cookie and exact allowed Origin;
+    worker links require neither. Clients never submit owner_id or farm_id.
+    Issued worker URLs are browser /w/{token} routes.
 servers:
   - url: https://api.example.invalid
     description: Deployment value is supplied by environment.
@@ -22,7 +24,6 @@ paths:
       tags: [Owner]
       summary: Issue short demo PIN session cookie
       security: []
-      parameters: [{ $ref: '#/components/parameters/CsrfToken' }]
       requestBody:
         required: true
         content:
@@ -34,7 +35,7 @@ paths:
           headers:
             Set-Cookie:
               schema: { type: string }
-              description: HttpOnly; Secure; SameSite=None cookie. Later owner mutations also require X-CSRF-Token.
+              description: HttpOnly; Secure; SameSite=None cookie. Later owner mutations also require exact allowed Origin.
           content: { application/json: { schema: { $ref: '#/components/schemas/OwnerSession' } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
@@ -44,7 +45,7 @@ paths:
       summary: Synchronously transcribe, structure, translate, and match video
       description: Raw audio is temporary and deleted after processing. No version is created.
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content:
@@ -56,7 +57,7 @@ paths:
                 audio: { type: string, format: binary, description: audio/webm, audio/mp4, or audio/wav; max 10 MiB and 60 seconds. }
                 language_hint: { type: string, enum: [ko], default: ko }
       responses:
-        '200': { description: Draft generated., content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } } }
+        '200': { description: structure-v2 draft generated., content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '503': { $ref: '#/components/responses/ProviderUnavailable' }
@@ -68,7 +69,6 @@ paths:
       parameters:
         - $ref: '#/components/parameters/DraftId'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content:
@@ -81,27 +81,28 @@ paths:
                 expected_draft_revision: { type: integer, minimum: 0 }
                 language_hint: { type: string, enum: [ko], default: ko }
       responses:
-        '200': { description: Updated draft., content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } } }
+        '200': { description: structure-v2 draft updated., content: { application/json: { schema: { $ref: '#/components/schemas/WorkDraft' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
   /api/v1/work-sessions/drafts/{draftId}/confirm:
     post:
       tags: [Owner]
-      summary: Confirm initial draft and publish immutable v1
+      summary: Confirm a structure-v2 draft and publish immutable v1
       description: >-
-        delivery_mode is CO_PRESENT or REMOTE. language_code is always required.
-        REMOTE returns one anonymous 24-hour link; CO_PRESENT returns no link.
+        New publish accepts only structure-v2/ontology-v2 and builds both vi/ne
+        WorkerBriefing packages. Delivery is selected after publish: CO_PRESENT
+        reads either package and REMOTE uses the separate link-issue endpoint.
+        Legacy v1 is read-only.
       security: [{ ownerSession: [] }]
       parameters:
         - $ref: '#/components/parameters/DraftId'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/DraftConfirmRequest' } } }
       responses:
-        '201': { description: v1 published., content: { application/json: { schema: { $ref: '#/components/schemas/InitialPublishResponse' } } } }
+        '201': { description: structure-v2 immutable v1 published with vi/ne WorkerBriefing packages., content: { application/json: { schema: { $ref: '#/components/schemas/InitialPublishResponse' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '409': { $ref: '#/components/responses/VersionConflict' }
         '422': { $ref: '#/components/responses/Unprocessable' }
@@ -121,15 +122,16 @@ paths:
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/SessionId' }]
       responses:
-        '200': { description: Owner view., content: { application/json: { schema: { $ref: '#/components/schemas/OwnerWorkSession' } } } }
+        '200': { description: Owner v2 view or separately marked legacy read-only view., content: { application/json: { schema: { oneOf: [{ $ref: '#/components/schemas/OwnerWorkSession' }, { $ref: '#/components/schemas/LegacyWorkSessionRead' }] } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /api/v1/work-sessions/{sessionId}/quantity-changes/from-audio:
     post:
       tags: [Owner]
       summary: Parse quantity-change audio without storing it
+      description: Parses a v2 PUBLISHED WorkSession without storing audio. Legacy v1 returns 422 LEGACY_READ_ONLY.
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/SessionId' }, { $ref: '#/components/parameters/CsrfToken' }]
+      parameters: [{ $ref: '#/components/parameters/SessionId' }]
       requestBody:
         required: true
         content:
@@ -151,11 +153,11 @@ paths:
     post:
       tags: [Owner]
       summary: Confirm quantity and publish the next immutable version
+      description: Regenerates a complete structure-v2 WorkVersion and both vi/ne WorkerBriefing packages atomically. Legacy v1 returns 422 LEGACY_READ_ONLY.
       security: [{ ownerSession: [] }]
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/QuantityChangeConfirmRequest' } } }
@@ -173,7 +175,6 @@ paths:
       parameters:
         - $ref: '#/components/parameters/SessionId'
         - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/CsrfToken'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/WorkerLinkIssueRequest' } } }
@@ -189,7 +190,7 @@ paths:
       security: []
       parameters: [{ $ref: '#/components/parameters/WorkerToken' }]
       responses:
-        '200': { description: Latest assignment., content: { application/json: { schema: { $ref: '#/components/schemas/WorkerAssignment' } } } }
+        '200': { description: Latest stored WorkerBriefing v2., content: { application/json: { schema: { $ref: '#/components/schemas/WorkerBriefing' } } } }
         '404': { $ref: '#/components/responses/AccessDenied' }
         '410': { description: Expired token; issue a new link., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -199,7 +200,7 @@ paths:
       summary: Create or rotate today's anonymous QR invite
       description: Creates the Asia/Seoul work-date team when absent. Each POST returns a new raw QR URL and invalidates the prior QR; the raw token is never stored.
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       responses:
         '200': { description: Existing team with a newly issued QR., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
         '201': { description: New team with QR., content: { application/json: { schema: { $ref: '#/components/schemas/TodayWorkTeam' } } } }
@@ -233,7 +234,7 @@ paths:
       tags: [Owner, Team]
       summary: Assign a published WorkSession to a temporary team member
       security: [{ ownerSession: [] }]
-      parameters: [{ $ref: '#/components/parameters/TeamMemberId' }, { $ref: '#/components/parameters/IdempotencyKey' }, { $ref: '#/components/parameters/CsrfToken' }]
+      parameters: [{ $ref: '#/components/parameters/TeamMemberId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/TeamAssignmentRequest' } } }
@@ -265,7 +266,7 @@ paths:
           required: true
           schema: { type: string, enum: [vi, ne] }
       responses:
-        '200': { description: Latest briefing., content: { application/json: { schema: { $ref: '#/components/schemas/Briefing' } } } }
+        '200': { description: Latest stored WorkerBriefing v2., content: { application/json: { schema: { $ref: '#/components/schemas/WorkerBriefing' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
   /health:
@@ -298,7 +299,6 @@ components:
     TeamInviteToken: { in: path, name: token, required: true, schema: { type: string, minLength: 32 } }
     TeamMemberId: { in: path, name: memberId, required: true, schema: { type: string, format: uuid } }
     IdempotencyKey: { in: header, name: Idempotency-Key, required: true, schema: { type: string, minLength: 8 } }
-    CsrfToken: { in: header, name: X-CSRF-Token, required: true, schema: { type: string, const: batmeori-demo }, description: Shared-demo CSRF token. Origin must also match FRONTEND_ORIGINS. }
   responses:
     Unauthorized: { description: Authentication required., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
     NotFound: { description: Resource not found., content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
@@ -313,7 +313,7 @@ components:
       type: object
       required: [code, message]
       properties:
-        code: { type: string, enum: [UNAUTHORIZED, NOT_FOUND, ACCESS_DENIED, LINK_EXPIRED, VERSION_CONFLICT, OVERRIDE_NOT_ALLOWED, SCHEMA_INVALID, PROVIDER_UNAVAILABLE, RATE_LIMITED, INTERNAL_ERROR] }
+        code: { type: string, enum: [UNAUTHORIZED, NOT_FOUND, ACCESS_DENIED, LINK_EXPIRED, VERSION_CONFLICT, LEGACY_READ_ONLY, OVERRIDE_NOT_ALLOWED, SCHEMA_INVALID, PROVIDER_UNAVAILABLE, RATE_LIMITED, INTERNAL_ERROR] }
         message: { type: string }
         request_id: { type: string }
         details: { type: object, additionalProperties: true }
@@ -371,7 +371,7 @@ components:
       additionalProperties: false
       required: [assignments]
       properties:
-        assignments: { type: array, items: { $ref: '#/components/schemas/WorkerAssignment' } }
+        assignments: { type: array, items: { $ref: '#/components/schemas/WorkerBriefing' } }
     Quantity:
       type: object
       required: [value, unit]
@@ -464,35 +464,32 @@ components:
         steps: { type: array, minItems: 0, items: { $ref: '#/components/schemas/Step' } }
     WorkDraft:
       type: object
-      required: [draft_id, draft_revision, summary_ko, interpretation, state, ambiguities, transcript, schema_version, contract_version]
+      required: [draft_id, draft_revision, summary_ko, interpretation, state, ambiguities, transcript, schema_version, contract_version, ontology_version]
       properties:
         draft_id: { type: string }
         draft_revision: { type: integer, minimum: 0 }
         summary_ko: { type: string, minLength: 1 }
         interpretation: { type: string, enum: [READY, AMBIGUOUS, UNSUPPORTED] }
-        state: { $ref: '#/components/schemas/WorkState' }
+        state: { $ref: '#/components/schemas/StructureV2' }
         ambiguities: { type: array, items: { $ref: '#/components/schemas/Ambiguity' } }
         transcript: { type: string }
-        schema_version: { type: string, const: '1' }
-        contract_version: { type: string, const: structure-v1 }
+        schema_version: { type: string, const: '2' }
+        contract_version: { type: string, const: structure-v2 }
+        ontology_version: { type: string, const: ontology-v2 }
     DraftConfirmRequest:
       oneOf:
         - type: object
           additionalProperties: false
-          required: [expected_version, decision, delivery_mode, language_code]
+          required: [expected_version, decision]
           properties:
             expected_version: { type: integer, const: 0 }
             decision: { type: string, const: CONFIRM }
-            delivery_mode: { type: string, enum: [CO_PRESENT, REMOTE] }
-            language_code: { type: string, enum: [vi, ne] }
         - type: object
           additionalProperties: false
-          required: [expected_version, decision, delivery_mode, language_code, ambiguity_override, override_reason]
+          required: [expected_version, decision, ambiguity_override, override_reason]
           properties:
             expected_version: { type: integer, const: 0 }
             decision: { type: string, const: PUBLISH_AS_IS }
-            delivery_mode: { type: string, enum: [CO_PRESENT, REMOTE] }
-            language_code: { type: string, enum: [vi, ne] }
             ambiguity_override: { type: boolean, const: true }
             override_reason: { type: string, enum: [EXPERIENCED_WORKER, IN_PERSON_BRIEFING, OWNER_ACCEPTED_OTHER] }
     QuantityChangeParseResult:
@@ -515,19 +512,21 @@ components:
       properties:
         version: { type: integer, minimum: 1 }
         lifecycle: { type: string, enum: [PUBLISHED, SUPERSEDED] }
-        state: { $ref: '#/components/schemas/WorkState' }
+        state: { $ref: '#/components/schemas/StructureV2' }
         ambiguity_override: { type: boolean }
         override_reason: { type: [string, 'null'], enum: [EXPERIENCED_WORKER, IN_PERSON_BRIEFING, OWNER_ACCEPTED_OTHER, null] }
         overridden_at: { type: [string, 'null'], format: date-time }
         transcript: { type: [string, 'null'] }
     OwnerWorkSession:
       type: object
-      required: [session_id, current_version, lifecycle, version]
+      required: [session_id, current_version, lifecycle, version, contract_version, ontology_version]
       properties:
         session_id: { type: string }
         current_version: { type: integer, minimum: 1 }
         lifecycle: { type: string, const: PUBLISHED }
         version: { $ref: '#/components/schemas/WorkVersion' }
+        contract_version: { type: string, const: structure-v2 }
+        ontology_version: { type: string, const: ontology-v2 }
         worker_link_meta: { type: array, items: { $ref: '#/components/schemas/WorkerLinkMeta' } }
     WorkerLinkMeta:
       type: object
@@ -548,7 +547,17 @@ components:
       required: [work_session, issued_worker_links]
       properties:
         work_session: { $ref: '#/components/schemas/OwnerWorkSession' }
-        issued_worker_links: { type: array, items: { $ref: '#/components/schemas/IssuedWorkerLink' } }
+        issued_worker_links: { type: array, maxItems: 1, items: { $ref: '#/components/schemas/IssuedWorkerLink' } }
+    LegacyWorkSessionRead:
+      type: object
+      additionalProperties: false
+      required: [session_id, current_version, contract_version, ontology_version, read_only]
+      properties:
+        session_id: { type: string }
+        current_version: { type: integer, minimum: 1 }
+        contract_version: { type: string, const: structure-v1 }
+        ontology_version: { type: string, const: ontology-v1 }
+        read_only: { type: boolean, const: true }
     WorkerLinkIssueRequest:
       type: object
       additionalProperties: false
@@ -588,3 +597,7 @@ components:
       type: object
       required: [status]
       properties: { status: { type: string, enum: [ok, ready] }, request_id: { type: string } }
+    StructureV2:
+      $ref: './schemas/structure-v2.schema.json'
+    WorkerBriefing:
+      $ref: './schemas/worker-briefing-v2.schema.json'

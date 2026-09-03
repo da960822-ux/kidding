@@ -85,7 +85,7 @@ GuidePhrase에 연결된 언어별 공식 번역. source page/url/license와 사
 ## 전달
 
 **WorkerLink**  
-WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 링크. 로그인 없이 열며 고정 버전이 아니라 Latest Published를 보여준다.
+WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 browser 링크. 공개 URL은 `/w/{token}`이며 로그인 없이 열고 JSON assignment를 통해 고정 버전이 아닌 Latest Published를 보여준다.
 
 **TodayWorkTeam**
 Asia/Seoul의 오늘 날짜에만 유효한 익명 작업팀. 농장주가 QR 하나를 열고, 참가자는 같은 QR에서 별명과 `vi|ne`만 제출한다. 영구 근로자 명부나 계정이 아니다.
@@ -117,3 +117,9 @@ non-blocking ambiguity를 그대로 전달할 때 owner가 고르는 `EXPERIENCE
 
 **Demo Fallback**  
 네트워크·provider 장애 때 쓰는 고정 fixture. 화면에 `DEMO FALLBACK` badge를 표시하며 live AI 결과로 가장하지 않는다.
+
+**legacy task code**
+현재 two-crop allowlist에서 retired된 stored TaskStep code. immutable WorkVersion에서만 저장된 값 그대로 읽으며, 새 WorkDraft·publish·quantity-confirm에는 쓸 수 없다. reset·rewrite·자동 remap하지 않는다.
+
+**WorkerBriefing**
+CO_PRESENT, remote, TodayWorkTeam assignment가 같은 immutable WorkVersion에서 읽는 언어별 DTO. transcript, raw audio, risk assessment, token hash, owner/farm/member identity는 포함하지 않는다.

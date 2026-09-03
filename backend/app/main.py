@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import io
@@ -10,8 +11,6 @@ import re
 import secrets
 import struct
 import time
-import urllib.error
-import urllib.request
 import uuid
 import wave
 from datetime import datetime, timedelta, timezone
@@ -27,15 +26,8 @@ from jsonschema.exceptions import SchemaError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from supabase import Client, create_client
 
-from .ai import (
-    AiProviderError,
-    merge_structure_transcript as ai_merge_structure_transcript,
-    provider_ready,
-    quantity_change_transcript as ai_quantity_change_transcript,
-    structure_transcript as ai_structure_transcript,
-    transcribe_audio as ai_transcribe_audio,
-    translate_segment as ai_translate_segment,
-)
+from .ai import AiProviderError, bridge_call, provider_ready
+from .p0_runtime import OwnerIdentity, sign_owner_cookie, verify_owner_cookie
 
 
 TASK_CODES_BY_FAMILY = {
@@ -43,6 +35,10 @@ TASK_CODES_BY_FAMILY = {
     "STRAWBERRY": {"STRAWBERRY_HARVEST", "STRAWBERRY_SORTING", "STRAWBERRY_INSPECTION", "STRAWBERRY_PACKING"},
 }
 TASK_CODES = set().union(*TASK_CODES_BY_FAMILY.values())
+LEGACY_TASK_CODES_BY_FAMILY = {
+    "ONION": {"ONION_COLLECT", "BAGGING", "LOADING", "WAREHOUSE_TRANSPORT", "STACKING"},
+    "STRAWBERRY": set(),
+}
 LANGUAGES = {"vi", "ne"}
 OVERRIDE_REASONS = {
     "EXPERIENCED_WORKER",
@@ -52,7 +48,6 @@ OVERRIDE_REASONS = {
 COOKIE_NAME = "batmeori_owner_session"
 TEAM_MEMBER_COOKIE_NAME = "batmeori_team_member"
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
-CSRF_TOKEN = "batmeori-demo"
 PIN_FAILURE_WINDOW_SECONDS = 300
 PIN_FAILURE_LIMIT = 5
 AI_REQUEST_WINDOW_SECONDS = 60
@@ -84,18 +79,12 @@ class Settings:
     def __init__(self) -> None:
         self.supabase_url = os.getenv("SUPABASE_URL", "")
         self.supabase_secret_key = os.getenv("SUPABASE_SECRET_KEY", "")
-        self.owner_pin = os.getenv("OWNER_PIN", "")
         self.owner_session_secret = os.getenv("OWNER_SESSION_SECRET", "")
         self.owner_session_ttl_seconds = int(os.getenv("OWNER_SESSION_TTL_SECONDS", "7200"))
         self.frontend_origins = os.getenv("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
-        self.public_api_base_url = os.getenv("PUBLIC_API_BASE_URL", "http://127.0.0.1:8000")
+        self.public_web_base_url = os.getenv("PUBLIC_WEB_BASE_URL", "").rstrip("/")
+        self.public_api_base_url = os.getenv("PUBLIC_API_BASE_URL", "").rstrip("/")
         self.demo_fallback = os.getenv("DEMO_FALLBACK", "0").lower() in {"1", "true", "yes"}
-        self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
-        self.openai_model = os.getenv("OPENAI_MODEL", "")
-        self.openai_stt_model = os.getenv("OPENAI_STT_MODEL", "")
-        self.openai_tts_model = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
-        self.openai_tts_voice = os.getenv("OPENAI_TTS_VOICE", "alloy")
-        self.openai_timeout_seconds = float(os.getenv("OPENAI_TIMEOUT_SECONDS", "20"))
 
     @property
     def origins(self) -> list[str]:
@@ -107,21 +96,29 @@ class Settings:
 
     @property
     def auth_configured(self) -> bool:
-        return bool(self.owner_pin and self.owner_session_secret)
+        return bool(self.owner_session_secret)
+
+    @property
+    def public_web_configured(self) -> bool:
+        return bool(self.public_web_base_url) or (self.demo_fallback and bool(self.origins))
+
+    @property
+    def public_api_configured(self) -> bool:
+        return bool(self.public_api_base_url) or self.demo_fallback
 
 
 settings = Settings()
 app = FastAPI(
     title="Batmeori API",
     version="1.1.0",
-    description="Provider-neutral P0 REST service for onion work instructions.",
+    description="Provider-neutral P0 REST service for onion and strawberry work instructions.",
 )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Idempotency-Key", "X-CSRF-Token"],
+    allow_headers=["Content-Type", "Idempotency-Key"],
 )
 
 
@@ -287,6 +284,9 @@ class WorkState(StrictModel):
     notes: str | None = None
     steps: list[Step] = Field(default_factory=list)
     risk_assessment: RiskAssessment
+    schema_version: str = "2"
+    contract_version: str = "structure-v2"
+    ontology_version: str = "ontology-v2"
 
 
 class WorkerState(StrictModel):
@@ -317,15 +317,14 @@ class WorkDraft(StrictModel):
     state: WorkState
     ambiguities: list[Ambiguity]
     transcript: str
-    schema_version: str = "1"
-    contract_version: str = "structure-v1"
+    schema_version: str = "2"
+    contract_version: str = "structure-v2"
+    ontology_version: str = "ontology-v2"
 
 
 class DraftConfirmRequest(StrictModel):
     expected_version: int = Field(ge=0, le=0)
     decision: str
-    delivery_mode: str
-    language_code: str
     ambiguity_override: bool = False
     override_reason: str | None = None
 
@@ -334,20 +333,6 @@ class DraftConfirmRequest(StrictModel):
     def valid_decision(cls, value: str) -> str:
         if value not in {"CONFIRM", "PUBLISH_AS_IS"}:
             raise ValueError("invalid decision")
-        return value
-
-    @field_validator("delivery_mode")
-    @classmethod
-    def valid_delivery_mode(cls, value: str) -> str:
-        if value not in {"CO_PRESENT", "REMOTE"}:
-            raise ValueError("invalid delivery mode")
-        return value
-
-    @field_validator("language_code")
-    @classmethod
-    def valid_language(cls, value: str) -> str:
-        if value not in LANGUAGES:
-            raise ValueError("language_code must be vi or ne")
         return value
 
     @field_validator("override_reason")
@@ -399,6 +384,8 @@ class WorkVersion(StrictModel):
 class OwnerWorkSession(StrictModel):
     session_id: str
     current_version: int
+    contract_version: str
+    ontology_version: str
     lifecycle: str = "PUBLISHED"
     version: WorkVersion
     worker_link_meta: list[WorkerLinkMeta] = Field(default_factory=list)
@@ -479,7 +466,7 @@ class TeamAssignmentMeta(StrictModel):
 
 
 class TeamAssignmentsResponse(StrictModel):
-    assignments: list[WorkerAssignment] = Field(default_factory=list)
+    assignments: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class Briefing(StrictModel):
@@ -540,6 +527,30 @@ class StructureOutput(StrictModel):
         return self
 
 
+class StructureOutputV2(StrictModel):
+    interpretation: Literal["READY", "AMBIGUOUS", "UNSUPPORTED"]
+    summary_ko: str = Field(min_length=1)
+    location: Location
+    task_family: Literal["ONION", "STRAWBERRY"]
+    quantity: Quantity | Literal["UNSPECIFIED"] | None
+    deadline: str | None
+    safety: list[str]
+    notes: str | None
+    steps: list[StructureStepOutput]
+    ambiguities: list[Ambiguity]
+    schema_version: Literal["2"]
+    contract_version: Literal["structure-v2"]
+    ontology_version: Literal["ontology-v2"]
+
+    @model_validator(mode="after")
+    def validate_contract(self) -> "StructureOutputV2":
+        if self.interpretation == "READY" and not self.steps:
+            raise ValueError("READY requires steps")
+        if self.interpretation == "AMBIGUOUS" and not self.ambiguities:
+            raise ValueError("AMBIGUOUS requires ambiguities")
+        return self
+
+
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -580,9 +591,18 @@ def one_row(result: Any, not_found_code: str = "NOT_FOUND") -> dict[str, Any]:
     return rows[0]
 
 
-def parse_state(raw: Any) -> WorkState:
+def parse_state(raw: Any, allow_legacy: bool = False) -> WorkState:
     if not isinstance(raw, dict):
         raise ApiError(422, "SCHEMA_INVALID", "작업 상태 형식이 올바르지 않습니다.")
+    if raw.get("contract_version") == "structure-v2" and "interpretation" in raw:
+        validate_contract_schema(raw, "structure-v2.schema.json")
+        try:
+            output = StructureOutputV2.model_validate(raw)
+        except ValidationError as exc:
+            raise ApiError(422, "SCHEMA_INVALID", "입력 형식이 올바르지 않습니다.", {"errors": exc.errors()})
+        state = work_state_from_structure_v2(output)
+        validate_state(state, allow_unsupported=True, for_publish=False, allow_legacy=allow_legacy)
+        return state
     state_data = dict(raw)
     state_data.setdefault(
         "risk_assessment",
@@ -597,7 +617,7 @@ def parse_state(raw: Any) -> WorkState:
         state = WorkState.model_validate(state_data)
     except ValidationError as exc:
         raise ApiError(422, "SCHEMA_INVALID", "입력 형식이 올바르지 않습니다.", {"errors": exc.errors()})
-    validate_state(state, allow_unsupported=True, for_publish=False)
+    validate_state(state, allow_unsupported=True, for_publish=False, allow_legacy=allow_legacy)
     return state
 
 
@@ -612,7 +632,7 @@ def validate_contract_schema(raw: Any, filename: str) -> None:
         raise ApiError(422, "SCHEMA_INVALID", "AI 결과가 계약을 충족하지 않습니다.") from exc
 
 
-def deterministic_risk(transcript: str, output: StructureOutput) -> RiskAssessment:
+def deterministic_risk(transcript: str, output: StructureOutput | StructureOutputV2) -> RiskAssessment:
     text = f"{transcript} {' '.join(output.safety)}".lower()
     safety_ambiguity = any(item.kind == "SAFETY" for item in output.ambiguities)
     high_rules = {
@@ -630,19 +650,13 @@ def deterministic_risk(transcript: str, output: StructureOutput) -> RiskAssessme
     return RiskAssessment(level="LOW", reasons=[])
 
 
-async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkState, list[Ambiguity], str]:
-    validate_contract_schema(raw, "structure-v1.schema.json")
-    try:
-        output = StructureOutput.model_validate(raw)
-    except ValidationError as exc:
-        raise ApiError(422, "SCHEMA_INVALID", "AI 구조화 결과 형식이 올바르지 않습니다.", {"errors": exc.errors()})
-
+def work_state_from_structure_v2(output: StructureOutputV2, transcript: str = "") -> WorkState:
     location_display = "장소 미지정"
     if output.location.kind == "DEICTIC":
         location_display = "농장주 확인 필요"
     elif output.location.kind == "NAMED":
         location_display = output.location.canonical_name or output.location.raw_text or "장소 미지정"
-    state = WorkState(
+    return WorkState(
         task_family=output.task_family,
         location=output.location,
         location_display=location_display,
@@ -665,7 +679,20 @@ async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkSt
             for item in output.steps
         ],
         risk_assessment=deterministic_risk(transcript, output),
+        schema_version="2",
+        contract_version="structure-v2",
+        ontology_version="ontology-v2",
     )
+
+
+async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkState, list[Ambiguity], str]:
+    validate_contract_schema(raw, "structure-v2.schema.json")
+    try:
+        output = StructureOutputV2.model_validate(raw)
+    except ValidationError as exc:
+        raise ApiError(422, "SCHEMA_INVALID", "AI 구조화 결과 형식이 올바르지 않습니다.", {"errors": exc.errors()})
+
+    state = work_state_from_structure_v2(output, transcript)
     validate_state(state, allow_unsupported=True, for_publish=False)
     if not state.steps or state.risk_assessment.level != "LOW" or any(item.kind == "SAFETY" for item in output.ambiguities):
         raise ApiError(422, "OVERRIDE_NOT_ALLOWED", "안전 또는 실행 단계 조건을 충족하지 않습니다.")
@@ -694,363 +721,10 @@ def parse_quantity_output(raw: Any, expected_version: int) -> QuantityChangePars
     return output
 
 
-def parse_ai_translation(raw: Any, segment: str, language_code: str) -> SegmentTranslation:
-    validate_contract_schema(raw, "translation-v1.schema.json")
-    data = dict(raw)
-    data.pop("schema_version", None)
-    data.pop("contract_version", None)
-    try:
-        translation = SegmentTranslation.model_validate(data)
-    except ValidationError as exc:
-        raise ApiError(422, "SCHEMA_INVALID", "AI 번역 결과 형식이 올바르지 않습니다.", {"errors": exc.errors()})
-    if (
-        translation.segment != segment
-        or translation.language_code != language_code
-        or translation.source != "AI_TRANSLATION"
-        or translation.guide_lookup != "MISS"
-        or translation.verified
-        or any((translation.phrase_key, translation.source_page, translation.source_url, translation.license))
-    ):
-        raise ApiError(422, "SCHEMA_INVALID", "AI 번역 결과의 출처 정보가 올바르지 않습니다.")
-    return translation
-
-
-DEMO_AUDIO_TRANSCRIPTS = {
-    "363579f7380a60c6b4fca1cc8b1327b2fee8015a9bc40181c793c36a06bc742f":
-        "창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨.",
-    "a78607973f7c123e69013570d06263be15943f2f6081d68dd76a163fd471552d":
-        "스무 망 말고 열다섯 망으로 해.",
-    "dc457f4326a28f2bfc904d35ed1009089eb7f101cc2fbd87f07c5ead9a941301":
-        "저짝 밭에서 양파 스무 망을 수확해.",
-}
-
-
-DEMO_ACTION_TRANSLATIONS = {
-    "ONION_HARVEST": {
-        "vi": "Thu hoạch hành.",
-        "ne": "प्याज काट्नुहोस्।",
-    },
-    "ONION_TRANSPORT": {
-        "vi": "Vận chuyển hành đến kho.",
-        "ne": "प्याज गोदाममा लैजानुहोस्।",
-    },
-    "STRAWBERRY_HARVEST": {
-        "vi": "Thu hoạch dâu tây.",
-        "ne": "स्ट्रबेरी टिप्नुहोस्।",
-    },
-}
-
-
-def normalized_text(value: str) -> str:
-    return re.sub(r"\s+", " ", value).strip().rstrip(".!?")
-
-
-def transcribe_audio(audio: bytes) -> str:
-    if not settings.demo_fallback:
-        provider_unavailable()
-    transcript = DEMO_AUDIO_TRANSCRIPTS.get(hashlib.sha256(audio).hexdigest())
-    if not transcript:
-        provider_unavailable()
-    return transcript
-
-
-def action_translation(task_code: str, language_code: str) -> SegmentTranslation | None:
-    text = DEMO_ACTION_TRANSLATIONS.get(task_code, {}).get(language_code)
-    if text is None:
-        return None
-    return SegmentTranslation(
-        segment="ACTION",
-        language_code=language_code,
-        text=text,
-        source="AI_TRANSLATION",
-        verified=False,
-        guide_lookup="MISS",
-        phrase_key=None,
-        source_page=None,
-        source_url=None,
-        license=None,
-    )
-
-
-def deterministic_translation(segment: str, language_code: str, text: str) -> SegmentTranslation:
-    return SegmentTranslation(
-        segment=segment,
-        language_code=language_code,
-        text=text,
-        source="DETERMINISTIC",
-        verified=False,
-        guide_lookup="NOT_APPLICABLE",
-    )
-
-
-def quantity_text(quantity: Quantity | str | None, language_code: str) -> str | None:
-    if not isinstance(quantity, Quantity):
-        return None
-    unit = {
-        "망": {"vi": "bao", "ne": "बोरा"},
-        "kg": {"vi": "kg", "ne": "किलो"},
-        "킬로": {"vi": "kg", "ne": "किलो"},
-        "개": {"vi": "cái", "ne": "वटा"},
-    }.get(quantity.unit, {}).get(language_code, quantity.unit)
-    prefix = {"vi": "Số lượng", "ne": "परिमाण"}[language_code]
-    return f"{prefix}: {quantity.value} {unit}."
-
-
-def order_text(sequence: int, language_code: str) -> str:
-    return {"vi": f"Bước {sequence}.", "ne": f"चरण {sequence}।"}[language_code]
-
-
-
-def deictic_location_text(language_code: str) -> str:
-    return {
-        "vi": "Vị trí do chủ nông trại xác nhận.",
-        "ne": "स्थान फार्म मालिकले पुष्टि गर्नुपर्छ।",
-    }[language_code]
-
-
-def guide_action_translation(client: Client, step: Step, language_code: str) -> SegmentTranslation | None:
-    try:
-        phrases = row_data(
-            client.table("guide_phrases")
-            .select("phrase_key,source_page,source_url,license")
-            .in_("canonical_ko", [step.title_ko, step.description_ko])
-            .eq("verified", True)
-            .limit(1)
-            .execute()
-        )
-        if not phrases:
-            return None
-        phrase = phrases[0]
-        translations = row_data(
-            client.table("guide_translations")
-            .select("translated_text")
-            .eq("phrase_key", phrase["phrase_key"])
-            .eq("language_code", language_code)
-            .eq("verified", True)
-            .limit(1)
-            .execute()
-        )
-    except Exception as exc:
-        raise ApiError(503, "PROVIDER_UNAVAILABLE", "가이드 데이터를 확인할 수 없습니다.") from exc
-    if not translations:
-        return None
-    return SegmentTranslation(
-        segment="ACTION",
-        language_code=language_code,
-        text=translations[0]["translated_text"],
-        source="OFFICIAL_GUIDE",
-        verified=True,
-        guide_lookup="HIT",
-        phrase_key=phrase["phrase_key"],
-        source_page=phrase["source_page"],
-        source_url=phrase["source_url"],
-        license=phrase["license"],
-    )
-
-
-def approved_video(client: Client, task_code: str | None) -> VideoAsset | None:
-    if task_code is None:
-        return None
-    try:
-        rows = row_data(
-            client.table("visual_assets")
-            .select("id,task_code,public_path,provenance,review_status,safety_level,captions_text")
-            .eq("task_code", task_code)
-            .eq("provenance", "AI_GENERATED_PREGENERATED")
-            .eq("review_status", "APPROVED")
-            .eq("safety_level", "LOW")
-            .limit(1)
-            .execute()
-        )
-    except Exception as exc:
-        raise ApiError(503, "PROVIDER_UNAVAILABLE", "영상 검수 데이터를 확인할 수 없습니다.") from exc
-    if not rows:
-        return None
-    row = rows[0]
-    return VideoAsset(
-        asset_id=row["id"],
-        task_code=row["task_code"],
-        video_url=row["public_path"],
-        provenance=row["provenance"],
-        review_status=row["review_status"],
-        safety_level=row["safety_level"],
-        captions_text=row["captions_text"],
-    )
-
-
-async def enrich_draft_state(client: Client, state: WorkState) -> WorkState:
-    state_data = state.model_dump()
-    for step_data in state_data["steps"]:
-        step = Step.model_validate(step_data)
-        translations: list[SegmentTranslation] = []
-        for language_code in sorted(LANGUAGES):
-            action = guide_action_translation(client, step, language_code)
-            if action is None:
-                action = parse_ai_translation(
-                    await ai_translate_segment("ACTION", step.description_ko, language_code), "ACTION", language_code
-                )
-            translations.append(action)
-            if (quantity := quantity_text(state.quantity, language_code)) is not None:
-                translations.append(deterministic_translation("QUANTITY", language_code, quantity))
-            translations.append(deterministic_translation("ORDER", language_code, order_text(step.sequence, language_code)))
-            if state.location.kind == "DEICTIC":
-                translations.append(deterministic_translation("LOCATION", language_code, deictic_location_text(language_code)))
-            elif state.location.kind == "NAMED":
-                translations.append(
-                    parse_ai_translation(
-                        await ai_translate_segment("LOCATION", state.location_display, language_code), "LOCATION", language_code
-                    )
-                )
-        video = approved_video(client, step.task_code)
-        step_data["video"] = video.model_dump() if video else None
-        step_data["delivery_mode"] = "VIDEO" if video else "TEXT"
-        step_data["translations"] = [item.model_dump() for item in translations]
-    enriched = WorkState.model_validate(state_data)
-    validate_state(enriched, allow_unsupported=True, for_publish=False)
-    return enriched
-
-
-def demo_step(sequence: int, task_code: str, title_ko: str, description_ko: str) -> Step:
-    translations = [
-        translation
-        for language_code in sorted(LANGUAGES)
-        if (translation := action_translation(task_code, language_code)) is not None
-    ]
-    return Step(
-        sequence=sequence,
-        task_code=task_code,
-        title_ko=title_ko,
-        description_ko=description_ko,
-        video=None,
-        audio_url=None,
-        delivery_mode="TEXT",
-        unsupported_reason=None,
-        translations=translations,
-    )
-
-
-def demo_structure(transcript: str) -> tuple[WorkState, list[Ambiguity]]:
-    text = normalized_text(transcript)
-    location = Location(raw_text=None, kind="UNSPECIFIED", canonical_name=None)
-    location_display = "장소 미지정"
-    ambiguities: list[Ambiguity] = []
-    task_family: Literal["ONION", "STRAWBERRY"] = "ONION"
-
-    if text == normalized_text("저짝 밭에서 양파 스무 망을 수확해"):
-        location = Location(raw_text="저짝", kind="DEICTIC", canonical_name=None)
-        location_display = "농장주 확인 필요"
-        ambiguities.append(
-            Ambiguity(
-                field="location",
-                message="'저짝'은 현장에서 농장주가 가리킨 위치 확인이 필요합니다.",
-                blocking=False,
-                kind="LOCATION",
-            )
-        )
-        steps = [demo_step(1, "ONION_HARVEST", "양파 수확", "양파를 수확한다")]
-        summary = "농장주가 가리킨 곳의 양파 20망을 수확합니다."
-    elif text == normalized_text("창고 앞 밭에서 양파 스무 망을 수확해서 창고로 옮겨"):
-        location = Location(raw_text="창고 앞 밭", kind="NAMED", canonical_name="창고 앞 밭")
-        location_display = "창고 앞 밭"
-        steps = [
-            demo_step(1, "ONION_HARVEST", "양파 수확", "양파를 수확한다"),
-            demo_step(2, "ONION_TRANSPORT", "양파 운반", "양파를 창고로 옮긴다"),
-        ]
-        summary = "창고 앞 밭의 양파 20망을 수확해 창고로 옮깁니다."
-    elif text == normalized_text("딸기 스무 상자를 수확해"):
-        task_family = "STRAWBERRY"
-        steps = [demo_step(1, "STRAWBERRY_HARVEST", "딸기 수확", "딸기를 수확한다")]
-        summary = "딸기 20상자를 수확합니다."
-    else:
-        provider_unavailable()
-
-    state = WorkState(
-        task_family=task_family,
-        location=location,
-        location_display=location_display,
-        quantity=Quantity(value=20, unit="상자" if task_family == "STRAWBERRY" else "망"),
-        deadline=None,
-        safety=[],
-        notes=None,
-        steps=steps,
-        risk_assessment=RiskAssessment(
-            level="LOW",
-            reasons=[],
-            schema_version="1",
-            contract_version="safety-policy-v1",
-        ),
-    )
-    return state, ambiguities
-
-
-KOREAN_NUMBERS = {
-    "한": 1,
-    "두": 2,
-    "세": 3,
-    "네": 4,
-    "다섯": 5,
-    "여섯": 6,
-    "일곱": 7,
-    "여덟": 8,
-    "아홉": 9,
-    "열": 10,
-    "열한": 11,
-    "열두": 12,
-    "열세": 13,
-    "열네": 14,
-    "열다섯": 15,
-    "열여섯": 16,
-    "열일곱": 17,
-    "열여덟": 18,
-    "열아홉": 19,
-    "스무": 20,
-}
-
-
-def parse_quantity_text(transcript: str) -> Quantity | None:
-    text = normalized_text(transcript)
-    candidate = text
-    for cue in ("말고", "으로 바꿔", "으로 해", "변경"):
-        if cue in text:
-            candidate = text.split(cue, 1)[1]
-            break
-    match = re.search(r"(?P<number>\d+|[가-힣]+)\s*(?P<unit>[가-힣A-Za-z]+)", candidate)
-    if not match:
-        return None
-    number_text = match.group("number")
-    value = int(number_text) if number_text.isdigit() else KOREAN_NUMBERS.get(number_text)
-    if value is None or value < 1:
-        return None
-    if candidate == text:
-        return None
-    unit = re.sub(r"(으로|로|을|를|은|는|이|가|만|쯤)$", "", match.group("unit"))
-    if not unit:
-        return None
-    return Quantity(value=value, unit=unit)
-
-
-def quantity_parse_result(transcript: str, expected_version: int) -> QuantityChangeParseResult:
-    quantity = parse_quantity_text(transcript)
-    if quantity is not None:
-        return QuantityChangeParseResult(
-            interpretation="READY",
-            quantity=quantity,
-            expected_version=expected_version,
-            ambiguities=[],
-        )
-    return QuantityChangeParseResult(
-        interpretation="AMBIGUOUS",
-        quantity=None,
-        expected_version=expected_version,
-        ambiguities=[
-            Ambiguity(
-                field="quantity",
-                message="변경할 수량과 단위를 확인할 수 없습니다.",
-                blocking=True,
-                kind="QUANTITY",
-            )
-        ],
-    )
+def replace_quantity_for_v2(state: WorkState, quantity: Quantity) -> WorkState:
+    state_data = state.model_dump(mode="json")
+    state_data["quantity"] = quantity.model_dump(mode="json")
+    return WorkState.model_validate(state_data)
 
 
 def draft_summary(state: WorkState) -> str:
@@ -1067,148 +741,9 @@ def draft_summary(state: WorkState) -> str:
     return f"{location_text}의 {crop} {quantity_text}을 작업합니다."
 
 
-def interpretation_for(ambiguities: list[Ambiguity]) -> str:
-    return "AMBIGUOUS" if ambiguities else "READY"
-
-
-def transcribe_and_release(audio: bytes) -> str:
-    try:
-        return transcribe_audio(audio)
-    finally:
-        del audio
-
-
-def tts_text(step: Step, language_code: str) -> str:
-    return " ".join(
-        translation.text.strip()
-        for translation in step.translations
-        if translation.language_code == language_code and translation.text.strip()
-    )
-
-
-def tts_text_hash(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def tts_audio_url(audio_bytes: bytes) -> str:
-    return f"data:audio/mpeg;base64,{base64.b64encode(audio_bytes).decode('ascii')}"
-
-
-def synthesize_tts(text: str) -> bytes:
-    if not settings.openai_api_key:
-        raise RuntimeError("TTS provider is not configured")
-    request = urllib.request.Request(
-        "https://api.openai.com/v1/audio/speech",
-        data=json.dumps(
-            {
-                "model": settings.openai_tts_model,
-                "voice": settings.openai_tts_voice,
-                "input": text,
-                "response_format": "mp3",
-            }
-        ).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {settings.openai_api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(request, timeout=settings.openai_timeout_seconds) as response:
-        audio_bytes = response.read()
-    if not audio_bytes:
-        raise RuntimeError("empty TTS response")
-    return audio_bytes
-
-
-def cached_tts_audio(client: Client, text: str, language_code: str) -> bytes | None:
-    text_hash = tts_text_hash(text)
-    try:
-        result = (
-            client.table("tts_assets")
-            .select("audio_bytes")
-            .eq("text_hash", text_hash)
-            .eq("language_code", language_code)
-            .limit(1)
-            .execute()
-        )
-    except Exception:
-        return None
-    rows = row_data(result)
-    if not rows:
-        return None
-    audio_bytes = rows[0].get("audio_bytes")
-    if isinstance(audio_bytes, str):
-        try:
-            return base64.b64decode(audio_bytes)
-        except ValueError:
-            return None
-    return bytes(audio_bytes) if isinstance(audio_bytes, (bytes, bytearray)) else None
-
-
-def cache_published_tts(client: Client, state: WorkState) -> None:
-    for step in state.steps:
-        for language_code in LANGUAGES:
-            text = tts_text(step, language_code)
-            if not text or cached_tts_audio(client, text, language_code) is not None:
-                continue
-            try:
-                client.table("tts_assets").upsert(
-                    {
-                        "text_hash": tts_text_hash(text),
-                        "language_code": language_code,
-                        "audio_bytes": synthesize_tts(text),
-                        "content_type": "audio/mpeg",
-                    },
-                    on_conflict="text_hash,language_code",
-                ).execute()
-            except (OSError, RuntimeError, urllib.error.URLError, urllib.error.HTTPError):
-                continue
-            except Exception:
-                continue
-
-
-def add_cached_tts_urls(client: Client, state: WorkState, language_code: str) -> WorkState:
-    state_data = state.model_dump()
-    for step_data in state_data["steps"]:
-        step = Step.model_validate(step_data)
-        text = tts_text(step, language_code)
-        audio_bytes = cached_tts_audio(client, text, language_code) if text else None
-        step_data["audio_url"] = tts_audio_url(audio_bytes) if audio_bytes else None
-        if step_data["video"] is None:
-            step_data["delivery_mode"] = "TEXT_TTS" if audio_bytes else "TEXT"
-    return WorkState.model_validate(state_data)
-
-
-def merge_demo_supplement(draft: WorkDraft, supplement_transcript: str) -> tuple[WorkState, list[Ambiguity]]:
-    text = normalized_text(supplement_transcript)
-    state_data = draft.state.model_dump()
-    ambiguities = list(draft.ambiguities)
-    merged = False
-
-    if "창고 앞 밭" in text:
-        state_data["location"] = Location(
-            raw_text="창고 앞 밭",
-            kind="NAMED",
-            canonical_name="창고 앞 밭",
-        ).model_dump()
-        state_data["location_display"] = "창고 앞 밭"
-        ambiguities = [item for item in ambiguities if item.field != "location"]
-        merged = True
-
-    quantity = parse_quantity_text(text)
-    if quantity is not None:
-        state_data["quantity"] = quantity.model_dump()
-        ambiguities = [item for item in ambiguities if item.field != "quantity"]
-        merged = True
-
-    if not merged:
-        provider_unavailable()
-    state = WorkState.model_validate(state_data)
-    validate_state(state, allow_unsupported=True, for_publish=False)
-    return state, ambiguities
-
-
-def validate_state(state: WorkState, allow_unsupported: bool, for_publish: bool) -> None:
+def validate_state(
+    state: WorkState, allow_unsupported: bool, for_publish: bool, allow_legacy: bool = False
+) -> None:
     sequences = [step.sequence for step in state.steps]
     if sequences and sequences != list(range(1, len(sequences) + 1)):
         raise ApiError(422, "SCHEMA_INVALID", "작업 단계 순서가 올바르지 않습니다.")
@@ -1224,11 +759,12 @@ def validate_state(state: WorkState, allow_unsupported: bool, for_publish: bool)
         if step.task_code is None:
             if not allow_unsupported or not step.unsupported_reason:
                 raise ApiError(422, "OVERRIDE_NOT_ALLOWED", "전달할 수 없는 작업 단계입니다.")
-        elif step.task_code not in TASK_CODES:
+        elif step.task_code in TASK_CODES:
+            if step.task_code not in TASK_CODES_BY_FAMILY[state.task_family]:
+                raise ApiError(422, "SCHEMA_INVALID", "작업 코드와 작물 범주가 일치하지 않습니다.")
+        elif not allow_legacy or step.task_code not in LEGACY_TASK_CODES_BY_FAMILY[state.task_family]:
             raise ApiError(422, "SCHEMA_INVALID", "지원하지 않는 작업 코드입니다.")
-        elif step.task_code not in TASK_CODES_BY_FAMILY[state.task_family]:
-            raise ApiError(422, "SCHEMA_INVALID", "작업 코드와 작물 범주가 일치하지 않습니다.")
-        elif step.unsupported_reason is not None:
+        if step.task_code is not None and step.unsupported_reason is not None:
             raise ApiError(422, "SCHEMA_INVALID", "지원 작업에 unsupported_reason을 넣을 수 없습니다.")
         if step.video is not None:
             if step.video.task_code != step.task_code:
@@ -1268,6 +804,8 @@ def parse_draft(row: dict[str, Any]) -> WorkDraft:
         ambiguities = [Ambiguity.model_validate(item) for item in row.get("ambiguities", [])]
     except ValidationError as exc:
         raise ApiError(422, "SCHEMA_INVALID", "초안의 모호함 형식이 올바르지 않습니다.", {"errors": exc.errors()})
+    if row.get("contract_version") != "structure-v2" or row.get("ontology_version") != "ontology-v2":
+        raise ApiError(422, "LEGACY_READ_ONLY", "기존 v1 초안은 읽기 전용입니다.")
     return WorkDraft(
         draft_id=str(row["id"]),
         draft_revision=row["draft_revision"],
@@ -1276,6 +814,9 @@ def parse_draft(row: dict[str, Any]) -> WorkDraft:
         state=parse_state(row["state_json"]),
         ambiguities=ambiguities,
         transcript=row.get("transcript") or "",
+        schema_version="2",
+        contract_version="structure-v2",
+        ontology_version="ontology-v2",
     )
 
 
@@ -1283,7 +824,7 @@ def parse_version(row: dict[str, Any]) -> WorkVersion:
     return WorkVersion(
         version=row["version"],
         lifecycle=row["status"],
-        state=parse_state(row["state_json"]),
+        state=parse_state(row["state_json"], allow_legacy=True),
         ambiguity_override=bool(row.get("ambiguity_override", False)),
         override_reason=row.get("override_reason"),
         overridden_at=row.get("overridden_at"),
@@ -1304,12 +845,12 @@ def localized_state(state: WorkState, language_code: str, client: Client | None 
         }
         for step in state.steps
     ]
-    localized = WorkState.model_validate(state_data)
-    return add_cached_tts_urls(client, localized, language_code) if client is not None else localized
+    return WorkState.model_validate(state_data)
 
 
 def localized_worker_state(state: WorkState, language_code: str, client: Client | None = None) -> WorkerState:
-    state_data = state.model_dump(exclude={"risk_assessment"})
+    worker_only = {"risk_assessment", "schema_version", "contract_version", "ontology_version"}
+    state_data = state.model_dump(exclude=worker_only)
     state_data["steps"] = [
         {
             **step.model_dump(),
@@ -1321,11 +862,7 @@ def localized_worker_state(state: WorkState, language_code: str, client: Client 
         }
         for step in state.steps
     ]
-    localized = WorkerState.model_validate(state_data)
-    if client is None:
-        return localized
-    state_with_tts = add_cached_tts_urls(client, WorkState.model_validate({**state_data, "risk_assessment": state.risk_assessment.model_dump()}), language_code)
-    return WorkerState.model_validate(state_with_tts.model_dump(exclude={"risk_assessment"}))
+    return WorkerState.model_validate(state_data)
 
 
 def worker_link_meta(client: Client, session_id: str) -> list[WorkerLinkMeta]:
@@ -1395,80 +932,39 @@ def today_team_response(client: Client, team_row: dict[str, Any], join_url: str 
     )
 
 
-def worker_assignment_for_session(client: Client, session_id: str, language_code: str) -> WorkerAssignment:
-    session = one_row(
-        client.table("work_sessions")
-        .select("id,current_version,status")
-        .eq("id", session_id)
-        .eq("status", "PUBLISHED")
-        .execute(),
-        "ACCESS_DENIED",
-    )
-    version = one_row(
-        client.table("work_versions")
-        .select("*")
-        .eq("work_session_id", session["id"])
-        .eq("version", session["current_version"])
-        .eq("status", "PUBLISHED")
-        .execute(),
-        "ACCESS_DENIED",
-    )
-    parsed = parse_version(version)
-    state = localized_worker_state(parsed.state, language_code, client)
-    badges: list[str] = []
-    if parsed.ambiguity_override or state.location.kind == "DEICTIC":
-        badges.append("확인이 필요한 지시")
-    return WorkerAssignment(
-        language_code=language_code,
-        session_id=str(session["id"]),
-        version=parsed.version,
-        state=state,
-        badges=badges,
-        source_detail=[translation for step in state.steps for translation in step.translations],
-    )
+def worker_assignment_for_session(client: Client, session_id: str, language_code: str, farm_id: str) -> dict[str, Any]:
+    return stored_worker_briefing(client, session_id, language_code, farm_id)
 
 
 def owner_session_response(client: Client, session_row: dict[str, Any], version_row: dict[str, Any]) -> OwnerWorkSession:
     return OwnerWorkSession(
         session_id=str(session_row["id"]),
         current_version=session_row["current_version"],
+        contract_version=session_row.get("contract_version") or "structure-v1",
+        ontology_version=session_row.get("ontology_version") or "ontology-v1",
         version=parse_version(version_row),
         worker_link_meta=worker_link_meta(client, str(session_row["id"])),
     )
 
 
-def sign_session(expires_at: int) -> str:
-    payload = str(expires_at).encode()
-    encoded = base64.urlsafe_b64encode(payload).decode().rstrip("=")
-    signature = hmac.new(settings.owner_session_secret.encode(), payload, hashlib.sha256).digest()
-    return f"{encoded}.{base64.urlsafe_b64encode(signature).decode().rstrip('=')}"
+def sign_session(identity: OwnerIdentity) -> str:
+    return sign_owner_cookie(identity, settings.owner_session_secret)
 
 
-def verify_session(value: str | None) -> bool:
-    if not value or not settings.auth_configured or "." not in value:
-        return False
-    encoded, encoded_signature = value.split(".", 1)
-    try:
-        payload = base64.urlsafe_b64decode(encoded + "===")
-        expires_at = int(payload.decode())
-        signature = base64.urlsafe_b64decode(encoded_signature + "===")
-    except (ValueError, UnicodeDecodeError, base64.binascii.Error):
-        return False
-    expected = hmac.new(settings.owner_session_secret.encode(), payload, hashlib.sha256).digest()
-    return expires_at > int(time.time()) and hmac.compare_digest(signature, expected)
+def verify_session(value: str | None) -> OwnerIdentity | None:
+    return verify_owner_cookie(value, settings.owner_session_secret)
 
 
-def require_owner(cookie: str | None) -> None:
-    if not verify_session(cookie):
+def require_owner(cookie: str | None) -> OwnerIdentity:
+    identity = verify_session(cookie)
+    if identity is None:
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
+    return identity
 
 
 def require_origin(request: Request) -> None:
     origin = request.headers.get("origin")
     if not origin or origin not in settings.origins:
-        raise ApiError(403, "UNAUTHORIZED", "허용되지 않은 요청입니다.")
-    csrf = request.headers.get("x-csrf-token", "")
-    if not hmac.compare_digest(csrf, CSRF_TOKEN):
         raise ApiError(403, "UNAUTHORIZED", "허용되지 않은 요청입니다.")
 
 
@@ -1662,10 +1158,314 @@ def provider_unavailable() -> None:
     raise ApiError(503, "PROVIDER_UNAVAILABLE", "AI 제공자가 준비되지 않았습니다.")
 
 
+async def node_transcript(audio: bytes, filename: str, content_type: str, language_hint: str) -> str:
+    result = await bridge_call(
+        "TRANSCRIBE_AUDIO",
+        {
+            "audio_base64": base64.b64encode(audio).decode(),
+            "filename": filename,
+            "content_type": content_type,
+            "language_hint": language_hint,
+        },
+    )
+    transcript = result.get("transcript")
+    if not isinstance(transcript, str) or not transcript.strip():
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "AI 제공자가 준비되지 않았습니다.")
+    return transcript.strip()
+
+
+def current_assets(client: Client) -> list[dict[str, Any]]:
+    return row_data(
+        client.table("visual_assets")
+        .select(
+            "id,task_code,asset_type,content_type,public_path,provenance,review_status,safety_level,is_current,captions_text"
+        )
+        .eq("review_status", "APPROVED")
+        .eq("safety_level", "LOW")
+        .eq("is_current", True)
+        .execute()
+    )
+
+
+def current_verified_guides(client: Client) -> list[dict[str, Any]]:
+    """Load verified guide data; Node performs the per-step lookup and translation decision."""
+    try:
+        phrases = row_data(
+            client.table("guide_phrases")
+            .select("phrase_key,canonical_ko,source_page,source_url,license")
+            .eq("verified", True)
+            .execute()
+        )
+        phrase_keys = [str(phrase["phrase_key"]) for phrase in phrases]
+        if not phrase_keys:
+            return []
+        translations = row_data(
+            client.table("guide_translations")
+            .select("phrase_key,language_code,translated_text")
+            .in_("phrase_key", phrase_keys)
+            .in_("language_code", sorted(LANGUAGES))
+            .eq("verified", True)
+            .execute()
+        )
+    except Exception as exc:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "가이드 데이터를 확인할 수 없습니다.") from exc
+    phrase_by_key = {str(phrase["phrase_key"]): phrase for phrase in phrases}
+    guides: list[dict[str, Any]] = []
+    for translation in translations:
+        phrase = phrase_by_key.get(str(translation.get("phrase_key")))
+        if phrase is None:
+            continue
+        guides.append(
+            {
+                "phrase_key": phrase["phrase_key"],
+                "canonical_ko": phrase["canonical_ko"],
+                "language_code": translation["language_code"],
+                "translated_text": translation["translated_text"],
+                "source_page": phrase["source_page"],
+                "source_url": phrase["source_url"],
+                "license": phrase["license"],
+                "verified": True,
+            }
+        )
+    return guides
+
+
+def structure_v2_state_json(
+    state: WorkState,
+    interpretation: str,
+    summary_ko: str,
+    ambiguities: list[Ambiguity],
+) -> dict[str, Any]:
+    return {
+        "interpretation": interpretation,
+        "summary_ko": summary_ko,
+        "location": state.location.model_dump(mode="json"),
+        "task_family": state.task_family,
+        "quantity": jsonable(state.quantity),
+        "deadline": state.deadline,
+        "safety": state.safety,
+        "notes": state.notes,
+        "steps": [
+            {
+                "sequence": step.sequence,
+                "task_code": step.task_code,
+                "title_ko": step.title_ko,
+                "description_ko": step.description_ko,
+                "unsupported_reason": step.unsupported_reason,
+            }
+            for step in state.steps
+        ],
+        "ambiguities": [item.model_dump(mode="json") for item in ambiguities],
+        "schema_version": "2",
+        "contract_version": "structure-v2",
+        "ontology_version": "ontology-v2",
+    }
+
+
+def structure_v2_work_input(
+    state: WorkState,
+    session_id: str,
+    version: int,
+    interpretation: str,
+    summary_ko: str,
+    ambiguities: list[Ambiguity],
+) -> dict[str, Any]:
+    return {
+        "session_id": session_id,
+        "version": version,
+        **structure_v2_state_json(state, interpretation, summary_ko, ambiguities),
+    }
+
+
+def tts_url(text_hash: str, language_code: str) -> str | None:
+    if settings.public_api_base_url:
+        return f"{settings.public_api_base_url}/api/v1/tts/{text_hash}/{language_code}"
+    if settings.demo_fallback and settings.origins:
+        return f"{settings.origins[0].rstrip('/')}/api/v1/tts/{text_hash}/{language_code}"
+    return None
+
+
+def tts_fallback(briefing: dict[str, Any]) -> dict[str, Any]:
+    result = dict(briefing)
+    result["tts"] = {"status": "FALLBACK", "text_hash": briefing.get("tts", {}).get("text_hash"), "audio_url": None}
+    result["badges"] = list(dict.fromkeys([*briefing.get("badges", []), "TEXT_TTS_FALLBACK"]))
+    result["steps"] = [
+        {**step, "delivery_mode": "TEXT"} if step.get("delivery_mode") == "TEXT_TTS" else step
+        for step in briefing.get("steps", [])
+    ]
+    return result
+
+
+def finalize_tts_package(client: Client, language_code: str, package: dict[str, Any]) -> dict[str, Any]:
+    briefing = package.get("briefing") if isinstance(package, dict) else None
+    transport = package.get("tts_transport") if isinstance(package, dict) else None
+    if not isinstance(briefing, dict) or not isinstance(transport, dict):
+        raise ApiError(422, "SCHEMA_INVALID", "AI TTS 결과가 올바르지 않습니다.")
+    if transport.get("status") != "READY" or transport.get("text_hash") != briefing.get("tts", {}).get("text_hash"):
+        return tts_fallback(briefing)
+    text_hash = transport.get("text_hash")
+    audio_base64 = transport.get("audio_bytes_base64")
+    audio_location = tts_url(text_hash, language_code) if isinstance(text_hash, str) else None
+    if not isinstance(text_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", text_hash) or not isinstance(audio_base64, str) or audio_location is None:
+        return tts_fallback(briefing)
+    try:
+        audio_bytes = base64.b64decode(audio_base64, validate=True)
+    except (ValueError, binascii.Error):
+        return tts_fallback(briefing)
+    if not audio_bytes or len(audio_bytes) > MAX_AUDIO_BYTES:
+        return tts_fallback(briefing)
+    try:
+        client.table("tts_assets").upsert(
+            {
+                "text_hash": text_hash,
+                "language_code": language_code,
+                "audio_bytes": f"\\x{audio_bytes.hex()}",
+                "content_type": "audio/mpeg",
+            },
+            on_conflict="text_hash,language_code",
+        ).execute()
+    except Exception:
+        return tts_fallback(briefing)
+    finally:
+        del audio_bytes
+    result = dict(briefing)
+    result["tts"] = {"status": "READY", "text_hash": text_hash, "audio_url": audio_location}
+    return result
+
+
+def private_tts_bytes(value: Any) -> bytes | None:
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    if not isinstance(value, str):
+        return None
+    try:
+        if value.startswith("\\x"):
+            return bytes.fromhex(value[2:])
+        return base64.b64decode(value, validate=True)
+    except (ValueError, binascii.Error):
+        return None
+
+
+async def build_worker_packages(
+    client: Client,
+    session_id: str,
+    version: int,
+    state: WorkState,
+    interpretation: str,
+    summary_ko: str,
+    ambiguities: list[Ambiguity],
+) -> list[dict[str, Any]]:
+    work = structure_v2_work_input(state, session_id, version, interpretation, summary_ko, ambiguities)
+    result = await bridge_call(
+        "BUILD_WORKER_PACKAGES_V2",
+        {
+            "work": work,
+            "languages": ["vi", "ne"],
+            "assets": current_assets(client),
+            "guides": current_verified_guides(client),
+        },
+    )
+    packages: list[dict[str, Any]] = []
+    for language_code in ("vi", "ne"):
+        briefing = finalize_tts_package(client, language_code, result.get(language_code))
+        validate_contract_schema(briefing, "worker-briefing-v2.schema.json")
+        packages.append(briefing)
+    return packages
+
+
+def legacy_worker_briefing(session_id: str, version: WorkVersion, language_code: str) -> dict[str, Any]:
+    state = localized_worker_state(version.state, language_code)
+    quantity = state.quantity
+    quantity_display = f"{quantity.value} {quantity.unit}" if isinstance(quantity, Quantity) else "UNSPECIFIED"
+    steps = []
+    source_detail: list[dict[str, Any]] = []
+    for step in state.steps:
+        segments = [item.model_dump(mode="json") for item in step.translations]
+        source_detail.extend(segments)
+        text = " ".join(item["text"] for item in segments if item.get("text")) or step.description_ko
+        steps.append(
+            {
+                "sequence": step.sequence,
+                "task_code": step.task_code,
+                "title": text,
+                "description": text,
+                "video": step.video.model_dump(mode="json") if step.video else None,
+                "audio_url": None,
+                "tts_status": "TEXT_FALLBACK",
+                "tts_hash": None,
+                "delivery_mode": step.delivery_mode,
+                "unsupported_reason": step.unsupported_reason,
+                "segments": segments,
+            }
+        )
+    return {
+        "session_id": session_id,
+        "version": version.version,
+        "contract_version": "structure-v1",
+        "language_code": language_code,
+        "lifecycle": "PUBLISHED",
+        "context": {
+            "location_display": state.location_display,
+            "quantity_display": quantity_display,
+            "deadline_display": state.deadline,
+            "safety": state.safety,
+            "notes": state.notes,
+        },
+        "steps": steps,
+        "badge_codes": ["LEGACY_READ_ONLY"],
+        "source_detail": source_detail,
+    }
+
+
+def stored_worker_briefing(client: Client, session_id: str, language_code: str, farm_id: str | None = None) -> dict[str, Any]:
+    session_query = client.table("work_sessions").select("id,current_version,status,contract_version,ontology_version").eq("id", session_id).eq("status", "PUBLISHED")
+    if farm_id is not None:
+        session_query = session_query.eq("farm_id", farm_id)
+    session = one_row(session_query.execute(), "ACCESS_DENIED")
+    if session.get("contract_version") == "structure-v1" and session.get("ontology_version") == "ontology-v1":
+        legacy_row = one_row(
+            client.table("work_versions")
+            .select("*")
+            .eq("work_session_id", session["id"])
+            .eq("version", session["current_version"])
+            .eq("status", "PUBLISHED")
+            .execute(),
+            "ACCESS_DENIED",
+        )
+        return legacy_worker_briefing(str(session["id"]), parse_version(legacy_row), language_code)
+    if session.get("contract_version") != "structure-v2" or session.get("ontology_version") != "ontology-v2":
+        raise ApiError(422, "SCHEMA_INVALID", "알 수 없는 작업 계약입니다.")
+    version = one_row(
+        client.table("work_versions")
+        .select("id,status,contract_version,ontology_version")
+        .eq("work_session_id", session["id"])
+        .eq("version", session["current_version"])
+        .eq("status", "PUBLISHED")
+        .execute(),
+        "ACCESS_DENIED",
+    )
+    package = one_row(
+        client.table("worker_briefing_packages")
+        .select("package_json")
+        .eq("work_version_id", version["id"])
+        .eq("language_code", language_code)
+        .execute(),
+        "ACCESS_DENIED",
+    ).get("package_json")
+    validate_contract_schema(package, "worker-briefing-v2.schema.json")
+    return package
+
+
 def issue_link(language_code: str) -> tuple[dict[str, Any], IssuedWorkerLink]:
     issued_at = now_utc()
     expires_at = issued_at + timedelta(hours=24)
     token = secrets.token_urlsafe(32)
+    if settings.public_web_base_url:
+        public_web_base_url = settings.public_web_base_url
+    elif settings.demo_fallback and settings.origins:
+        public_web_base_url = settings.origins[0].rstrip("/")
+    else:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "공개 웹 주소가 준비되지 않았습니다.")
     return (
         {
             "language_code": language_code,
@@ -1675,7 +1475,7 @@ def issue_link(language_code: str) -> tuple[dict[str, Any], IssuedWorkerLink]:
         },
         IssuedWorkerLink(
             language_code=language_code,
-            url=f"{settings.public_api_base_url.rstrip('/')}/api/v1/worker-links/{token}/assignment",
+            url=f"{public_web_base_url}/w/{token}",
             expires_at=expires_at,
         ),
     )
@@ -1705,7 +1505,7 @@ async def health() -> dict[str, str]:
 
 @app.get("/ready")
 async def ready() -> dict[str, str]:
-    if not settings.supabase_configured or not settings.auth_configured or not provider_ready():
+    if not settings.supabase_configured or not settings.auth_configured or not settings.public_web_configured or not provider_ready():
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "Supabase 또는 AI 제공자가 준비되지 않았습니다.")
     try:
         db_client().table("work_sessions").select("id").limit(1).execute()
@@ -1718,14 +1518,23 @@ async def ready() -> dict[str, str]:
 async def issue_owner_session(payload: PinLoginRequest, request: Request, response: Response) -> OwnerSession:
     require_origin(request)
     check_pin_rate_limit(request)
-    if not settings.auth_configured or not hmac.compare_digest(payload.pin, settings.owner_pin):
+    if not settings.auth_configured:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    try:
+        rows = row_data(db_client().rpc("authenticate_demo_owner", {"p_pin": payload.pin}).execute())
+    except Exception:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    if not rows:
         record_pin_failure(request)
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
-    clear_pin_failures(request)
+    owner = rows[0]
     expires_at = now_utc() + timedelta(seconds=settings.owner_session_ttl_seconds)
+    identity = OwnerIdentity(str(owner["owner_id"]), str(owner["farm_id"]), int(expires_at.timestamp()))
+    clear_pin_failures(request)
+    expires_at = datetime.fromtimestamp(identity.expires_at, timezone.utc)
     response.set_cookie(
         COOKIE_NAME,
-        sign_session(int(expires_at.timestamp())),
+        sign_session(identity),
         max_age=settings.owner_session_ttl_seconds,
         httponly=True,
         secure=True,
@@ -1743,37 +1552,30 @@ async def draft_from_audio(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkDraft:
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     require_idempotency(idempotency_key)
     check_ai_rate_limit(request)
     audio_bytes: bytes | None = None
     try:
         audio_bytes = await read_audio_upload(audio, language_hint)
-        if settings.demo_fallback:
-            transcript = transcribe_and_release(audio_bytes)
-            state, ambiguities = demo_structure(transcript)
-            interpretation = interpretation_for(ambiguities)
-            validate_state(state, allow_unsupported=True, for_publish=False)
-        else:
-            transcript = await ai_transcribe_audio(
-                audio_bytes,
-                filename=audio.filename or "audio",
-                content_type=audio.content_type or "audio/webm",
-                language_hint=language_hint,
-            )
-            state, ambiguities, interpretation = await parse_structure_output(
-                await ai_structure_transcript(transcript), transcript
-            )
-            state = await enrich_draft_state(db_client(), state)
+        transcript = await node_transcript(
+            audio_bytes, audio.filename or "audio", audio.content_type or "audio/webm", language_hint
+        )
+        state, ambiguities, interpretation = await parse_structure_output(
+            await bridge_call("BUILD_OWNER_DRAFT_V2", {"transcript": transcript}), transcript
+        )
+        summary_ko = draft_summary(state)
         draft_data = {
             "draft_revision": 0,
-            "summary_ko": draft_summary(state),
+            "summary_ko": summary_ko,
             "transcript": transcript,
             "interpretation": interpretation,
-            "state_json": state.model_dump(mode="json"),
+            "state_json": structure_v2_state_json(state, interpretation, summary_ko, ambiguities),
             "ambiguities": [item.model_dump(mode="json") for item in ambiguities],
-            "contract_version": "structure-v1",
+            "contract_version": "structure-v2",
+            "ontology_version": "ontology-v2",
+            "farm_id": owner.farm_id,
         }
         try:
             result = db_client().table("work_drafts").insert(draft_data).select("*").execute()
@@ -1800,7 +1602,7 @@ async def supplement_draft(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkDraft:
     draft_id = draftId
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     audio_bytes: bytes | None = None
     try:
@@ -1810,33 +1612,32 @@ async def supplement_draft(
         if expected_draft_revision < 0:
             raise ApiError(422, "SCHEMA_INVALID", "expected_draft_revision이 필요합니다.")
         client = db_client()
-        row = one_row(client.table("work_drafts").select("*").eq("id", draft_id).execute())
+        row = one_row(client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute())
         if row["draft_revision"] != expected_draft_revision:
             raise ApiError(409, "VERSION_CONFLICT", "최신 작업 초안을 다시 확인하세요.")
         draft = parse_draft(row)
-        transcript = await ai_transcribe_audio(
-            audio_bytes,
-            filename=audio.filename or "audio",
-            content_type=audio.content_type or "audio/webm",
-            language_hint=language_hint,
+        transcript = await node_transcript(
+            audio_bytes, audio.filename or "audio", audio.content_type or "audio/webm", language_hint
         )
+        structure = structure_v2_state_json(draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities)
         state, ambiguities, interpretation = await parse_structure_output(
-            await ai_merge_structure_transcript(draft.model_dump(mode="json"), transcript), transcript
+            await bridge_call("MERGE_SUPPLEMENT_V2", {"structure": structure, "transcript": transcript}), transcript
         )
-        state = await enrich_draft_state(client, state)
+        summary_ko = draft_summary(state)
         result = (
             client.table("work_drafts")
             .update(
                 {
                     "draft_revision": expected_draft_revision + 1,
-                    "summary_ko": draft_summary(state),
+                    "summary_ko": summary_ko,
                     "transcript": f"{draft.transcript} {transcript}".strip(),
                     "interpretation": interpretation,
-                    "state_json": state.model_dump(mode="json"),
+                    "state_json": structure_v2_state_json(state, interpretation, summary_ko, ambiguities),
                     "ambiguities": [item.model_dump(mode="json") for item in ambiguities],
                 }
             )
             .eq("id", draft_id)
+            .eq("farm_id", owner.farm_id)
             .eq("draft_revision", expected_draft_revision)
             .select("*")
             .execute()
@@ -1862,43 +1663,46 @@ async def confirm_draft(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> InitialPublishResponse:
     draft_id = draftId
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
-    issue_key = require_idempotency(idempotency_key)
+    require_idempotency(idempotency_key)
     client = db_client()
-    draft = parse_draft(one_row(client.table("work_drafts").select("*").eq("id", draft_id).execute()))
+    draft = parse_draft(
+        one_row(client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute())
+    )
     validate_confirm(draft, payload)
-    link_row: dict[str, Any] | None = None
     issued: list[IssuedWorkerLink] = []
-    if payload.delivery_mode == "REMOTE":
-        link_row, link = issue_link(payload.language_code)
-        link_row["issue_idempotency_key"] = issue_key
-        issued = [link]
+    session_id = str(uuid.uuid4())
     try:
+        state_json = structure_v2_state_json(draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities)
+        packages = await build_worker_packages(
+            client, session_id, 1, draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities
+        )
         rpc_result = client.rpc(
-            "publish_initial_draft",
+            "publish_work_version_with_packages",
             {
+                "p_farm_id": owner.farm_id,
                 "p_draft_id": draft_id,
-                "p_state_json": jsonable(draft.state),
-                "p_transcript": draft.transcript,
+                "p_session_id": session_id,
+                "p_expected_version": 0,
+                "p_state_json": state_json,
+                "p_packages": packages,
                 "p_decision": payload.decision,
-                "p_override_reason": payload.override_reason,
                 "p_ambiguity_override": payload.ambiguity_override,
-                "p_delivery_mode": payload.delivery_mode,
-                "p_language_code": payload.language_code,
-                "p_link": link_row,
+                "p_override_reason": payload.override_reason,
             },
         ).execute()
         session_id = str(one_row(rpc_result)["session_id"])
     except ApiError:
         raise
+    except AiProviderError:
+        raise
     except Exception:
         raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
-    session_row = one_row(client.table("work_sessions").select("*").eq("id", session_id).execute())
+    session_row = one_row(client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
     version_row = one_row(
         client.table("work_versions").select("*").eq("work_session_id", session_id).eq("version", 1).execute()
     )
-    cache_published_tts(client, parse_version(version_row).state)
     return InitialPublishResponse(
         work_session=owner_session_response(client, session_row, version_row),
         issued_worker_links=issued,
@@ -1909,9 +1713,11 @@ async def confirm_draft(
 async def list_sessions(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> dict[str, list[OwnerWorkSession]]:
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     client = db_client()
-    sessions = row_data(client.table("work_sessions").select("*").order("updated_at", desc=True).execute())
+    sessions = row_data(
+        client.table("work_sessions").select("*").eq("farm_id", owner.farm_id).order("updated_at", desc=True).execute()
+    )
     items: list[OwnerWorkSession] = []
     for session in sessions:
         version = one_row(
@@ -1931,9 +1737,9 @@ async def get_session(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> OwnerWorkSession:
     session_id = sessionId
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     client = db_client()
-    session = one_row(client.table("work_sessions").select("*").eq("id", session_id).execute())
+    session = one_row(client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
     version = one_row(
         client.table("work_versions")
         .select("*")
@@ -1957,7 +1763,7 @@ async def parse_quantity_change(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> dict[str, Any]:
     session_id = sessionId
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     audio_bytes: bytes | None = None
     try:
@@ -1966,16 +1772,24 @@ async def parse_quantity_change(
         if expected_version < 1:
             raise ApiError(422, "SCHEMA_INVALID", "expected_version이 필요합니다.")
         client = db_client()
-        session = one_row(client.table("work_sessions").select("current_version,status").eq("id", session_id).execute())
+        session = one_row(
+            client.table("work_sessions")
+            .select("current_version,status,contract_version,ontology_version")
+            .eq("id", session_id)
+            .eq("farm_id", owner.farm_id)
+            .execute()
+        )
+        if session.get("contract_version") != "structure-v2" or session.get("ontology_version") != "ontology-v2":
+            raise ApiError(422, "LEGACY_READ_ONLY", "기존 v1 버전은 수량 변경할 수 없습니다.")
         if session["status"] != "PUBLISHED" or session["current_version"] != expected_version:
             raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
-        transcript = await ai_transcribe_audio(
-            audio_bytes,
-            filename=audio.filename or "audio",
-            content_type=audio.content_type or "audio/webm",
-            language_hint=language_hint,
+        transcript = await node_transcript(
+            audio_bytes, audio.filename or "audio", audio.content_type or "audio/webm", language_hint
         )
-        return parse_quantity_output(await ai_quantity_change_transcript(transcript, expected_version), expected_version)
+        return parse_quantity_output(
+            await bridge_call("PARSE_QUANTITY_CHANGE", {"transcript": transcript, "expected_version": expected_version}),
+            expected_version,
+        )
     finally:
         if audio_bytes is not None:
             del audio_bytes
@@ -1991,24 +1805,74 @@ async def confirm_quantity_change(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> OwnerWorkSession:
     session_id = sessionId
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
+    session_before = one_row(
+        client.table("work_sessions")
+        .select("id,current_version,status,contract_version,ontology_version")
+        .eq("id", session_id)
+        .eq("farm_id", owner.farm_id)
+        .execute()
+    )
+    if session_before.get("contract_version") != "structure-v2" or session_before.get("ontology_version") != "ontology-v2":
+        raise ApiError(422, "LEGACY_READ_ONLY", "기존 v1 버전은 수량 변경할 수 없습니다.")
+    if session_before["status"] != "PUBLISHED" or session_before["current_version"] != payload.expected_version:
+        raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
+    previous = one_row(
+        client.table("work_versions")
+        .select("*")
+        .eq("work_session_id", session_id)
+        .eq("version", payload.expected_version)
+        .eq("status", "PUBLISHED")
+        .execute()
+    )
+    previous_state_json = previous["state_json"]
+    validate_contract_schema(previous_state_json, "structure-v2.schema.json")
     try:
+        previous_structure = StructureOutputV2.model_validate(previous_state_json)
+    except ValidationError as exc:
+        raise ApiError(422, "SCHEMA_INVALID", "현재 작업 버전의 구조가 올바르지 않습니다.", {"errors": exc.errors()})
+    next_state = replace_quantity_for_v2(parse_version(previous).state, payload.quantity)
+    validate_state(next_state, allow_unsupported=True, for_publish=True)
+    summary_ko = draft_summary(next_state)
+    next_state_json = structure_v2_state_json(
+        next_state, previous_structure.interpretation, summary_ko, previous_structure.ambiguities
+    )
+    try:
+        packages = await build_worker_packages(
+            client,
+            session_id,
+            payload.expected_version + 1,
+            next_state,
+            previous_structure.interpretation,
+            summary_ko,
+            previous_structure.ambiguities,
+        )
         result = client.rpc(
-            "publish_quantity_change",
+            "publish_work_version_with_packages",
             {
+                "p_farm_id": owner.farm_id,
+                "p_draft_id": None,
                 "p_session_id": session_id,
                 "p_expected_version": payload.expected_version,
-                "p_quantity": jsonable(payload.quantity),
+                "p_state_json": next_state_json,
+                "p_packages": packages,
+                "p_decision": previous.get("confirmation_decision") or "CONFIRM",
+                "p_ambiguity_override": bool(previous.get("ambiguity_override", False)),
+                "p_override_reason": previous.get("override_reason"),
             },
         ).execute()
+    except AiProviderError:
+        raise
     except Exception:
         raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
     if not row_data(result):
         raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
-    session = one_row(client.table("work_sessions").select("*").eq("id", session_id).execute())
+    session = one_row(
+        client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute()
+    )
     version = one_row(
         client.table("work_versions")
         .select("*")
@@ -2016,7 +1880,6 @@ async def confirm_quantity_change(
         .eq("version", session["current_version"])
         .execute()
     )
-    cache_published_tts(client, parse_version(version).state)
     return owner_session_response(client, session, version)
 
 
@@ -2027,12 +1890,14 @@ async def create_today_team(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
     work_date, expires_at = today_seoul()
-    rows = row_data(client.table("today_work_teams").select("*").eq("work_date", work_date).limit(1).execute())
+    rows = row_data(
+        client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+    )
     created = not rows
     team_row = rows[0] if rows else {"id": str(uuid.uuid4())}
     team_id = str(team_row["id"])
@@ -2043,6 +1908,7 @@ async def create_today_team(
     ).hexdigest()
     invite = {
         "id": team_id,
+        "farm_id": owner.farm_id,
         "work_date": work_date,
         "invite_token_hash": hash_link_token(token),
         "invite_issue_idempotency_key": issue_key,
@@ -2060,12 +1926,14 @@ async def create_today_team(
                 hashlib.sha256,
             ).hexdigest()
         else:
-            result = client.table("today_work_teams").update(invite).eq("id", team_id).select("*").execute()
+            result = client.table("today_work_teams").update(invite).eq("id", team_id).eq("farm_id", owner.farm_id).select("*").execute()
             team_row = one_row(result)
     except Exception:
         if not created:
             raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
-        team_row = one_row(client.table("today_work_teams").select("*").eq("work_date", work_date).limit(1).execute())
+        team_row = one_row(
+            client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+        )
         team_id = str(team_row["id"])
         token = hmac.new(
             settings.owner_session_secret.encode(),
@@ -2074,21 +1942,23 @@ async def create_today_team(
         ).hexdigest()
         result = client.table("today_work_teams").update(
             {**invite, "id": team_id, "invite_token_hash": hash_link_token(token)}
-        ).eq("id", team_id).select("*").execute()
+        ).eq("id", team_id).eq("farm_id", owner.farm_id).select("*").execute()
         team_row = one_row(result)
     response.status_code = 201 if created else 200
-    origin = request.headers["origin"].rstrip("/")
-    return today_team_response(client, team_row, f"{origin}/team/{token}")
+    public_web_base_url = settings.public_web_base_url or request.headers["origin"].rstrip("/")
+    return today_team_response(client, team_row, f"{public_web_base_url}/team/{token}")
 
 
 @app.get("/api/v1/work-teams/today", response_model=TodayWorkTeam)
 async def get_today_team(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     work_date, _ = today_seoul()
     client = db_client()
-    team_row = one_row(client.table("today_work_teams").select("*").eq("work_date", work_date).limit(1).execute())
+    team_row = one_row(
+        client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+    )
     return today_team_response(client, team_row)
 
 
@@ -2131,6 +2001,7 @@ async def join_today_team(
                 .insert(
                     {
                         "team_id": team_row["id"],
+                        "farm_id": team_row["farm_id"],
                         "display_name": payload.display_name,
                         "language_code": payload.language_code,
                         "join_idempotency_key": join_key,
@@ -2173,17 +2044,20 @@ async def assign_today_team_member(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TeamAssignmentMeta:
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
     work_date, _ = today_seoul()
-    team_row = one_row(client.table("today_work_teams").select("id").eq("work_date", work_date).limit(1).execute())
+    team_row = one_row(
+        client.table("today_work_teams").select("id").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+    )
     one_row(
         client.table("today_work_team_members")
         .select("id")
         .eq("id", memberId)
         .eq("team_id", team_row["id"])
+        .eq("farm_id", owner.farm_id)
         .limit(1)
         .execute()
     )
@@ -2192,6 +2066,7 @@ async def assign_today_team_member(
         .select("id")
         .eq("id", payload.work_session_id)
         .eq("status", "PUBLISHED")
+        .eq("farm_id", owner.farm_id)
         .limit(1)
         .execute()
     )
@@ -2200,6 +2075,7 @@ async def assign_today_team_member(
         .select("*")
         .eq("team_member_id", memberId)
         .eq("work_session_id", payload.work_session_id)
+        .eq("farm_id", owner.farm_id)
         .is_("revoked_at", "null")
         .limit(1)
         .execute()
@@ -2210,7 +2086,7 @@ async def assign_today_team_member(
         try:
             assignment = one_row(
                 client.table("today_work_assignments")
-                .insert({"team_member_id": memberId, "work_session_id": payload.work_session_id})
+                .insert({"team_member_id": memberId, "work_session_id": payload.work_session_id, "farm_id": owner.farm_id})
                 .select("*")
                 .execute()
             )
@@ -2220,6 +2096,7 @@ async def assign_today_team_member(
                 .select("*")
                 .eq("team_member_id", memberId)
                 .eq("work_session_id", payload.work_session_id)
+                .eq("farm_id", owner.farm_id)
                 .is_("revoked_at", "null")
                 .limit(1)
                 .execute()
@@ -2233,7 +2110,9 @@ async def get_my_today_assignments(
 ) -> TeamAssignmentsResponse:
     team_id, member_id = require_team_member(batmeori_team_member)
     client = db_client()
-    team_row = one_row(client.table("today_work_teams").select("expires_at").eq("id", team_id).limit(1).execute(), "UNAUTHORIZED")
+    team_row = one_row(
+        client.table("today_work_teams").select("expires_at,farm_id").eq("id", team_id).limit(1).execute(), "UNAUTHORIZED"
+    )
     if utc_datetime(team_row["expires_at"]) <= now_utc():
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
     member = one_row(
@@ -2241,6 +2120,7 @@ async def get_my_today_assignments(
         .select("language_code")
         .eq("id", member_id)
         .eq("team_id", team_id)
+        .eq("farm_id", team_row["farm_id"])
         .limit(1)
         .execute(),
         "UNAUTHORIZED",
@@ -2249,13 +2129,15 @@ async def get_my_today_assignments(
         client.table("today_work_assignments")
         .select("work_session_id")
         .eq("team_member_id", member_id)
+        .eq("farm_id", team_row["farm_id"])
         .is_("revoked_at", "null")
         .order("assigned_at")
         .execute()
     )
-    return TeamAssignmentsResponse(
-        assignments=[worker_assignment_for_session(client, str(row["work_session_id"]), member["language_code"]) for row in assignment_rows]
-    )
+    return {"assignments": [
+        stored_worker_briefing(client, str(row["work_session_id"]), member["language_code"], str(team_row["farm_id"]))
+        for row in assignment_rows
+    ]}
 
 
 @app.post("/api/v1/work-sessions/{sessionId}/worker-links", status_code=201, response_model=WorkerLinkIssueResponse)
@@ -2267,7 +2149,7 @@ async def issue_worker_link(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkerLinkIssueResponse:
     session_id = sessionId
-    require_owner(batmeori_owner_session)
+    owner = require_owner(batmeori_owner_session)
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
@@ -2276,14 +2158,16 @@ async def issue_worker_link(
         .select("id")
         .eq("id", session_id)
         .eq("status", "PUBLISHED")
+        .eq("farm_id", owner.farm_id)
         .execute()
     )
     link_row, issued = issue_link(payload.language_code)
     link_row["issue_idempotency_key"] = issue_key
     try:
         client.rpc(
-            "issue_worker_link",
+            "issue_worker_link_v2",
             {
+                "p_farm_id": owner.farm_id,
                 "p_session_id": session_id,
                 "p_language_code": payload.language_code,
                 "p_link": link_row,
@@ -2294,14 +2178,14 @@ async def issue_worker_link(
     return WorkerLinkIssueResponse(session_id=session_id, issued_worker_links=[issued])
 
 
-@app.get("/api/v1/worker-links/{token}/assignment", response_model=WorkerAssignment)
-async def get_worker_assignment(token: str) -> WorkerAssignment:
+@app.get("/api/v1/worker-links/{token}/assignment", response_model=dict[str, Any])
+async def get_worker_assignment(token: str) -> dict[str, Any]:
     if len(token) < 32 or not settings.owner_session_secret:
         raise ApiError(404, "ACCESS_DENIED", "접근할 수 없습니다.")
     client = db_client()
     row = one_row(
         client.table("worker_links")
-        .select("work_session_id,language_code,expires_at,revoked_at")
+        .select("work_session_id,language_code,expires_at,revoked_at,farm_id")
         .eq("token_hash", hash_link_token(token))
         .limit(1)
         .execute(),
@@ -2314,69 +2198,42 @@ async def get_worker_assignment(token: str) -> WorkerAssignment:
         expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     if expires_at <= now_utc():
         raise ApiError(410, "LINK_EXPIRED", "접근할 수 없습니다. 링크를 다시 발급받으세요.")
-    session = one_row(
-        client.table("work_sessions")
-        .select("id,current_version,status")
-        .eq("id", row["work_session_id"])
-        .eq("status", "PUBLISHED")
-        .execute(),
-        "ACCESS_DENIED",
-    )
-    version = one_row(
-        client.table("work_versions")
-        .select("*")
-        .eq("work_session_id", session["id"])
-        .eq("version", session["current_version"])
-        .eq("status", "PUBLISHED")
-        .execute(),
-        "ACCESS_DENIED",
-    )
-    parsed = parse_version(version)
-    language_code = row["language_code"]
-    state = localized_worker_state(parsed.state, language_code, client)
-    badges: list[str] = []
-    if parsed.ambiguity_override or state.location.kind == "DEICTIC":
-        badges.append("확인이 필요한 지시")
-    translations = [translation for step in state.steps for translation in step.translations]
-    return WorkerAssignment(
-        language_code=language_code,
-        session_id=str(session["id"]),
-        version=parsed.version,
-        state=state,
-        badges=badges,
-        source_detail=translations,
-    )
+    return stored_worker_briefing(client, str(row["work_session_id"]), row["language_code"], str(row["farm_id"]))
 
 
-@app.get("/api/v1/brief", response_model=Briefing)
+@app.get("/api/v1/tts/{text_hash}/{language_code}")
+async def get_tts_asset(text_hash: str, language_code: str) -> Response:
+    if language_code not in LANGUAGES or not re.fullmatch(r"[0-9a-f]{64}", text_hash):
+        raise ApiError(404, "ACCESS_DENIED", "접근할 수 없습니다.")
+    try:
+        row = one_row(
+            db_client()
+            .table("tts_assets")
+            .select("audio_bytes,content_type")
+            .eq("text_hash", text_hash)
+            .eq("language_code", language_code)
+            .limit(1)
+            .execute(),
+            "ACCESS_DENIED",
+        )
+    except ApiError:
+        raise
+    except Exception as exc:
+        raise ApiError(503, "PROVIDER_UNAVAILABLE", "음성을 불러올 수 없습니다.") from exc
+    audio = private_tts_bytes(row.get("audio_bytes"))
+    if not audio:
+        raise ApiError(404, "ACCESS_DENIED", "접근할 수 없습니다.")
+    return Response(content=audio, media_type=row.get("content_type") or "audio/mpeg")
+
+
+@app.get("/api/v1/brief", response_model=dict[str, Any])
 async def get_brief(
     session_id: str,
     language_code: str,
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
-) -> Briefing:
-    require_owner(batmeori_owner_session)
+) -> dict[str, Any]:
+    owner = require_owner(batmeori_owner_session)
     if language_code not in LANGUAGES:
         raise ApiError(422, "SCHEMA_INVALID", "지원하지 않는 언어입니다.")
     client = db_client()
-    session = one_row(
-        client.table("work_sessions")
-        .select("id,current_version,status")
-        .eq("id", session_id)
-        .eq("status", "PUBLISHED")
-        .execute()
-    )
-    version = one_row(
-        client.table("work_versions")
-        .select("*")
-        .eq("work_session_id", session_id)
-        .eq("version", session["current_version"])
-        .eq("status", "PUBLISHED")
-        .execute()
-    )
-    state = localized_state(parse_version(version).state, language_code, client)
-    return Briefing(
-        session_id=session_id,
-        version=session["current_version"],
-        language_code=language_code,
-        steps=state.steps,
-    )
+    return stored_worker_briefing(client, session_id, language_code, owner.farm_id)

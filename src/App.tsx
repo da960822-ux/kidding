@@ -13,7 +13,7 @@ import { WebApp } from './webapp/WebApp';
 function App() {
   const [locale, setLocale] = useState<Locale>(() => {
     const savedLocale = window.localStorage.getItem('batmeori-locale');
-    return savedLocale === 'vi' || savedLocale === 'ne' ? savedLocale : 'ko';
+    return savedLocale === 'vi' || savedLocale === 'ne' || savedLocale === 'km' ? savedLocale : 'ko';
   });
   const content = landingContent[locale];
   const appMode = window.location.pathname !== '/' || new URLSearchParams(window.location.search).has('app');
@@ -37,7 +37,7 @@ function App() {
       </a>
       <Header content={content} locale={locale} onLocaleChange={changeLocale} appHref={appHref} />
       <main id="main-content">
-        <HeroSection content={content} appHref={appHref} />
+        <HeroSection content={content} appHref={appHref} locale={locale} />
         <FeaturesSection content={content} />
         <CTASection content={content} appHref={appHref} />
         <HowItWorksSection content={content} />

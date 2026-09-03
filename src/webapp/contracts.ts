@@ -20,6 +20,7 @@ export type NationalityCode = 'VN' | 'PH' | 'LA' | 'KH' | 'TH' | 'NP' | 'MM' | '
 export interface TeamMember {
   member_id: string;
   display_name: string;
+  display_name_ko?: string | null;
   nationality_code: NationalityCode;
   language_code: WorkerLocale;
   joined_at: string;

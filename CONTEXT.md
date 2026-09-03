@@ -92,7 +92,7 @@ GuidePhrase에 연결된 언어별 공식 번역. source page/url/license와 사
 농장주 경로를 고르면 별도 입력 없이 시작되는 P0용 짧은 이용 상태. 개인 계정이나 로그인으로 부르지 않는다.
 
 **Worker entry**  
-근로자가 별도 로그인 없이 농장주에게 받은 링크로 들어오는 진입 경로. Today work team 참여에서는 국적 선택, Team invite 확인, 표시명 입력 순서로 진행하며 QR 인식만으로는 참여가 완료되지 않는다. 유효한 WorkerLink가 없으면 작업 내용을 보여주지 않는다.
+근로자가 별도 로그인 없이 농장주에게 받은 링크로 들어오는 진입 경로. Today work team 참여에서는 Team invite 확인, 국적 선택, 표시명 입력 순서로 진행하며 QR 인식만으로는 참여가 완료되지 않는다. 유효한 WorkerLink가 없으면 작업 내용을 보여주지 않는다.
 
 **Today work team**  
 한 농장의 오늘 작업에 참여하는 임시 근로자 묶음. 계정이나 장기 인력명부가 아니며, 농장주가 보여준 QR의 초대가 만료되면 새로 참여할 수 없다.
@@ -107,13 +107,13 @@ Team member가 직접 고르는 국가 정보. 선택지는 베트남(`VN`), 필
 Today work team 참여 URL을 담은 QR 또는 같은 URL의 수동 입력값. QR을 인식한 시점에는 후보 초대만 확보하며, Team member는 국적·표시명·안내 언어를 제출한 뒤에만 생성된다. 추측하기 어려운 token을 가지며 오늘 작업팀과 함께 만료된다.
 
 **WorkerLink**  
-WorkSession과 하나의 선택 언어(`vi|ne`)를 연결하는 익명 24시간 유효 링크. 로그인 없이 열며 고정 버전이 아니라 Latest Published를 보여준다.
+WorkSession과 하나의 선택 언어(`vi|ne|km`)를 연결하는 익명 24시간 유효 링크. 로그인 없이 열며 고정 버전이 아니라 Latest Published를 보여준다.
 
 **Delivery mode**  
 P0 owner의 전달 선택. `CO_PRESENT`는 demo owner session의 briefing에서 언어를 고르고 같이 본다. `REMOTE`는 언어 하나로 익명 WorkerLink를 발급한다.
 
 **Localized worker view**  
-WorkerLink와 같이 보기 브리핑에서 선택 언어(`vi|ne`)만 제공하는 작업 표현. 장소·수량·마감·안전·메모·단계·배지도 모두 선택 언어이며 한국어를 fallback으로 사용하지 않는다.
+WorkerLink와 같이 보기 브리핑에서 선택 언어(`vi|ne|km`)만 제공하는 작업 표현. 장소·수량·마감·안전·메모·단계·배지도 모두 선택 언어이며 한국어를 fallback으로 사용하지 않는다.
 
 **Executable step**  
 비어 있지 않은 title과 description을 가진 TaskStep. allowlisted `task_code` 또는 owner가 승인한 non-safety `task_code:null` fallback이 있다. 빈 `steps[]`는 executable step이 없는 blocking draft다.

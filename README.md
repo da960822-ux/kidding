@@ -4,9 +4,9 @@
 
 ## P0 범위
 
-농장주는 계정 등록 없이 당일 임시 `오늘 작업팀`을 열고 QR 하나로 근로자를 초대할 수 있다. 근로자는 별명, 8개 국적(VN·PH·LA·KH·TH·NP·MM·MN), P0 안내 언어(`vi|ne`)를 직접 선택한다. 이 참여 정보는 로그인이나 상시 근로자 등록이 아니다.
+농장주는 계정 등록 없이 당일 임시 `오늘 작업팀`을 열고 QR 하나로 근로자를 초대할 수 있다. 근로자는 별명, 8개 국적(VN·PH·LA·KH·TH·NP·MM·MN), P0 안내 언어(`vi|ne|km`)를 직접 선택한다. 이 참여 정보는 로그인이나 상시 근로자 등록이 아니다.
 
-양파와 딸기만 지원한다. 전달 언어는 베트남어(`vi`)·네팔어(`ne`), 변경은 수량 변경만 지원한다. 랜딩 다음 역할 선택은 인증이 아니며, 농장주는 자동 데모 세션으로 시작하고 근로자는 전달받은 익명 링크로 들어간다. confirm 뒤 농장주는 `CO_PRESENT` 같이 보기 또는 `REMOTE` 링크로 보내기를 고르고 언어를 선택한다. 전자는 demo owner session으로 여는 owner 폰 video+TTS briefing, 후자는 언어를 고른 익명 24시간 latest-`PUBLISHED` 링크다. 전화번호·SMS·개인 로그인은 제외한다. `AI는 추측하지 않는다. 결정은 농장주가 한다.` unknown은 `UNSPECIFIED`/`null`로 유지한다. [Safety Policy](docs/SAFETY_POLICY.md)에 따라 LOW 비안전 미지원 작업만 reason을 남겨 전달할 수 있으며, safety ambiguity·HIGH·UNKNOWN 위험·schema invalid·실행 단계 없음은 override 불가다. 영상은 8개 정규 작업 코드별 AI 사전 생성 후 사람 검수한 자산만 사용하며 `safety_level: HIGH` 자산은 게시하지 않는다. 일반 작업표현은 정부 가이드 HIT를 우선하고 MISS 시 `AI_TRANSLATION` 출처를 표시한다. 안전표현은 검수 출처가 없으면 자동 게시하지 않는다.
+양파와 딸기만 지원한다. 전달 언어는 베트남어(`vi`)·네팔어(`ne`)·캄보디아어(`km`), 변경은 수량 변경만 지원한다. 랜딩 다음 역할 선택은 인증이 아니며, 농장주는 자동 데모 세션으로 시작하고 근로자는 전달받은 익명 링크로 들어간다. confirm 뒤 농장주는 `CO_PRESENT` 같이 보기 또는 `REMOTE` 링크로 보내기를 고르고 언어를 선택한다. 전자는 demo owner session으로 여는 owner 폰 video+TTS briefing, 후자는 언어를 고른 익명 24시간 latest-`PUBLISHED` 링크다. 전화번호·SMS·개인 로그인은 제외한다. `AI는 추측하지 않는다. 결정은 농장주가 한다.` unknown은 `UNSPECIFIED`/`null`로 유지한다. [Safety Policy](docs/SAFETY_POLICY.md)에 따라 LOW 비안전 미지원 작업만 reason을 남겨 전달할 수 있으며, safety ambiguity·HIGH·UNKNOWN 위험·schema invalid·실행 단계 없음은 override 불가다. 영상은 8개 정규 작업 코드별 AI 사전 생성 후 사람 검수한 자산만 사용하며 `safety_level: HIGH` 자산은 게시하지 않는다. 일반 작업표현은 정부 가이드 HIT를 우선하고 MISS 시 `AI_TRANSLATION` 출처를 표시한다. 안전표현은 검수 출처가 없으면 자동 게시하지 않는다.
 
 ## 실행 전제
 

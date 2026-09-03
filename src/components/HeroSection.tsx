@@ -1,5 +1,5 @@
 import { ArrowRight, CirclePlay, Languages, MessagesSquare, Sprout } from 'lucide-react';
-import type { LandingContent } from '../types';
+import type { LandingContent, Locale } from '../types';
 import { ButtonLink, Container } from './ui';
 import { FarmBackdrop } from './FarmBackdrop';
 import { PhoneMockup } from './PhoneMockup';
@@ -7,19 +7,19 @@ import { PhoneMockup } from './PhoneMockup';
 const benefitIcons = [Sprout, Languages, MessagesSquare];
 const benefitColors = ['text-primary bg-white/90', 'text-[#287FC5] bg-white/90', 'text-[#E97C31] bg-white/90'];
 
-export function HeroSection({ content, appHref }: { content: LandingContent; appHref: string }) {
+export function HeroSection({ content, appHref, locale }: { content: LandingContent; appHref: string; locale: Locale }) {
   return (
     <section id="service" className="relative isolate overflow-hidden bg-gradient-to-b from-[#FFFDF7] via-[#FFF9E9] to-[#E9EFC7]">
       <FarmBackdrop />
       <Container className="relative z-10 grid min-h-[760px] items-center gap-14 pb-24 pt-16 lg:grid-cols-[1.08fr_0.92fr] lg:pb-20 lg:pt-12">
-        <div className="max-w-2xl">
+        <div className="min-w-0 max-w-2xl">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-white/70 px-4 py-2 text-sm font-bold text-deep shadow-sm backdrop-blur">
             <Sprout className="h-4 w-4" aria-hidden="true" />
             {content.tagline}
           </div>
           <h1 className="text-5xl font-black leading-[1.12] tracking-[-0.045em] text-ink sm:text-6xl lg:text-7xl">
             <span className="block">{content.hero.line1}</span>
-            <span className="mt-2 block text-deep">{content.hero.line2}</span>
+            <span className={`mt-2 block text-deep ${locale === 'ko' ? 'whitespace-nowrap text-[clamp(1.75rem,4.35vw,3.5rem)] sm:text-[clamp(2.75rem,4.35vw,3.5rem)]' : ''}`}>{content.hero.line2}</span>
           </h1>
           <p className="mt-7 whitespace-pre-line text-lg font-medium leading-8 text-[#39493B] sm:text-xl sm:leading-9">
             {content.hero.description}
@@ -48,7 +48,7 @@ export function HeroSection({ content, appHref }: { content: LandingContent; app
           </div>
         </div>
 
-        <div className="pb-2 lg:pt-8">
+        <div className="min-w-0 pb-2 lg:pt-8">
           <PhoneMockup content={content} />
         </div>
       </Container>

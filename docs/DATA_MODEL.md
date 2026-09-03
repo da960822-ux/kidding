@@ -63,7 +63,7 @@ change-audio preview는 저장하지 않고 `READY|AMBIGUOUS`, quantity/null, am
 
 `work_team_invites`: `id`, `work_team_id`, `token_hash`, `token_ciphertext`, `issued_at`, `expires_at`, `revoked_at?`, `issue_idempotency_key`. raw token은 DB·로그에 평문 저장하지 않는다. `token_ciphertext`는 서버 전용 키로 암호화해 owner-authenticated 오늘 팀 조회에서 QR URL을 복원할 때만 사용한다. 만료는 발급 후 24시간과 업무일 종료 중 빠른 시각이다.
 
-`work_team_members`: `id`, `work_team_id`, `display_name`, `nationality_code`, `language_code`, `joined_at`. `display_name`은 trim 후 1~30자이며 계정 식별자가 아니다. `nationality_code`는 `VN|PH|LA|KH|TH|NP|MM|MN`, `language_code`는 P0 안내 언어 `vi|ne`다. 국적과 안내 언어를 자동 동일시하지 않는다. owner 조회의 members는 `joined_at` 오름차순이다.
+`work_team_members`: `id`, `work_team_id`, `display_name`, `nationality_code`, `language_code`, `joined_at`. `display_name`은 trim 후 1~30자이며 계정 식별자가 아니다. `nationality_code`는 `VN|PH|LA|KH|TH|NP|MM|MN`, `language_code`는 P0 안내 언어 `vi|ne|km`다. 국적과 안내 언어를 자동 동일시하지 않는다. owner 조회의 members는 `joined_at` 오름차순이다.
 
 ### `guide_phrases` / `guide_translations`
 

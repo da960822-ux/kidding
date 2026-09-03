@@ -1,4 +1,4 @@
-export type Locale = 'ko' | 'vi' | 'ne';
+export type Locale = 'ko' | 'vi' | 'ne' | 'km';
 
 export interface FeatureContent {
   title: string;

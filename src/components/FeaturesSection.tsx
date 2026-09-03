@@ -31,7 +31,7 @@ export function FeaturesSection({ content }: { content: LandingContent }) {
                   <Icon className="h-11 w-11" strokeWidth={2.2} aria-hidden="true" />
                 </span>
                 <h3 className="relative mt-7 text-xl font-black tracking-tight text-ink">{feature.title}</h3>
-                <p className="relative mt-4 text-base font-medium leading-7 text-[#465247]">{feature.description}</p>
+                <p className="relative mt-4 whitespace-pre-line text-base font-medium leading-7 text-[#465247]">{feature.description}</p>
               </article>
             );
           })}

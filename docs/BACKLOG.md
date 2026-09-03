@@ -6,15 +6,15 @@
 |---|---|---|---|---|---|
 | P0-01 | P0 | AI 계약·양파·딸기 ontology | 8개 task code, family/code 일치 규칙과 3개 JSON Schema가 예제·안전정책과 일치 | 없음 | AI |
 | P0-02 | P0 | AI 사전생성 영상 | 8개 영상, AI 생성 provenance, 사람 검수 APPROVED·LOW manifest, captions, FE 전달 | P0-01 | AI |
-| P0-03 | P0 | AI 처리 pipeline | STT→구조화→vi/ne 번역 source→TTS/영상 match; unknown·안전문구 추가 없음 | P0-01 | AI |
+| P0-03 | P0 | AI 처리 pipeline | STT→구조화→vi/ne/km 번역 source→TTS/영상 match; unknown·안전문구 추가 없음 | P0-01 | AI |
 | P0-04 | P0 | demo owner session·audio 입력 | 역할 선택 시 자동 session cookie, exact CORS/Origin, rate limit, 10MiB/60초, raw audio 즉시 삭제 | 없음 | BE |
 | P0-05 | P0 | draft·보완·확정 | audio-only supplement, schema/Safety gate, override audit, link 없는 v1 confirm | P0-03,P0-04 | BE |
 | P0-06 | P0 | version·수량 변경 | 비영속 parse, direct confirm, idempotency·409, v2/latest PUBLISHED | P0-03,P0-05 | BE |
 | P0-07 | P0 | 두 전달 API | demo owner session `CO_PRESENT` brief와 `REMOTE` 24h create/reissue/latest; 선택 언어 전용 응답·transcript 비공개 | P0-05 | BE |
 | P0-08 | P0 | owner 모바일 UI | 녹음·요약·ambiguity·source·confirm·수량 변경·fallback 표시 | P0-05,P0-06 | FE |
-| P0-09 | P0 | 전달 모바일 UI | confirm 뒤 같이 보기/링크로 보내기, vi/ne, video/TTS/text, polling/focus refresh | P0-02,P0-07,P0-08 | FE |
-| P0-09A | P0 | 오늘 작업팀 API·저장 | 당일 active team 1개, invite hash/암호화·만료, 8개 국적·vi/ne validation, idempotent join | P0-04 | BE |
-| P0-09B | P0 | 오늘 작업팀 UI | owner URL 기반 QR 생성·팀원 목록, worker 국적 → QR/링크 → 별명 참여, 랜딩 선택 언어 유지, 카메라/수동 fallback | P0-09A | FE |
+| P0-09 | P0 | 전달 모바일 UI | confirm 뒤 같이 보기/링크로 보내기, vi/ne/km, video/TTS/text, polling/focus refresh | P0-02,P0-07,P0-08 | FE |
+| P0-09A | P0 | 오늘 작업팀 API·저장 | 당일 active team 1개, invite hash/암호화·만료, 8개 국적·vi/ne/km validation, idempotent join | P0-04 | BE |
+| P0-09B | P0 | 오늘 작업팀 UI | owner URL 기반 QR 생성·팀원 목록, worker QR/링크 → 국적 → 별명 참여, 지원 국적 선택 시 안내 언어 전환, 카메라/수동 fallback | P0-09A | FE |
 | P0-10 | P0 | 계약 negative checks | 401/409/422, HIGH/UNKNOWN, empty steps, expiry/reissue, transcript 차단 모두 PASS | P0-05–P0-09 | BE |
 | P0-11 | P0 | AI 평가 실행 | 30 transcript와 3 synthetic WAV; dataset/prompt/manifest hash·metrics·failures 저장 | P0-03,P0-06 | AI |
 | P0-12 | P0 | T-6h feature freeze | canonical 계약 snapshot, 범위 동결, negative check PASS | P0-10 | BE |

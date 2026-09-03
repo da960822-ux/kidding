@@ -1,6 +1,6 @@
-import { Sprout } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Locale } from '../types';
+import { BrandMark } from '../components/BrandMark';
 import { api } from './api';
 import { AppShell } from './AppShell';
 import type { OwnerWorkSession, WorkDraft } from './contracts';
@@ -14,6 +14,7 @@ const roleCopy = {
   ko: { title: '어떤 역할이신가요?', intro: '로그인 없이 바로 시작할 수 있어요.', owner: '농장주', worker: '근로자', loading: '연결하고 있어요…', error: '농장주 화면에 연결하지 못했습니다. 인터넷을 확인하고 다시 눌러주세요.', retry: '다시 연결' },
   vi: { title: 'Bạn có vai trò gì?', intro: 'Có thể bắt đầu ngay mà không cần đăng nhập.', owner: 'Chủ nông trại', worker: 'Người lao động', loading: 'Đang kết nối…', error: 'Không thể kết nối. Hãy kiểm tra mạng và thử lại.', retry: 'Kết nối lại' },
   ne: { title: 'तपाईंको भूमिका के हो?', intro: 'लगइन नगरी तुरुन्त सुरु गर्न सकिन्छ।', owner: 'खेत मालिक', worker: 'कामदार', loading: 'जडान हुँदैछ…', error: 'जडान हुन सकेन। इन्टरनेट जाँचेर फेरि प्रयास गर्नुहोस्।', retry: 'फेरि जडान' },
+  km: { title: 'តើអ្នកមានតួនាទីអ្វី?', intro: 'អ្នកអាចចាប់ផ្តើមភ្លាមៗដោយមិនចាំបាច់ចូលគណនី។', owner: 'ម្ចាស់កសិដ្ឋាន', worker: 'កម្មករ', loading: 'កំពុងភ្ជាប់…', error: 'មិនអាចភ្ជាប់បានទេ។ សូមពិនិត្យអ៊ីនធឺណិត ហើយព្យាយាមម្តងទៀត។', retry: 'ភ្ជាប់ម្តងទៀត' },
 };
 
 function routeState() {
@@ -57,7 +58,7 @@ function RoleSelectScreen({ go, locale }: { go: (screen: AppScreen) => void; loc
   const [loading, setLoading] = useState(false); const [error, setError] = useState(''); const t = roleCopy[locale];
   const enterOwner = async () => { setLoading(true); setError(''); try { await api.createOwnerSession(); go('owner-home'); } catch { setError(t.error); } finally { setLoading(false); } };
   return <div className="mx-auto flex min-h-[calc(100vh-56px)] max-w-6xl flex-col justify-center py-6 sm:py-12">
-    <div className="text-center"><span className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#1F5B31] text-white sm:h-[72px] sm:w-[72px]"><Sprout className="h-8 w-8 sm:h-9 sm:w-9" /></span><h1 className="mt-5 text-[36px] font-black tracking-[-0.03em] text-[#173626] sm:mt-6 sm:text-[52px]">{t.title}</h1><p className="mt-3 text-[20px] font-bold text-muted sm:text-[24px]">{t.intro}</p></div>
+    <div className="text-center"><BrandMark className="mx-auto h-16 w-[88px] sm:h-20 sm:w-[110px]" /><h1 className="mt-5 text-[36px] font-black tracking-[-0.03em] text-[#173626] sm:mt-6 sm:text-[52px]">{t.title}</h1><p className="mt-3 text-[20px] font-bold text-muted sm:text-[24px]">{t.intro}</p></div>
     <div className="mt-10 grid gap-6 lg:grid-cols-2 lg:gap-8">
       <RoleCard label={t.owner} tone="owner" disabled={loading} onClick={enterOwner}><img src="/images/role-owner.png" alt="" className="h-[150px] w-[180px] scale-[1.28] object-contain sm:h-[200px] sm:w-[240px]" /></RoleCard>
       <RoleCard label={t.worker} tone="worker" onClick={() => go('worker-entry')}><img src="/images/role-worker.png" alt="" className="h-[150px] w-[180px] object-contain sm:h-[200px] sm:w-[240px]" /></RoleCard>
@@ -69,7 +70,7 @@ function RoleSelectScreen({ go, locale }: { go: (screen: AppScreen) => void; loc
 export function WebApp({ initialLocale }: { initialLocale: Locale }) {
   const initial = routeState(); const requestedLocale = new URLSearchParams(window.location.search).get('lang');
   const [screen, setScreen] = useState<AppScreen>(initial.screen); const [sessionId, setSessionId] = useState<string | null>(initial.sessionId); const sessionIdRef = useRef<string | null>(initial.sessionId); const [token, setToken] = useState<string | null>(initial.token);
-  const [workerLocale, setWorkerLocale] = useState<WorkerLocale>(requestedLocale === 'ne' || initialLocale === 'ne' ? 'ne' : 'vi'); const [draft, setDraft] = useState<WorkDraft | null>(null); const [session, setSessionState] = useState<OwnerWorkSession | null>(null);
+  const [workerLocale, setWorkerLocale] = useState<WorkerLocale>(requestedLocale === 'ne' || requestedLocale === 'km' ? requestedLocale : initialLocale === 'ne' || initialLocale === 'km' ? initialLocale : 'vi'); const [draft, setDraft] = useState<WorkDraft | null>(null); const [session, setSessionState] = useState<OwnerWorkSession | null>(null);
   const setSession = (next: OwnerWorkSession | null) => { setSessionState(next); if (next) { sessionIdRef.current = next.session_id; setSessionId(next.session_id); } };
   const go = (next: AppScreen) => { setScreen(next); window.history.pushState({}, '', pathFor(next, workerLocale, sessionIdRef.current, token)); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   const changeLocale = (next: WorkerLocale) => { setWorkerLocale(next); document.documentElement.lang = next; };

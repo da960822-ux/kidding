@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
-const [api, contracts, routes, model, mock, ownerScreens, workerScreens, openapi, structureSchema, vercel] = await Promise.all([
+const [api, contracts, routes, model, mock, ownerScreens, workerScreens, landing, openapi, structureSchema, translationSchema, vercel] = await Promise.all([
   readFile(new URL('../src/webapp/api.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/webapp/contracts.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/webapp/WebApp.tsx', import.meta.url), 'utf8'),
@@ -9,8 +9,10 @@ const [api, contracts, routes, model, mock, ownerScreens, workerScreens, openapi
   readFile(new URL('../src/webapp/mock-api.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/webapp/OwnerScreens.tsx', import.meta.url), 'utf8'),
   readFile(new URL('../src/webapp/WorkerScreens.tsx', import.meta.url), 'utf8'),
+  readFile(new URL('../src/content.ts', import.meta.url), 'utf8'),
   readFile(new URL('../docs/openapi.yaml', import.meta.url), 'utf8'),
   readFile(new URL('../docs/schemas/structure-v1.schema.json', import.meta.url), 'utf8'),
+  readFile(new URL('../docs/schemas/translation-v1.schema.json', import.meta.url), 'utf8'),
   readFile(new URL('../vercel.json', import.meta.url), 'utf8'),
 ]);
 
@@ -35,6 +37,11 @@ for (const retired of ['ONION_COLLECT', 'BAGGING', 'LOADING', 'WAREHOUSE_TRANSPO
 }
 assert.ok(contracts.includes("'ONION' | 'STRAWBERRY'"), 'Both P0 task families must ship');
 JSON.parse(structureSchema);
+assert.deepEqual(JSON.parse(translationSchema).properties.language_code.enum, ['vi', 'ne', 'km'], 'All worker languages must ship in translation schema');
+for (const locale of ["vi", "ne", "km"]) {
+  assert.ok(model.includes(`'${locale}'`) && openapi.includes(`enum: [vi, ne, km]`), `Missing worker locale: ${locale}`);
+  assert.ok(mock.includes(`translated('${locale}'`) && workerScreens.includes(`${locale}: {`) && landing.includes(`${locale}: {`), `Missing localized UI or mock data: ${locale}`);
+}
 assert.deepEqual(JSON.parse(vercel).rewrites, [{ source: '/(.*)', destination: '/index.html' }], 'SPA routes need Vercel fallback');
 
 assert.ok(!routes.includes('/demo') && !routes.includes('/preview'), 'Mock routes must not ship');

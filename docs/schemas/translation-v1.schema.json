@@ -7,7 +7,7 @@
   "required": ["segment", "language_code", "text", "source", "guide_lookup", "phrase_key", "verified", "source_page", "source_url", "license", "schema_version", "contract_version"],
   "properties": {
     "segment": {"enum": ["ACTION", "QUANTITY", "ORDER", "SAFETY", "LOCATION", "OTHER"]},
-    "language_code": {"enum": ["vi", "ne"]},
+    "language_code": {"enum": ["vi", "ne", "km"]},
     "text": {"type": "string", "minLength": 1},
     "source": {"enum": ["OFFICIAL_GUIDE", "AI_TRANSLATION", "DETERMINISTIC"]},
     "guide_lookup": {"enum": ["HIT", "MISS", "NOT_APPLICABLE"]},

@@ -110,7 +110,7 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 ## TTS `tts-v1`
 
-입력: 게시된 step text, `language_code`(`ko|vi|ne`), voice settings. 출력: 재생 가능한 `audio_url` 또는 실패 상태. publish 시 text content hash로 생성·cache하며 text를 source of truth로 둔다. 실패하면 text를 표시한다.
+입력: 게시된 step text, `language_code`(`ko|vi|ne|km`), voice settings. 출력: 재생 가능한 `audio_url` 또는 실패 상태. publish 시 text content hash로 생성·cache하며 text를 source of truth로 둔다. 실패하면 text를 표시한다.
 
 ## 영상 매칭 `visual-match-v1`
 

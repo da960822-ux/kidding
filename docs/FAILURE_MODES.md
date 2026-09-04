@@ -36,6 +36,8 @@
 | 미확정 팀에서 QR 요청 | `409 VERSION_CONFLICT` | 첫 작업 확정 안내 | pending 초대·배정 금지 | - |
 | 자정 경과·작업 변경·QR 재발급 | 팀 활성화부터 고정 24시간 | 기존 팀 유지·실제 만료 시각 표시 | 날짜로 새 팀을 생성하거나 expiry 연장 금지 | - |
 | 새 배정·배정 작업 변경 | 미확인 receipt와 최신 briefing | vi/ne 알림·명시적 지시 확인 | 조회만으로 확인 저장 금지 | - |
+| 작업 목록 백그라운드 재조회 실패 | 마지막 성공 목록 유지 | 경고는 표시하되 기존 선택·배정 가능 | read 실패가 저장 상태를 바꾸지 않음 | 캐시 snapshot과 freshness 상태 분리 |
+| 팀 배정 응답 유실·5xx | 동일 member/session 멱등 배정 1회 재시도 후 roster 확인 | 확인 중 표시, 결과 확인 전 실패 금지 | active unique row를 반환 | timeout-before-commit 순서 회귀 |
 | 근로자의 구버전 확인 | `409 VERSION_CONFLICT` | 최신 내용 표시 후 다시 확인 | session lock과 expected_version 비교 | - |
 | 확인 저장 실패 | 오류·미확인 유지 | 성공 표시 금지, 재시도 | 최초 성공 시각 유지·idempotent 처리 | - |
 | 작업 화면 닫힘·기기 잠금 | polling 알림 보장 불가 | 재접속 시 미확인 배정 표시 | OS 푸시 전송으로 오인시키지 않음 | - |

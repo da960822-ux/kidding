@@ -55,7 +55,7 @@ test('published storyboard uses matched package video and keeps text after media
   await expect(page.getByRole('heading', { name: '1. 양파 수확' })).toBeVisible();
 });
 
-test('owner team roster appears while work list is still pending', async ({ page }) => {
+test('owner team roster keeps current work assignable while work list refresh is pending', async ({ page }) => {
   await publish(page);
   await page.evaluate(async () => {
     const { api } = await import('/src/webapp/api.ts');
@@ -65,8 +65,9 @@ test('owner team roster appears while work list is still pending', async ({ page
     history.pushState({}, '', '/owner/team'); dispatchEvent(new PopStateEvent('popstate'));
   });
   await expect(page.getByText('Lan', { exact: true })).toBeVisible({ timeout: 2500 });
-  await expect(page.getByLabel('Lan 작업 선택')).toBeDisabled();
-  await expect(page.getByText('작업 목록을 불러오는 중…')).toBeVisible();
+  await expect(page.getByLabel('Lan 작업 선택')).toBeEnabled();
+  await expect(page.getByRole('button', { name: '이 작업 배정' })).toBeEnabled();
+  await expect(page.getByText('작업 목록을 불러오는 중…')).toHaveCount(0);
 });
 
 test('storyboard rejects another session, version or language package and retries without borrowing a step video', async ({ page }) => {

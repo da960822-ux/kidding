@@ -98,6 +98,13 @@
 
 ## 변경·재현 규칙
 
+## E-010 구조화 추론 강도 축소와 장소 생략 회귀
+
+- 날짜: 2026-09-04. 동일 `gpt-5.6-terra`의 구조화 요청만 `medium`에서 `low`로 바꾼 선행 단일 비교는 같은 입력·prompt·schema에서 15,533ms에서 4,473ms였다. 한 번의 호출이므로 운영 p50/p95나 전체 처리시간으로 일반화하지 않는다.
+- 적용: 초기 초안과 보완 `structure-v2`만 server-only `OPENAI_STRUCTURE_REASONING_EFFORT=low`를 사용한다. STT·전사 검토·수량 변경·번역·TTS에는 reasoning 값을 보내지 않는다.
+- 적용 후 live 구조화 3건: 장소 생략 4,272ms, 수량·순서·금지 복합지시 4,534ms, 실제 장소 후보 충돌 2,718ms. 장소 생략은 `READY`/`UNSPECIFIED`/LOCATION 질문 없음, 복합지시는 20망과 수확·선별·운반 순서 및 두 금지사항 보존, 실제 동·서 밭 충돌은 blocking LOCATION이었다.
+- 범위: 비식별 텍스트 입력의 구조화 호출만 측정했다. STT·번역·TTS·DB·HTTP 전체 경로와 원어민 검수는 포함하지 않았다.
+
 결과 없는 항목은 `미실행`으로 남기고 추정 점수를 쓰지 않는다. production/수집 원음은 저장하지 않으며 입력은 비식별 텍스트/정답 구조만 보관한다. `evals/audio/`의 PII 없는 합성 TTS WAV만 재현 fixture로 보관한다. FE는 동일 run의 화면 캡처를, BE는 request/version ID를, AI는 prompt·provider 환경값을 넘겨야 한 실험으로 인정한다.
 
 current runs record `structure-v2`/`ontology-v2`; retired-code fixtures remain preservation fixtures, not new publish data. Migration regression은 legacy data/asset reference가 reset·rewrite·자동 remap 없이 queryable임을 기록한다.

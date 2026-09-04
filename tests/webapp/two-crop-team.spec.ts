@@ -67,6 +67,18 @@ test('mobile current-work navigation falls back to home until a work is loaded',
   await expect(page.getByRole('heading', { name: '오늘 어떤 작업을 시킬까요?' })).toBeVisible();
 });
 
+test('today-team cards fit a 320px mobile viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.addInitScript(({ team, session }) => {
+    localStorage.setItem('batmeori-demo-today-team', JSON.stringify(team));
+    localStorage.setItem('batmeori-demo-session', JSON.stringify(session));
+    localStorage.setItem('batmeori-demo-sessions', JSON.stringify([session]));
+  }, { team, session: ownerSession });
+  await page.goto('/owner/team');
+  await expect(page.getByRole('img', { name: '오늘 작업팀 참여 QR 코드' })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
 test('owner session server failure stays distinct from login and can retry', async ({ page }) => {
   await page.goto('/start');
   await page.evaluate(() => {

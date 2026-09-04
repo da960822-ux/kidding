@@ -44,6 +44,8 @@ Supabase Storage public `visual-assets` bucket (worker video CDN)
 
 동기 DB I/O는 thread pool로 격리하여 async HTTP event loop를 막지 않는다. 인증·만료·Farm/member 범위를 유지하고 목록의 현재 version/package를 일괄 조회한다. rate-limit 갱신은 기존 요청 흐름에 두며 mutable query builder를 요청 간 공유하지 않는다. FE는 화면 이동을 미디어 다운로드와 분리하고 중복 polling 및 이전 session/언어 응답을 무효화한다.
 
+owner team 화면은 `sessions`/`team`의 마지막 성공 snapshot, 각 조회의 loading/error, 배정 mutation 상태를 별도로 유지한다. 조회 오류는 snapshot을 무효화하지 않는다. 같은 member/session 배정은 활성 row unique constraint로 멱등이며, FE의 동일 논리 작업은 보존된 Idempotency-Key로 한 번 재시도한다. 두 mutation 응답이 모두 불명확할 때만 `GET /work-teams/today`의 roster를 최종 확인한다. 성공 응답이나 roster의 활성 배정이 없기 전에는 성공으로 표시하지 않고, 최종 확인 전에는 실패로 단정하지 않는다.
+
 사투리 해석은 Node의 ontology-v2 참고 JSON을 LLM 문맥에 추가하는 로컬 검색 방식이다. 벡터DB·추가 provider 호출·전사문 강제 치환은 사용하지 않는다. 최초 지시, 보완, 수량 변경이 같은 참고 자료 선택 경로를 쓰며 기존 provider-neutral JSON 입출력은 유지한다. 영상 전달 정책은 작업 분류와 분리한다. 신규 ONION_TRANSPORT package도 다른 코드와 같은 `APPROVED`·`LOW` 자산 매칭을 사용하고 기존 저장 package는 그대로 읽는다.
 
 `audio → transcript → structure-v2 WorkDraft → owner confirm → WorkSession v1 PUBLISHED + vi/ne packages → CO_PRESENT briefing, REMOTE link issue/resolve, 또는 TodayWorkTeam member assignment`.

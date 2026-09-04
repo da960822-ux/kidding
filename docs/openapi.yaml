@@ -341,6 +341,7 @@ paths:
       tags: [Owner, Team]
       summary: Assign a published WorkSession to a temporary team member
       security: [{ ownerSession: [] }]
+      description: Exact Origin and owner cookie required. Repeating the same active member/work-session assignment is idempotent and returns the existing assignment.
       parameters: [{ $ref: '#/components/parameters/TeamMemberId' }, { $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
         required: true

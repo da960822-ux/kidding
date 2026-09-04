@@ -16,7 +16,7 @@ export function PageHeading({ title, description, action }: { title: string; des
 }
 
 export function Panel({ children, className = '' }: PropsWithChildren<{ className?: string }>) {
-  return <section className={`rounded-3xl border border-deep/10 bg-white p-5 shadow-[0_10px_30px_rgba(47,93,53,0.06)] sm:p-6 ${className}`}>{children}</section>;
+  return <section className={`min-w-0 rounded-3xl border border-deep/10 bg-white p-5 shadow-[0_10px_30px_rgba(47,93,53,0.06)] sm:p-6 [&_select]:min-w-0 [&_select]:w-full ${className}`}>{children}</section>;
 }
 
 export function PanelHeader({ title, aside }: { title: string; aside?: ReactNode }) {

@@ -14,8 +14,14 @@ from test_main import structure, worker_briefing
 
 class Query:
     def __init__(self, rows):
+        self.source = rows
         self.rows = rows
 
+    def insert(self, row):
+        inserted = {**row, "assigned_at": "2026-09-04T00:00:00+00:00", "revoked_at": None}
+        self.source.append(inserted)
+        self.rows = [inserted]
+        return self
     def select(self, *_): return self
     def limit(self, *_): return self
     def order(self, *_, **__): return self
@@ -164,6 +170,20 @@ class TemporaryTeamTests(unittest.TestCase):
         self.assertEqual(first.status_code, 200)
         self.assertEqual(first.json()["acknowledged_version"], 2)
         self.assertEqual(self.client.post(url, json={"expected_version": 2}).json(), first.json())
+
+    def test_repeated_assignment_reuses_one_active_row(self):
+        self.owner_cookie()
+        self.rows["today_work_team_members"] = [{"id": "member-1", "team_id": self.team_id, "farm_id": "farm-1"}]
+        self.rows["work_sessions"] = [{"id": self.session_id, "farm_id": "farm-1", "status": "PUBLISHED"}]
+        url = "/api/v1/work-teams/today/members/member-1/assignments"
+        body = {"work_session_id": self.session_id}
+
+        first = self.client.post(url, json=body, headers={"Idempotency-Key": "assignment-first"})
+        second = self.client.post(url, json=body, headers={"Idempotency-Key": "assignment-retry"})
+
+        self.assertEqual((first.status_code, second.status_code), (201, 201))
+        self.assertEqual(second.json(), first.json())
+        self.assertEqual(len([row for row in self.rows["today_work_assignments"] if row["revoked_at"] is None]), 1)
 
     def test_assignment_reads_expose_receipts_without_acknowledging(self):
         self.rows["today_work_team_members"] = [{"id": "member-1", "team_id": self.team_id, "farm_id": "farm-1", "display_name": "Min", "language_code": "vi", "joined_at": self.now.isoformat()}]

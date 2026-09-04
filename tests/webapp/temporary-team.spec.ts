@@ -16,6 +16,7 @@ async function openOwnerTeamWithMember(page: Page, displayName: string) {
 }
 
 test('owner starts without credentials and receives reusable team access after first confirmation', async ({ page }) => {
+  test.slow();
   await page.goto('/start');
   await page.getByRole('button', { name: /농장주예요/ }).click();
   await expect(page.getByRole('heading', { name: '평소 말투 그대로 말씀하세요' })).toBeVisible();
@@ -71,20 +72,120 @@ test('background refresh failure keeps the cached work list assignable without d
   await expect(page.getByRole('button', { name: '이 작업 배정' })).toBeEnabled();
 });
 
-test('lost assignment response is reconciled before showing a failure', async ({ page }) => {
+test('initial work-list failure keeps the current known work assignable', async ({ page }) => {
+  await page.goto('/owner/new');
+  await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
+  await page.getByRole('button', { name: '확정하기' }).click();
+  await expect(page.getByText('작업 확정 완료', { exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const { api, ApiError } = await import('/src/webapp/api.ts');
+    const team = await api.getTodayTeam();
+    await api.joinTodayTeam(team.join_url!.split('/').pop()!, { display_name: 'Min', language_code: 'vi' });
+    api.listSessions = () => Promise.reject(new ApiError(503, 'PROVIDER_UNAVAILABLE', '요청을 처리하지 못했습니다. 다시 시도해주세요.'));
+    history.pushState({}, '', '/owner/team'); dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByText('Min', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Min 작업 선택')).toBeEnabled();
+  await expect(page.getByRole('button', { name: '이 작업 배정' })).toBeEnabled();
+  await expect(page.getByRole('alert')).toContainText('기존 목록으로 계속 배정할 수 있습니다.');
+});
+
+test('timeout before commit retries the same assignment before roster reconciliation', async ({ page }) => {
   await openOwnerTeamWithMember(page, 'Mai');
   await page.evaluate(async () => {
     const { api } = await import('/src/webapp/api.ts');
     const assign = api.assignTodayTeamMember;
+    (window as typeof window & { assignmentCalls?: number }).assignmentCalls = 0;
     api.assignTodayTeamMember = async (...args) => {
-      await assign(...args);
-      throw new DOMException('Response lost', 'TimeoutError');
+      const state = window as typeof window & { assignmentCalls?: number };
+      state.assignmentCalls = (state.assignmentCalls ?? 0) + 1;
+      if (state.assignmentCalls === 1) {
+        window.setTimeout(() => { void assign(...args); }, 400);
+        throw new DOMException('Response timed out before commit', 'TimeoutError');
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 500));
+      return assign(...args);
     };
   });
   await page.getByRole('button', { name: '이 작업 배정' }).click();
   await expect(page.getByRole('status')).toContainText('배정했습니다.');
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { assignmentCalls?: number }).assignmentCalls)).toBe(2);
   await expect(page.getByRole('button', { name: '배정됨' })).toBeEnabled();
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('assignment 4xx is not retried or cleared by roster polling', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'An');
+  await page.evaluate(async () => {
+    const { api, ApiError } = await import('/src/webapp/api.ts');
+    (window as typeof window & { assignmentCalls?: number }).assignmentCalls = 0;
+    api.assignTodayTeamMember = async () => {
+      const state = window as typeof window & { assignmentCalls?: number };
+      state.assignmentCalls = (state.assignmentCalls ?? 0) + 1;
+      throw new ApiError(422, 'SCHEMA_INVALID', '배정할 수 없는 작업입니다.');
+    };
+  });
+  await page.getByRole('button', { name: '이 작업 배정' }).click();
+  await expect(page.getByRole('alert')).toContainText('배정할 수 없는 작업입니다.');
+  await page.evaluate(() => dispatchEvent(new Event('focus')));
+  await page.waitForTimeout(500);
+  await expect(page.getByRole('alert')).toContainText('배정할 수 없는 작업입니다.');
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { assignmentCalls?: number }).assignmentCalls)).toBe(1);
+});
+
+test('assignment failure waits for both retries and the final roster check', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'Hoa');
+  await page.evaluate(async () => {
+    const { api, ApiError } = await import('/src/webapp/api.ts');
+    const getTeam = api.getTodayTeam;
+    const state = window as typeof window & { assignmentCalls?: number; releaseRoster?: () => void; rosterWaiting?: boolean };
+    state.assignmentCalls = 0;
+    api.assignTodayTeamMember = async () => {
+      state.assignmentCalls = (state.assignmentCalls ?? 0) + 1;
+      throw new ApiError(503, 'PROVIDER_UNAVAILABLE', '응답을 확인할 수 없습니다.');
+    };
+    api.getTodayTeam = async () => {
+      const snapshot = await getTeam();
+      state.rosterWaiting = true;
+      await new Promise<void>((resolve) => { state.releaseRoster = resolve; });
+      return snapshot;
+    };
+  });
+  await page.getByRole('button', { name: '이 작업 배정' }).click();
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { assignmentCalls?: number }).assignmentCalls)).toBe(2);
+  await expect.poll(() => page.evaluate(() => (window as typeof window & { rosterWaiting?: boolean }).rosterWaiting)).toBe(true);
+  await expect(page.getByRole('status')).toContainText('배정 결과를 확인하고 있어요');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.evaluate(() => (window as typeof window & { releaseRoster?: () => void }).releaseRoster?.());
+  await expect(page.getByRole('alert')).toContainText('배정 결과를 확인하지 못했어요');
+});
+
+test('assignment blocks team mutations and a delayed roster poll cannot undo success', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'Linh');
+  await page.evaluate(async () => {
+    const { api } = await import('/src/webapp/api.ts');
+    const assign = api.assignTodayTeamMember; const getTeam = api.getTodayTeam;
+    const state = window as typeof window & { releaseAssignment?: () => void; releaseTeamPoll?: () => void; pollFinished?: boolean };
+    api.getTodayTeam = async () => {
+      const snapshot = await getTeam();
+      await new Promise<void>((resolve) => { state.releaseTeamPoll = resolve; });
+      state.pollFinished = true;
+      return snapshot;
+    };
+    api.assignTodayTeamMember = async (...args) => {
+      dispatchEvent(new Event('focus'));
+      await new Promise<void>((resolve) => { state.releaseAssignment = resolve; });
+      return assign(...args);
+    };
+  });
+  await page.getByRole('button', { name: '이 작업 배정' }).click();
+  await expect(page.getByRole('button', { name: '배정 중…' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '새 QR 발급' })).toBeDisabled();
+  await page.evaluate(() => (window as typeof window & { releaseAssignment?: () => void }).releaseAssignment?.());
+  await expect(page.getByRole('status')).toContainText('배정했습니다.');
+  await page.evaluate(() => (window as typeof window & { releaseTeamPoll?: () => void }).releaseTeamPoll?.());
+  await page.waitForTimeout(100);
+  await expect(page.getByRole('button', { name: '배정됨' })).toBeEnabled();
 });
 
 test('worker must explicitly acknowledge each assigned version, including unselected work', async ({ page }) => {

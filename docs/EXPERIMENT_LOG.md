@@ -105,6 +105,13 @@
 - 적용 후 live 구조화 3건: 장소 생략 4,272ms, 수량·순서·금지 복합지시 4,534ms, 실제 장소 후보 충돌 2,718ms. 장소 생략은 `READY`/`UNSPECIFIED`/LOCATION 질문 없음, 복합지시는 20망과 수확·선별·운반 순서 및 두 금지사항 보존, 실제 동·서 밭 충돌은 blocking LOCATION이었다.
 - 범위: 비식별 텍스트 입력의 구조화 호출만 측정했다. STT·번역·TTS·DB·HTTP 전체 경로와 원어민 검수는 포함하지 않았다.
 
+## E-011 `만`/`망` 경계 재검증
+
+- 재현: 공백 없이 합성한 `저쪽 밭 양파 스무망 캐갖고…` WAV를 현재 STT→구조화 경로에서 3회 실행했다.
+- 수정: 고유어 수사 뒤 `만`이 붙은 고확신 전사도 독립 재전사 대상으로 올린다. 두 후보에도 경계가 남으면 `AUDIO_UNCLEAR`로 닫고 `망`으로 사후 치환하지 않는다. 실제 `이십만 개`는 이 추가 경로를 타지 않는다.
+- 결과: 세 실행 모두 전사는 `스무 망`, 구조 수량은 `20망`이었다. 전체 구조 평가는 2/3이었고 나머지 1건은 수량이 아니라 `저쪽 밭`을 NAMED로 처리한 기존 위치 변동 실패였다. 합성 음성이므로 실제 화자 정확도 주장은 하지 않는다.
+- 증거: [반복 결과](../evals/results/dialect-20260904T041246156925Z/results.jsonl), Node 경계 단위 회귀 3건, 전체 자동 검증 9/9 suites.
+
 결과 없는 항목은 `미실행`으로 남기고 추정 점수를 쓰지 않는다. production/수집 원음은 저장하지 않으며 입력은 비식별 텍스트/정답 구조만 보관한다. `evals/audio/`의 PII 없는 합성 TTS WAV만 재현 fixture로 보관한다. FE는 동일 run의 화면 캡처를, BE는 request/version ID를, AI는 prompt·provider 환경값을 넘겨야 한 실험으로 인정한다.
 
 current runs record `structure-v2`/`ontology-v2`; retired-code fixtures remain preservation fixtures, not new publish data. Migration regression은 legacy data/asset reference가 reset·rewrite·자동 remap 없이 queryable임을 기록한다.

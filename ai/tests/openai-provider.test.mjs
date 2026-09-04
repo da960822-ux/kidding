@@ -92,6 +92,43 @@ test('low-confidence transcription is accepted only when independent verificatio
   assert.equal(requests[1].get('prompt'), transcriptionPrompt.trim());
 });
 
+test('high-confidence native-number man boundary is verified instead of becoming a large count', async () => {
+  let callCount = 0;
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionPrompt, transcriptionReviewPrompt, fetchImpl: async () => {
+    callCount += 1;
+    if (callCount === 1) return { ok: true, json: async () => ({ text: '저쪽 밭 양파 스무만 캐 갖고 옮겨.', logprobs: [{ token: '스무만', logprob: -0.01 }] }) };
+    if (callCount === 2) return { ok: true, json: async () => ({ text: '저쪽 밭 양파 스무 망 캐 갖고 옮겨.' }) };
+    return { ok: true, json: async () => ({ output_text: '{"choice":"B"}' }) };
+  } });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '저쪽 밭 양파 스무 망 캐 갖고 옮겨.' });
+  assert.equal(callCount, 3);
+});
+
+test('unresolved native-number man boundary closes as unclear without replacement', async () => {
+  let callCount = 0;
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionPrompt, transcriptionReviewPrompt, fetchImpl: async () => {
+    callCount += 1;
+    return { ok: true, json: async () => callCount === 1
+      ? { text: '양파 스무만 골라.', logprobs: [{ token: '스무만', logprob: -0.01 }] }
+      : { text: '양파 스무만 골라.' } };
+  } });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '' });
+  assert.equal(callCount, 2);
+});
+
+test('genuine sino-korean large count is not sent to extra verification', async () => {
+  let callCount = 0;
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionPrompt, fetchImpl: async () => {
+    callCount += 1;
+    return { ok: true, json: async () => ({ text: '양파 이십만 개를 골라.', logprobs: [{ token: '이십만', logprob: -0.01 }] }) };
+  } });
+
+  assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '양파 이십만 개를 골라.' });
+  assert.equal(callCount, 1);
+});
+
 test('low-confidence split UTF-8 tokens trigger verification instead of silently losing an action', async () => {
   let callCount = 0;
   const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionReviewPrompt, fetchImpl: async () => {

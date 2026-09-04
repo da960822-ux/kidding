@@ -1,0 +1,46 @@
+{
+  "total": 3,
+  "passed": 2,
+  "failed": [
+    "audio-stt-mang-boundary#r1"
+  ],
+  "excluded_negative_family": [],
+  "model": "gpt-5.6-terra",
+  "transcription_model": "gpt-transcribe",
+  "revision": "56a142ff41d9a706909aff2d85fa666d7316837b",
+  "prompt_sha256": "f7a6e25e723198122ab83239b2eaada48ee4246306bdf03b83f66bc2e895f1fd",
+  "dataset_sha256": {
+    "tmp/stt-mang-boundary-regression.jsonl": "fe7d6089c7c0829774aeb8bd3c0a5e64129b9ab6de9c3d02763288030fdf70ac"
+  },
+  "audio_count": 3,
+  "limits": "Authored synthetic text and synthetic WAVs, no real-speaker accuracy claim. No database writes. Validator-negative cases are excluded from live model scoring. Field-level checks are not full human semantic review.",
+  "context_sha256": {
+    "ai\\references\\agriculture-terms-v2.json": "5c1e345cdab0f6f1ccadc5ea25a076a3effb63939dcfc9854a31a7157d52c589",
+    "ai\\references\\dialect-v2.json": "0d0411d2a5e3f4c68ed0a7468d56a0a2b108e6b075411483057334653f4d90a4",
+    "ai\\references\\structure-parsing-v1.json": "bba3dbceda622b4dd316f31eb4d8823bfbc9ec2de33cdf220c1d62fb4afb1ce4"
+  },
+  "dialect_context": true,
+  "repetitions": 3,
+  "attempts_per_case": 1,
+  "source_sha256_before": {
+    "ai\\prompts\\prompt-quantity-change-001.md": "89adb83a765587ac9e40e3e4ce2129b7f2c78e1b9e03df7f4d945b30180974e4",
+    "ai\\prompts\\prompt-structure-005.md": "f7a6e25e723198122ab83239b2eaada48ee4246306bdf03b83f66bc2e895f1fd",
+    "ai\\prompts\\prompt-structure-supplement-002.md": "10b41f83cef49ee98e1a2332784cd3bc5a00c0f76e58748d2d1aae1127c61ea1",
+    "ai\\prompts\\prompt-transcription-002.md": "ebc60def478525aa83bc9ba3351c5aa0dcbcf074af6d7abe6bb636f306836d0c",
+    "ai\\prompts\\prompt-transcription-review-001.md": "63980c4fc75ccafdd7f81c704c2281cdf268c0918c7d0559bcca93567983e4b3",
+    "ai\\lib\\dialect-reference.mjs": "9ce3983a8e3818e54fdeeab29dda3fe1dd47615373bc3e3ebac4325059e37fb0",
+    "ai\\lib\\ontology-v2.mjs": "f0b19d79b0eb8c2712ba203264cdacbdb0a10bfae1a029a2c4e100ecb8977dd5",
+    "ai\\lib\\openai-provider.mjs": "5bda4605849a7213b4a1ef04f0484dc16f1fdd059bba3bc5502cd5d287e025d5",
+    "ai\\lib\\openai-requests.mjs": "eafa1d0d8f81e22d7bf263121eacd04d2eef82012ecff102cb1b56b978a66c99",
+    "ai\\lib\\quantity-source.mjs": "e5bd805615a5cd811d18b97adb45b87987d45f0684b91c01d6a38e545743f89d",
+    "ai\\lib\\structure-v2-contract.mjs": "6ebfe827e2cb6e6ba0795f0bdedd1d2806f71694b30edc1f46f9b1242f1c8df3",
+    "ai\\lib\\visual-match.mjs": "b7f88280fb8028c378a0c8c6621ff12edd7b5613a21cb5e94c6d0f2eb787ee30",
+    "ai\\lib\\worker-briefing-v2.mjs": "e18b71fb8863eb3db453b04cded19ca633024dec36e62c07152ff22c0e91f78a",
+    "ai\\references\\dialect-v2.json": "0d0411d2a5e3f4c68ed0a7468d56a0a2b108e6b075411483057334653f4d90a4",
+    "ai\\index.mjs": "3cbf240bd66cc7ff09343560217d5d529d9d57ab13824703805d4d0db97e8a00",
+    "ai\\scripts\\eval-without-dialect.mjs": "c0250c9768e621439c1403ca462ad1622e683ea5e3ab0c17994ce665e27e1186",
+    "backend\\app\\main.py": "d774527505dacf7587ac400dd2c8150069fd9f7735bb6943a48b41d48e933dc8",
+    "backend\\evaluate_dialect.py": "b26278000070967f6fc3b0a42069a47d9718cee27057c5283639a15368d39376"
+  },
+  "source_changed_during_run": false
+}

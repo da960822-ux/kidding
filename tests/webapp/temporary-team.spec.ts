@@ -58,6 +58,38 @@ test('expired management link never silently starts another team', async ({ page
   await expect(page.getByRole('button', { name: '새 팀으로 시작' })).toBeVisible();
 });
 
+test('owner can speak a new instruction for one member without selecting an existing team work', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'Lan');
+  const before = await page.evaluate(() => JSON.parse(localStorage.getItem('batmeori-demo-today-team')!).members[0].assignment_session_ids.length);
+
+  await page.getByRole('button', { name: 'Lan 개인 지시 말하기' }).click();
+  await expect(page.getByRole('heading', { name: 'Lan님에게 새 개인 지시' })).toBeVisible();
+  await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
+  await expect(page.getByText('Lan님에게 따로 전달할 내용인지 확인해주세요.')).toBeVisible();
+  await page.getByRole('button', { name: 'Lan님에게 배정' }).click();
+
+  await expect(page).toHaveURL(/\/owner\/team$/);
+  await expect(page.getByRole('status')).toContainText('Lan님에게 개인 지시를 배정했습니다.');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('batmeori-demo-today-team')!).members[0].assignment_session_ids.length)).toBe(before + 1);
+});
+
+test('personal instruction publish is retained when the member assignment fails', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'Mai');
+  await page.evaluate(async () => {
+    const { api, ApiError } = await import('/src/webapp/api.ts');
+    api.assignTodayTeamMember = () => Promise.reject(new ApiError(503, 'PROVIDER_UNAVAILABLE', '배정 실패'));
+  });
+
+  await page.getByRole('button', { name: 'Mai 개인 지시 말하기' }).click();
+  await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
+  await page.getByRole('button', { name: 'Mai님에게 배정' }).click();
+
+  await expect(page).toHaveURL(/\/owner\/team$/);
+  await expect(page.getByRole('alert')).toContainText('새 개인 지시는 저장했지만 Mai님에게 배정하지 못했습니다.');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('batmeori-demo-sessions')!).length)).toBe(2);
+  await expect(page.getByLabel('Mai 작업 선택').locator('option')).toHaveCount(3);
+});
+
 test('background refresh failure keeps the cached work list assignable without duplicate alerts', async ({ page }) => {
   await openOwnerTeamWithMember(page, 'Lan');
   await page.evaluate(async () => {

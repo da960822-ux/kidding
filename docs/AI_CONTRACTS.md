@@ -31,7 +31,7 @@ provider adapter는 server-only environment에서 실행한다. provider/model/v
 }
 ```
 
-OpenAI adapter는 특정 작물·수량·작업 어휘가 없는 일반 한국어 작업 문맥과 `language=ko`로 `OPENAI_TRANSCRIBE_MODEL`을 먼저 호출하고 token log probability를 확인한다. 한국어 UTF-8 분할 토큰의 대체문자와 byte 조각도 신뢰도 검사에서 제외하지 않는다. `OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD`보다 낮은 말 토큰이 있을 때만 `OPENAI_TRANSCRIBE_VERIFICATION_MODEL`로 같은 원음을 다시 전사한다. 두 결과가 다르면 `OPENAI_TRANSCRIPT_REVIEW_MODEL`이 후보에 없는 문장을 만들지 못하는 enum 계약으로 A/B/UNCLEAR만 고른다. 숫자·단위·작업·장소 충돌이 불명확하거나 UNCLEAR이면 빈 transcript로 반환해 `422 AUDIO_UNCLEAR` 재녹음을 요청한다. provider 연결·응답 실패만 `503 PROVIDER_UNAVAILABLE`이다. raw audio는 요청 완료 즉시 삭제하고 transcript만 version 감사에 남긴다. 실행 경로에는 특정 정답 문장, 고정 농업 키워드, 사후 치환 규칙을 넣지 않는다.
+OpenAI adapter는 특정 작물·수량·작업 어휘가 없는 일반 한국어 작업 문맥과 `language=ko`로 `OPENAI_TRANSCRIBE_MODEL`을 먼저 호출하고 token log probability를 확인한다. 한국어 UTF-8 분할 토큰의 대체문자와 byte 조각도 신뢰도 검사에서 제외하지 않는다. `OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD`보다 낮은 말 토큰이 있거나 고유어 수사가 바로 `만`으로 이어져 수량 단위 `망`과 경계가 불명확한 경우 `OPENAI_TRANSCRIBE_VERIFICATION_MODEL`로 같은 원음을 다시 전사한다. 두 결과가 다르면 `OPENAI_TRANSCRIPT_REVIEW_MODEL`이 후보에 없는 문장을 만들지 못하는 enum 계약으로 A/B/UNCLEAR만 고른다. 경계 위험이 두 전사에서 그대로 남거나 숫자·단위·작업·장소 충돌이 불명확하거나 UNCLEAR이면 빈 transcript로 반환해 `422 AUDIO_UNCLEAR` 재녹음을 요청한다. provider 연결·응답 실패만 `503 PROVIDER_UNAVAILABLE`이다. raw audio는 요청 완료 즉시 삭제하고 transcript만 version 감사에 남긴다. 실행 경로에는 특정 정답 문장, 고정 농업 키워드, 사후 치환 규칙을 넣지 않는다.
 
 ## 구조화 `structure-v2`
 

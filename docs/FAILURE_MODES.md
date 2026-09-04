@@ -3,6 +3,7 @@
 | 상황 | 판정/응답 | FE | BE | AI 주담당 |
 |---|---|---|---|---|
 | 빈 transcript·한국어 음성 불명확 | `422 AUDIO_UNCLEAR`, 저장하지 않음 | 녹음 재생 확인·재시도 | provider 장애와 분리 | confidence/empty 판정 |
+| 고유어 수사 뒤 `만`이 `망` 단위와 불명확 | 독립 재전사; 경계가 해소되지 않으면 `422 AUDIO_UNCLEAR` | 원음 확인·재녹음 | 잘못된 대수량 초안 저장 금지 | 치환 없이 경계 재검증 |
 | STT provider 연결·응답 실패 | `503 PROVIDER_UNAVAILABLE` | 잠시 후 재시도 | 안전한 오류 envelope | provider failure 판정 |
 | 구조화 JSON invalid | `422`, draft 저장·게시 금지 | 원문 유지·재시도 | schema validation | 계약 준수 |
 | 사투리·수량/동사 경계가 불명확 | 추측 치환 없이 blocking `TASK`/`QUANTITY` ambiguity | 해당 내용 보완 | 기존 게시 차단 유지 | 관련 사전 문맥만 참고 |
@@ -38,6 +39,7 @@
 | 새 배정·배정 작업 변경 | 미확인 receipt와 최신 briefing | vi/ne 알림·명시적 지시 확인 | 조회만으로 확인 저장 금지 | - |
 | 작업 목록 백그라운드 재조회 실패 | 마지막 성공 목록 유지 | 경고는 표시하되 기존 선택·배정 가능 | read 실패가 저장 상태를 바꾸지 않음 | 캐시 snapshot과 freshness 상태 분리 |
 | 팀 배정 응답 유실·5xx | 동일 member/session 멱등 배정 1회 재시도 후 roster 확인 | 확인 중 표시, 결과 확인 전 실패 금지 | active unique row를 반환 | timeout-before-commit 순서 회귀 |
+| 개인 지시 publish 성공·member 배정 실패 | 새 WorkSession 보존, 미배정 안내 | 같은 사람에게 다시 배정 가능; 완료로 오표시 금지 | 기존 멱등 TeamAssignment 경계 사용 | 새 AI 호출 없음 |
 | 근로자의 구버전 확인 | `409 VERSION_CONFLICT` | 최신 내용 표시 후 다시 확인 | session lock과 expected_version 비교 | - |
 | 확인 저장 실패 | 오류·미확인 유지 | 성공 표시 금지, 재시도 | 최초 성공 시각 유지·idempotent 처리 | - |
 | 작업 화면 닫힘·기기 잠금 | polling 알림 보장 불가 | 재접속 시 미확인 배정 표시 | OS 푸시 전송으로 오인시키지 않음 | - |

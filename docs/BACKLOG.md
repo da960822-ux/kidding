@@ -21,8 +21,10 @@
 | P0-05 | P0 | structure/translation | unknown 보존, vi/ne locale purity, safety verified provenance, worker TTS·caption package | P0-01 | AI |
 | P0-05a | P0 | 사투리 참고 사전·문맥 연결 | 출처/미검수 구분, 원문 불변, 초기·보완·수량 경로의 관련 문맥 선택, 고정 실패 및 미사용 표현 평가, 동일 prompt 사전 유무 비교, UTF-8 STT 신뢰도 검사 | P0-05 | AI |
 | P0-05b | P0 | 양파 운반 영상 gate | 운반 코드·단계 유지, 승인 LOW 수작업 영상 매칭, 없으면 텍스트·TTS, 기존 immutable package 불변 | P0-05 | AI |
+| P0-05c | P0 | STT `만`/`망` 수량 경계 검증 | 고유어 수사+`만` 고확신 결과도 독립 재전사, 미해소 시 AUDIO_UNCLEAR, 치환·실제 `이십만 개` 훼손 없음 | P0-05a | AI |
 | P0-06 | P0 | owner confirm | v2 immutable version + vi/ne package atomically publish; delivery is separate, override, safety gate | P0-04,P0-05 | BE |
 | P0-07 | P0 | owner storyboard | summary·ambiguity·source·delivery branch 표시, 위치 원문 보존·현장 설명 원클릭 전달 | P0-06 | FE |
+| P0-07a | P0 | 개인 음성 지시 | roster에서 사람 선택→새 음성 초안→확인→그 사람에게 즉시 배정, 기존 작업 선택은 재사용 보조 경로 | P0-03,P0-04,P0-06 | FE |
 | P0-08 | P0 | 정적 영상·TTS 표시 | video 또는 text+TTS, captions | P0-02,P0-05 | FE |
 | P0-09 | P0 | CO_PRESENT briefing | PIN cookie, vi/ne, 최신 version | P0-06,P0-08 | BE |
 | P0-10 | P0 | REMOTE anonymous link | 언어별 24h hash browser `${PUBLIC_WEB_BASE_URL}/w/{token}`, JSON assignment로 최신 PUBLISHED | P0-06 | BE |

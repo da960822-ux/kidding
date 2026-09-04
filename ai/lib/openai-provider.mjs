@@ -22,6 +22,12 @@ function lowConfidence(logprobs, minimum) {
   return !spokenTokens.length || spokenTokens.some((item) => item.logprob < minimum);
 }
 
+function unclearNativeNumberBoundary(transcript) {
+  const ones = '(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉)';
+  const tens = `(?:열(?:${ones})?|스무|(?:스물|서른|마흔|쉰|예순|일흔|여든|아흔)(?:${ones})?)`;
+  return new RegExp(`(?:^|\\s)(?:${ones}|${tens})\\s*만(?=$|[\\s.,!?]|[을를이가은는과와도만으로])`, 'u').test(transcript.normalize('NFKC'));
+}
+
 export function createOpenAiProvider({ env, fetchImpl, transcriptionPrompt = '', transcriptionReviewPrompt = '' } = {}) {
   const transcriptionModel = env?.OPENAI_TRANSCRIBE_MODEL || 'gpt-transcribe';
   const verificationModel = env?.OPENAI_TRANSCRIBE_VERIFICATION_MODEL || 'gpt-4o-transcribe';
@@ -39,10 +45,11 @@ export function createOpenAiProvider({ env, fetchImpl, transcriptionPrompt = '',
       const audio = Buffer.from(audio_base64, 'base64');
       const primary = await requests.transcription(audio, filename, content_type, language_hint, { model: transcriptionModel, logprobs: true, prompt: transcriptionPrompt });
       if (typeof primary?.text !== 'string') throw new TypeError('INVALID_PROVIDER_RESPONSE');
-      if (!primary.text.trim() || !lowConfidence(primary.logprobs, minimumLogprob)) return { transcript: primary.text };
+      const boundaryRisk = unclearNativeNumberBoundary(primary.text);
+      if (!primary.text.trim() || !lowConfidence(primary.logprobs, minimumLogprob) && !boundaryRisk) return { transcript: primary.text };
       const verification = await requests.transcription(audio, filename, content_type, language_hint, { model: verificationModel, prompt: transcriptionPrompt });
       if (typeof verification?.text !== 'string') throw new TypeError('INVALID_PROVIDER_RESPONSE');
-      if (comparableTranscript(primary.text) === comparableTranscript(verification.text)) return { transcript: primary.text };
+      if (comparableTranscript(primary.text) === comparableTranscript(verification.text)) return { transcript: boundaryRisk ? '' : primary.text };
       if (!transcriptionReviewPrompt.trim()) return { transcript: '' };
       const review = outputText(await requests.response([
         { role: 'user', content: `${transcriptionReviewPrompt}\n<candidate-a>${primary.text}</candidate-a>\n<candidate-b>${verification.text}</candidate-b>` },
@@ -55,7 +62,8 @@ export function createOpenAiProvider({ env, fetchImpl, transcriptionPrompt = '',
           properties: { choice: { type: 'string', enum: ['A', 'B', 'UNCLEAR'] } },
         },
       }, reviewModel));
-      return { transcript: review.choice === 'A' ? primary.text : review.choice === 'B' ? verification.text : '' };
+      const transcript = review.choice === 'A' ? primary.text : review.choice === 'B' ? verification.text : '';
+      return { transcript: transcript && !unclearNativeNumberBoundary(transcript) ? transcript : '' };
     },
     async interpretStructureV2({ prompt, transcript, schema }) {
       return outputText(await requests.response([{ role: 'user', content: `${prompt}\n<owner-transcript>${transcript}</owner-transcript>` }], { type: 'json_schema', name: 'structure_v2', strict: true, schema }, undefined, env?.OPENAI_STRUCTURE_REASONING_EFFORT || 'low'));

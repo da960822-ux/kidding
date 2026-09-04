@@ -115,6 +115,10 @@ _Avoid_: Worker (영구 고용인·계정을 뜻함)
 **TeamAssignment**
 TeamMember와 WorkSession의 연결. 근로자 화면은 연결된 WorkSession의 Latest Published를 읽으므로 수량 버전은 고정하지 않는다.
 
+**PersonalInstruction**
+농장주가 TodayWorkTeam의 한 TeamMember를 먼저 선택하고 새로 말해 만든 WorkSession을 그 TeamMember에게 바로 TeamAssignment하는 작성 흐름. 기존 WorkSession 선택·재사용과 다르며, 별도 지시문 엔티티나 영구 근로자 프로필을 만들지 않는다.
+_Avoid_: 개인 작업 복사본, 개인 채팅, 팀 공통 작업
+
 **Assignment acknowledgement**
 근로자가 배정된 작업의 특정 버전을 직접 확인했다는 기록. 작업 완료나 이해도 검증을 뜻하지 않으며, 내용이 변경되면 새 버전의 확인이 필요하다.
 

@@ -25,6 +25,8 @@ export interface TeamMember {
   assignment_receipts?: AssignmentReceipt[];
 }
 
+export type PersonalInstructionTarget = Pick<TeamMember, 'member_id' | 'display_name' | 'language_code'>;
+
 export interface AssignmentReceipt {
   work_session_id: string;
   current_version: number;

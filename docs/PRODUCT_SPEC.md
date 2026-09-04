@@ -16,7 +16,7 @@
 - 전달 방식: `CO_PRESENT` 또는 `REMOTE`
 - `CO_PRESENT`: 농장주 PIN 세션의 owner 폰에서 언어를 골라 함께 보기
 - `REMOTE`: 언어를 하나 골라 로그인 없는 24시간 익명 browser 링크 `${PUBLIC_WEB_BASE_URL}/w/{token}` 발급. 해당 route는 JSON assignment endpoint로 Latest Published를 읽는다.
-- 오늘 작업팀: 농장주가 오늘의 QR 하나를 열고, 근로자는 별명과 `vi|ne`만 제출한다. 농장주는 roster를 보고 사람별로 하나 이상 WorkSession을 배정할 수 있다. 참가자 브라우저는 자기 배정의 Latest Published만 읽는다.
+- 오늘 작업팀: 농장주가 오늘의 QR 하나를 열고, 근로자는 별명과 `vi|ne`만 제출한다. 농장주는 roster를 보고 기존 WorkSession을 다시 배정하거나, 한 사람을 먼저 선택해 새 지시를 말하고 확인한 뒤 그 사람에게 바로 배정한다. 개인 지시는 기존 팀 작업 선택을 선행 조건으로 두지 않는다. 참가자 브라우저는 자기 배정의 Latest Published만 읽는다.
 - 농장주 접근: 농장 코드·농장명·PIN 입력 없이 첫 작업을 작성한다. 첫 확정 시 팀의 24시간 관리 PIN과 참가 QR을 자동 발급한다. 같은 기기는 쿠키로 관리하고 다른 기기는 관리 링크와 PIN으로 복귀한다. 공개 회원가입·개인 계정은 없다. PIN이나 PIN 파생값은 참가 QR에 포함하지 않는다.
 - 작업팀은 첫 확정부터 정확히 24시간 유효하다. 작업 추가·수량 변경·QR 재발급으로 만료 시각이나 PIN이 바뀌지 않는다. 새 팀은 별도의 관리 PIN·QR을 사용한다.
 
@@ -54,7 +54,7 @@ Vercel production FE는 `VITE_API_BASE_URL`을 비워 같은 origin의 `/api`를
 5. 정부 가이드 공식 번역 HIT는 `OFFICIAL_GUIDE`, 일반 작업표현 MISS는 `AI_TRANSLATION`으로 표시한다. 안전표현은 검수된 출처가 없으면 게시하지 않는다.
 6. `APPROVED`이고 `safety_level: LOW`인 사전 생성 영상을 매칭한다. 영상이 없으면 텍스트+TTS를 사용한다.
 7. 농장주가 `CONFIRM` 또는 허용된 `PUBLISH_AS_IS`를 선택하면 검증된 `structure-v2`/`ontology-v2` WorkVersion v1과 `vi`·`ne` WorkerBriefing package를 원자적으로 `PUBLISHED`한다. confirm request는 delivery 방식·언어·worker 정보를 받지 않으며 익명 링크도 만들지 않는다.
-8. 게시 뒤 `CO_PRESENT`는 owner PIN briefing에서 `vi|ne`를 골라 재생한다. `REMOTE`는 별도 발급 API에서 언어를 골라 24시간 익명 `/w/{token}` browser 링크를 만든다. TodayWorkTeam은 QR join에서 worker가 별명·`vi|ne`를 직접 고르고, 농장주는 roster에 각 WorkSession을 하나 이상 배정한다.
+8. 게시 뒤 `CO_PRESENT`는 owner PIN briefing에서 `vi|ne`를 골라 재생한다. `REMOTE`는 별도 발급 API에서 언어를 골라 24시간 익명 `/w/{token}` browser 링크를 만든다. TodayWorkTeam은 QR join에서 worker가 별명·`vi|ne`를 직접 고른다. 농장주는 기존 WorkSession을 고르거나, 선택한 TeamMember용 새 음성 지시를 publish한 직후 그 사람에게 TeamAssignment한다.
 9. 유효한 remote 링크는 고정 버전이 아니라 항상 최신 `PUBLISHED` WorkVersion을 읽는다. 링크 만료·재발급 시 기존 링크를 폐기한다.
 10. 수량 변경 audio parse는 저장하지 않는다. 농장주가 `quantity`와 `expected_version`을 직접 확인할 때만 새 immutable version을 만든다.
 

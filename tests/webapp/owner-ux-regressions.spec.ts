@@ -171,7 +171,7 @@ test('quantity conflict reloads the current value before another confirmation', 
   await expect(page.getByText('15망', { exact: true })).toBeVisible();
 });
 
-test('owner briefing distinguishes full server audio from current step speech', async ({ page }) => {
+test('owner briefing keeps full server audio without a duplicate current-step control', async ({ page }) => {
   await publishWork(page);
   const expected = await page.evaluate(async () => {
     const { api } = await import('/src/webapp/api.ts');
@@ -198,15 +198,12 @@ test('owner briefing distinguishes full server audio from current step speech', 
     Object.defineProperty(speechSynthesis, 'getVoices', { configurable: true, value: () => [{ lang: 'vi-VN', name: 'Vietnamese test voice', localService: true }] });
     Object.defineProperty(speechSynthesis, 'speak', { configurable: true, value: (utterance: SpeechSynthesisUtterance) => events.speech.push(utterance.text) });
     Object.defineProperty(speechSynthesis, 'cancel', { configurable: true, value: () => {} });
-    return { first: sample.steps[0].description, second: sample.steps[1].description };
+    return sample.steps.length;
   });
   await page.getByRole('button', { name: /현장에서 같이 보기/ }).click();
   await page.getByRole('button', { name: '현장에서 작업 함께 보기', exact: true }).click();
   await page.getByRole('button', { name: 'Nghe toàn bộ hướng dẫn', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __ownerMedia: { audio: string[] } }).__ownerMedia.audio)).toEqual(['/audio/owner-complete.mp3']);
-  await page.getByRole('button', { name: 'Nghe bước này', exact: true }).click();
-  const spoken = await page.evaluate(() => (window as unknown as { __ownerMedia: { speech: string[] } }).__ownerMedia.speech);
-  expect(spoken).toHaveLength(1);
-  expect(spoken[0]).toContain(expected.first);
-  expect(spoken[0]).not.toContain(expected.second);
+  await expect(page.getByRole('button', { name: 'Nghe bước này', exact: true })).toHaveCount(0);
+  expect(expected).toBeGreaterThan(1);
 });

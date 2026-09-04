@@ -4,6 +4,10 @@
 
 ## 서버 adapter 설정
 
+OpenAI adapter의 초기 초안과 보완 구조화 요청만 `OPENAI_STRUCTURE_REASONING_EFFORT`(기본 `low`)를 사용한다. 번역, 수량 변경 해석, STT 및 전사 검토, TTS 설정은 그대로 유지한다. 비교 실험에서는 같은 모델의 `medium`을 지정할 수 있다. 낮은 추론 설정도 기존 schema·수량·순서·금지사항·안전 게시 검증을 통과해야 한다.
+
+출발/작업 장소를 아예 말하지 않은 경우 `location`은 `UNSPECIFIED`, `raw_text:null`, `canonical_name:null`로 보존하며, 생략만을 이유로 LOCATION 질문이나 게시 차단을 만들지 않는다. 실제로 말한 장소를 알아듣지 못했거나 서로 다른 장소 후보를 선택해야 하면 원문 표현을 보존하고 blocking LOCATION으로 확인한다. 운반 목적지는 해당 단계에 보존하며 생략된 출발 장소를 대신 채우지 않는다. 이 규칙은 초기 초안과 보완에 동일하게 적용한다. BE는 기존 초안의 순수 장소 생략 LOCATION도 non-blocking으로 정규화한다. FE는 농장주의 명시적 확인을 `PUBLISH_AS_IS`·`OWNER_ACCEPTED_OTHER`로 기록하고 진행시킬 수 있다. 현장 설명을 뜻하는 `IN_PERSON_BRIEFING`은 DEICTIC에만 쓴다.
+
 비-TTS AI 작업(전사·초안·보완·수량 preview)은 HTTP 요청 시작부터 50초의 공통 bridge 예산을 쓰며 재시도는 남은 시간만 사용한다. provider의 JSON/STT HTTP 요청도 45초에 중단한다. 기존 FE 60초 timeout 안에 실패 안내를 돌려주는 목적이며 DB commit rollback을 보장하는 취소 계약은 아니다. 이 비-TTS 시간 예산은 게시 package의 합성 및 근로자 TTS 재생/캐시에 적용하지 않는다. 전체 TTS 내용·재생은 아래 Worker briefing 계약을 따른다. 응답 유실 시 FE는 같은 논리적 확정 요청의 키를 재사용하고 현재 게시 상태를 조회하여 결과 불명을 복구한다.
 
 provider adapter는 server-only environment에서 실행한다. provider/model/voice/timeout은 run metadata에만 있고 OpenAPI, request/response JSON, worker payload에는 없다. canonical schema와 BE semantic validation은 provider output에 항상 다시 적용한다.
@@ -154,7 +158,7 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 예를 들어 검수 단위 HIT가 없는 `quantity:{value:20,unit:"망"}`의 새 package는 `vi`에서 `20 bao`, `ne`에서 `20 बोरा`를 두 번째 항목으로 읽는다. 마감·메모가 null이면 빈 줄이나 대체 문구를 만들지 않는다. Worker DTO의 `tts.text_hash`는 이 exact UTF-8 text의 64자리 SHA-256으로 UI에 표시하지 않는다. Node↔BE private `tts_transport`는 exact `text`, `text_hash`, audio bytes를 보관하며, BE 신규 package 검증과 browser 전체 음성 fallback은 동일한 조립 규칙을 사용한다.
 
-`context.notes`는 기존 메모 필드 그대로 유지하며 금지·주의 문구의 휴리스틱 분류나 `safety` 이동을 하지 않는다. FE는 시작 전 첫 화면·단계 화면·CO_PRESENT 화면에서 메모 전체를 펼침 없이 표시한다. 단계 음성은 안전 문구 전체, 현재 단계의 `${title} ${description}`, 메모의 비어 있지 않은 항목을 줄바꿈으로 합친다.
+`context.notes`는 기존 메모 필드 그대로 유지하며 금지·주의 문구의 휴리스틱 분류나 `safety` 이동을 하지 않는다. FE는 시작 전 첫 화면·단계 화면·CO_PRESENT 화면에서 메모 전체를 펼침 없이 표시한다. 단계 화면의 음성 조작은 저장 hash 검증과 기기 fallback을 쓰는 전체 듣기 하나다.
 
 기존 immutable package와 저장 음성은 수정하지 않는다. browser는 현재 표시 package로 조립한 전체 텍스트의 hash와 저장된 `tts.text_hash`가 일치할 때만 저장 음성을 전체 듣기에 사용한다. 불일치·검증 불가·재생 실패 시 같은 전체 텍스트를 기기 음성으로 읽고, 기기 음성도 미지원이면 선택 언어 글 안내와 재시도를 유지한다. 신규 생성 검증 규칙을 과거 package 조회의 차단 조건으로 적용하지 않는다.
 
@@ -162,7 +166,7 @@ worker DTO에는 transcript, raw audio, `risk_assessment`, identity/owner audit 
 
 ## 영상 매칭 `visual-match-v1`
 
-현재 전달 정책은 신규 양파 운반(`ONION_TRANSPORT`) package의 영상만 제외하고 같은 작업 코드·텍스트·TTS를 유지한다. 이 설정은 `ai/references/delivery-policy-v2.json`의 데이터로 관리하며 동작 표현 치환이나 task_code 변경에 사용하지 않는다. 다른 단계 영상과 이미 저장된 immutable briefing package는 변경하지 않는다.
+양파 운반(`ONION_TRANSPORT`)도 다른 단계와 같은 자산 gate를 사용한다. `AI_GENERATED_PREGENERATED`, 사람 `APPROVED`, `LOW`, current인 정확히 한 영상만 신규 package에 넣고, 없으면 text+TTS fallback을 사용한다. 동작 표현이나 task_code는 영상 유무로 바꾸지 않으며 이미 저장된 immutable briefing package는 변경하지 않는다.
 
 입력: allowlisted `task_code`; 출력: `visual_asset_id` 또는 `null`. asset은 `provenance: AI_GENERATED_PREGENERATED`, `review_status: APPROVED`, `safety_level: LOW`일 때만 매칭·게시한다. HIGH는 생성·기록 가능하지만 게시 금지. P0 영상은 기계 정지 수작업뿐이며 운전·회전날·농약·고소작업을 포함하지 않는다.
 

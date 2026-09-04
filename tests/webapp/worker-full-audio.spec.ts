@@ -47,8 +47,7 @@ for (const language of ['vi', 'ne'] as const) {
       }
       await page.getByRole('button', { name: language === 'vi' ? 'Bắt đầu bước 1' : 'चरण १ सुरु गर्नुहोस्', exact: true }).click();
       await expect(page.getByText(note, { exact: true })).toBeVisible();
-      await page.getByRole('button', { name: language === 'vi' ? 'Nghe bước này' : 'यो चरण सुन्नुहोस्', exact: true }).click();
-      await expect.poll(() => page.evaluate(() => (window as any).spoken.at(-1))).toContain(note);
+      await expect(page.getByRole('button', { name: language === 'vi' ? 'Nghe bước này' : 'यो चरण सुन्नुहोस्', exact: true })).toHaveCount(0);
     });
   }
 }

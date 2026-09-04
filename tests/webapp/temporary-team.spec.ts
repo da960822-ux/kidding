@@ -1,4 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+async function openOwnerTeamWithMember(page: Page, displayName: string) {
+  await page.goto('/start');
+  await page.evaluate(async (name) => {
+    const { api } = await import('/src/webapp/api.ts');
+    await api.startOwnerSession();
+    const draft = await api.createDraft(new Blob(['demo']));
+    await api.confirmDraft(draft.draft_id, 'CONFIRM');
+    const team = await api.getTodayTeam();
+    await api.joinTodayTeam(team.join_url!.split('/').pop()!, { display_name: name, language_code: 'vi' });
+    history.pushState({}, '', '/owner/team'); dispatchEvent(new PopStateEvent('popstate'));
+  }, displayName);
+  await expect(page.getByText(displayName, { exact: true })).toBeVisible();
+  await expect(page.getByLabel(`${displayName} 작업 선택`)).toBeEnabled();
+}
 
 test('owner starts without credentials and receives reusable team access after first confirmation', async ({ page }) => {
   await page.goto('/start');
@@ -40,6 +55,36 @@ test('expired management link never silently starts another team', async ({ page
   await expect(page.getByRole('alert')).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('batmeori-demo-owner-session'))).toBeNull();
   await expect(page.getByRole('button', { name: '새 팀으로 시작' })).toBeVisible();
+});
+
+test('background refresh failure keeps the cached work list assignable without duplicate alerts', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'Lan');
+  await page.evaluate(async () => {
+    const { api, ApiError } = await import('/src/webapp/api.ts');
+    api.listSessions = () => Promise.reject(new ApiError(503, 'PROVIDER_UNAVAILABLE', '요청을 처리하지 못했습니다. 다시 시도해주세요.'));
+    api.getTodayTeam = () => Promise.reject(new ApiError(503, 'PROVIDER_UNAVAILABLE', '요청을 처리하지 못했습니다. 다시 시도해주세요.'));
+    dispatchEvent(new Event('focus'));
+  });
+  await expect(page.getByRole('alert')).toHaveCount(1);
+  await expect(page.getByRole('alert')).toContainText('기존 목록으로 계속 배정할 수 있습니다.');
+  await expect(page.getByLabel('Lan 작업 선택')).toBeEnabled();
+  await expect(page.getByRole('button', { name: '이 작업 배정' })).toBeEnabled();
+});
+
+test('lost assignment response is reconciled before showing a failure', async ({ page }) => {
+  await openOwnerTeamWithMember(page, 'Mai');
+  await page.evaluate(async () => {
+    const { api } = await import('/src/webapp/api.ts');
+    const assign = api.assignTodayTeamMember;
+    api.assignTodayTeamMember = async (...args) => {
+      await assign(...args);
+      throw new DOMException('Response lost', 'TimeoutError');
+    };
+  });
+  await page.getByRole('button', { name: '이 작업 배정' }).click();
+  await expect(page.getByRole('status')).toContainText('배정했습니다.');
+  await expect(page.getByRole('button', { name: '배정됨' })).toBeEnabled();
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('worker must explicitly acknowledge each assigned version, including unselected work', async ({ page }) => {

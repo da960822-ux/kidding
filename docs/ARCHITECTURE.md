@@ -44,7 +44,7 @@ Supabase Storage public `visual-assets` bucket (worker video CDN)
 
 동기 DB I/O는 thread pool로 격리하여 async HTTP event loop를 막지 않는다. 인증·만료·Farm/member 범위를 유지하고 목록의 현재 version/package를 일괄 조회한다. rate-limit 갱신은 기존 요청 흐름에 두며 mutable query builder를 요청 간 공유하지 않는다. FE는 화면 이동을 미디어 다운로드와 분리하고 중복 polling 및 이전 session/언어 응답을 무효화한다.
 
-사투리 해석은 Node의 ontology-v2 참고 JSON을 LLM 문맥에 추가하는 로컬 검색 방식이다. 벡터DB·추가 provider 호출·전사문 강제 치환은 사용하지 않는다. 최초 지시, 보완, 수량 변경이 같은 참고 자료 선택 경로를 쓰며 기존 provider-neutral JSON 입출력은 유지한다. 영상 제외 정책은 별도 JSON 데이터이며 작업 분류와 분리한다. 현재 신규 ONION_TRANSPORT package는 text/TTS로 전달하고 기존 저장 package는 그대로 읽는다.
+사투리 해석은 Node의 ontology-v2 참고 JSON을 LLM 문맥에 추가하는 로컬 검색 방식이다. 벡터DB·추가 provider 호출·전사문 강제 치환은 사용하지 않는다. 최초 지시, 보완, 수량 변경이 같은 참고 자료 선택 경로를 쓰며 기존 provider-neutral JSON 입출력은 유지한다. 영상 전달 정책은 작업 분류와 분리한다. 신규 ONION_TRANSPORT package도 다른 코드와 같은 `APPROVED`·`LOW` 자산 매칭을 사용하고 기존 저장 package는 그대로 읽는다.
 
 `audio → transcript → structure-v2 WorkDraft → owner confirm → WorkSession v1 PUBLISHED + vi/ne packages → CO_PRESENT briefing, REMOTE link issue/resolve, 또는 TodayWorkTeam member assignment`.
 
@@ -52,7 +52,7 @@ owner client은 새로고침 뒤 tab에 남은 draft ID만으로 `GET /api/v1/wo
 
 수량 변경은 저장 없는 preview → owner direct confirm(`quantity`, `expected_version`)으로만 다음 immutable version을 만든다. 새 state와 두 package 삽입이 성공한 뒤에만 이전 `PUBLISHED`를 `SUPERSEDED`로 바꾸며, remote 링크는 같은 토큰으로 최신 `PUBLISHED` 버전을 읽는다.
 
-owner 화면의 비동기 완료 처리는 화면 이동 세대와 인증 세대를 확인한다. 화면을 떠난 뒤 완료된 요청은 현재 선택과 이동을 덮지 않으며, 서버 게시 결과는 기존 session 조회로 복구한다. worker의 전체/단계 듣기는 같은 재생 컴포넌트를 재사용하지만 전체만 저장된 TTS URL을 사용한다. API DTO나 저장된 package는 변경하지 않는다. `/owner/manage`는 저장한 같은 origin의 관리 링크를 검증해 기존 `/owner/manage/{team_id}` PIN 화면으로 연결하는 클라이언트 진입 화면이다. 관리 PIN과 링크는 농장주 홈의 기본 접힌 관리 영역에만 표시하며 QR·전달 화면에서 제외한다.
+owner 화면의 비동기 완료 처리는 화면 이동 세대와 인증 세대를 확인한다. 화면을 떠난 뒤 완료된 요청은 현재 선택과 이동을 덮지 않으며, 서버 게시 결과는 기존 session 조회로 복구한다. worker 단계 화면은 저장 hash를 검증하는 전체 듣기 하나만 제공한다. API DTO나 저장된 package는 변경하지 않는다. `/owner/manage`는 저장한 같은 origin의 관리 링크를 검증해 기존 `/owner/manage/{team_id}` PIN 화면으로 연결하는 클라이언트 진입 화면이다. 관리 PIN과 링크는 농장주 홈의 기본 접힌 관리 영역에만 표시하며 QR·전달 화면에서 제외한다.
 
 ## Atomic v2 publish RPC
 
@@ -70,13 +70,13 @@ REMOTE 발급은 별도 `public.issue_worker_link_v2(p_farm_id uuid, p_session_i
 
 `worker-briefing-v2` package builder는 source WorkVersion step 배열을 삭제·정렬 변경 없이 locale별로 변환한다. `context.safety[]`는 locale text를 담고 verified guide provenance는 `source_detail[]`의 `SAFETY`/`step_sequence:null` entries로 보존하며, video caption도 같은 locale로 변환한다. worker DTO의 TTS `text_hash`는 UI 비표시 opaque fingerprint이고, exact text/audio bytes/cache key는 Node↔BE private transport에만 남긴다.
 
-전체 TTS는 [AI_CONTRACTS](AI_CONTRACTS.md)의 위치·객체 수량·마감·안전·전체 단계·메모 순서로 조립한다. Node 생성, BE 신규 package exact text/hash 검증, FE browser 전체 음성 fallback이 같은 규칙을 사용하며 LLM 음성 요약은 없다. FE는 저장 hash와 표시 텍스트 hash가 일치할 때만 저장 음성을 전체 듣기에 사용한다. 기존 package의 부분 음성이나 hash 검증 불가는 기기 전체 음성으로 전환하고, 미지원이면 텍스트와 재시도를 제공한다. 기존 저장 package 조회·불변 내용은 보존한다. 단계 음성은 안전·현재 단계·메모를 읽는다. FE는 notes 전체를 시작 전·단계·CO_PRESENT 화면에 펼침 없이 표시하며 재분류하지 않는다. 필드·schema version·DB 구조 변경은 없다.
+전체 TTS는 [AI_CONTRACTS](AI_CONTRACTS.md)의 위치·객체 수량·마감·안전·전체 단계·메모 순서로 조립한다. Node 생성, BE 신규 package exact text/hash 검증, FE browser 전체 음성 fallback이 같은 규칙을 사용하며 LLM 음성 요약은 없다. FE는 저장 hash와 표시 텍스트 hash가 일치할 때만 저장 음성을 전체 듣기에 사용한다. 기존 package의 부분 음성이나 hash 검증 불가는 기기 전체 음성으로 전환하고, 미지원이면 텍스트와 재시도를 제공한다. 기존 저장 package 조회·불변 내용은 보존한다. 별도 단계 듣기는 제공하지 않는다. FE는 notes 전체를 시작 전·단계·CO_PRESENT 화면에 펼침 없이 표시하며 재분류하지 않는다. 검수 영상은 고유 종횡비와 전체 프레임을 보존한다. 필드·schema version·DB 구조 변경은 없다.
 
 ## 인증·게시 gate
 
 기존 농장 인증 호환 경로는 service-role 전용 `authenticate_farm_owner(farm_code, pin)` RPC가 선택한 Farm의 active credential PIN hash를 검증해 반환한 `owner_id`, `farm_id`만 cookie claim으로 쓴다. Python은 PIN hash를 읽지 않는다. 운영 시 service-role 전용 provisioning RPC에 Farm access code·표시명·PIN을 전달해 Farm과 salted hash를 원자적으로 생성하거나 갱신하며 migration·로그·응답에 raw PIN을 두지 않는다. owner mutation은 cookie의 farm claim과 `FRONTEND_ORIGINS` exact Origin을 요구한다. 정적 CSRF header는 사용하지 않는다.
 
-BE는 schema·ontology·risk assessment·번역 source·영상 provenance/review를 재검증한다. HIGH/UNKNOWN 위험, safety ambiguity, schema invalid, no executable step은 게시하지 않는다. 안전표현은 verified `OFFICIAL_GUIDE` source가 없으면 자동 게시하지 않는다.
+BE는 schema·ontology·risk assessment·번역 source·영상 provenance/review를 재검증한다. HIGH/UNKNOWN 위험, safety ambiguity, schema invalid, no executable step은 게시하지 않는다. 안전표현은 verified `OFFICIAL_GUIDE` source가 없으면 자동 게시하지 않는다. AI adapter는 초기·보완 구조화에만 server-only 추론 강도를 적용하며 나머지 provider 작업과 publish gate에는 영향을 주지 않는다. 작업 장소 생략은 `UNSPECIFIED`로 전달하고, 실제 장소 충돌만 기존 ambiguity gate로 보낸다.
 
 P0 ontology는 `ONION|STRAWBERRY` 두 family와 8개 canonical task code로 닫혀 있다. non-null step code는 state의 family와 일치해야 하며, FE 입력·LLM output·DB 저장 어느 경로에서도 이 검증을 우회하지 않는다.
 

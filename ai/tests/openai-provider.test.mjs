@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createOpenAiProvider } from '../lib/openai-provider.mjs';
+import { createRuntime } from '../index.mjs';
 
 const transcriptionPrompt = await readFile(new URL('../prompts/prompt-transcription-002.md', import.meta.url), 'utf8');
 const transcriptionReviewPrompt = await readFile(new URL('../prompts/prompt-transcription-review-001.md', import.meta.url), 'utf8');
@@ -26,6 +27,7 @@ test('sentence translation shares sack terminology while retaining source text a
     for (const segment of ['ACTION', 'OTHER']) {
       assert.equal(await provider.translate({ languageCode, segment, text, glossary }), 'translated');
       const request = requests.at(-1);
+      assert.equal('reasoning' in request, false);
       const system = request.input.find((item) => item.role === 'system').content;
       assert.ok(system.includes(term));
       assert.match(system, /망/);
@@ -65,6 +67,7 @@ test('transcription uses Korean and accepts a high-confidence primary result', a
   assert.equal(requests.length, 1);
   assert.equal(requests[0].get('model'), 'gpt-transcribe');
   assert.equal(requests[0].get('language'), 'ko');
+  assert.equal(requests[0].has('reasoning'), false);
   assert.equal(requests[0].get('response_format'), 'json');
   assert.deepEqual(requests[0].getAll('include[]'), ['logprobs']);
   assert.match(requests[0].get('prompt'), /문맥에 맞는 표준 한국어/);
@@ -119,6 +122,7 @@ test('low-confidence disagreement uses contextual candidate selection without ha
   assert.deepEqual(await provider.transcribe({ audio_base64: 'AQID' }), { transcript: '잎과 뿌리를 다듬어.' });
   assert.equal(callCount, 3);
   assert.equal(reviewRequest.model, 'gpt-4o-mini');
+  assert.equal('reasoning' in reviewRequest, false);
   assert.match(reviewRequest.input[0].content, /<candidate-a>입가 뿌리를 다듬어.<\/candidate-a>/);
   assert.doesNotMatch(transcriptionReviewPrompt, /양파|딸기|망|뿌리|입가|잎과/);
 });
@@ -156,14 +160,47 @@ test('structure requests adapt the contract schema and read REST response output
   });
 
   assert.deepEqual(result, { interpretation: 'READY' });
+  assert.deepEqual(request.reasoning, { effort: 'low' });
   assert.equal(request.text.format.schema.allOf, undefined);
   assert.equal(request.text.format.schema.properties.interpretation.type, 'string');
   assert.equal(request.text.format.schema.properties.version.type, 'string');
 });
 
+test('initial and supplement structure use the server-only effort without changing model or schema', async () => {
+  const structure = {
+    interpretation: 'READY', summary_ko: '양파 수확', task_family: 'ONION',
+    location: { raw_text: null, kind: 'UNSPECIFIED', canonical_name: null },
+    quantity: 'UNSPECIFIED', deadline: null, safety: [], notes: null,
+    steps: [{ sequence: 1, task_code: 'ONION_HARVEST', title_ko: '양파 수확', description_ko: '양파를 수확한다.', unsupported_reason: null }],
+    ambiguities: [], schema_version: '2', contract_version: 'structure-v2', ontology_version: 'ontology-v2',
+  };
+  for (const configuredEffort of [undefined, 'medium']) {
+    const requests = [];
+    const provider = createOpenAiProvider({
+      env: { OPENAI_API_KEY: 'test', OPENAI_MODEL: 'test-model', OPENAI_STRUCTURE_REASONING_EFFORT: configuredEffort },
+      fetchImpl: async (_url, init) => {
+        requests.push(JSON.parse(init.body));
+        return { ok: true, json: async () => ({ output_text: JSON.stringify(structure) }) };
+      },
+    });
+    const runtime = createRuntime({ providers: provider });
+    const initial = await runtime.buildOwnerDraftV2({ transcript: '양파를 수확해' });
+    await runtime.mergeSupplementV2({ structure: initial, transcript: '양파를 수확해' });
+    assert.equal(requests.length, 2);
+    for (const request of requests) {
+      assert.deepEqual(request.reasoning, { effort: configuredEffort ?? 'low' });
+      assert.equal(request.model, 'test-model');
+      assert.equal(request.text.format.name, 'structure_v2');
+      assert.equal(request.text.format.strict, true);
+    }
+    assert.deepEqual(requests[0].text.format.schema, requests[1].text.format.schema);
+  }
+});
+
 test('synthesize returns a deterministic transport contract with bytes, hash, and no public URL', async () => {
   const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test', OPENAI_MODEL: 'test-model', OPENAI_TTS_VOICE: 'test-voice' }, fetchImpl: async (_url, init) => {
     assert.match(init.body, /gpt-4o-mini-tts/);
+    assert.equal('reasoning' in JSON.parse(init.body), false);
     return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer };
   } });
   const result = await provider.synthesize({ text: 'vi:양파 수확', languageCode: 'vi' });
@@ -177,6 +214,7 @@ test('quantity parsing sends the versioned prompt rule for an explicit Korean ta
     return { ok: true, json: async () => ({ output_text: JSON.stringify({ interpretation: 'READY', quantity: { value: 12, unit: '망' }, expected_version: 4, ambiguities: [], schema_version: '1', contract_version: 'quantity-change-v1' }) }) };
   } });
   await provider.interpretQuantityChange({ prompt: '`열두 망으로 맞춰` is a READY quantity change.', transcript: '열두 망으로 맞춰', expected_version: 4, schema: { type: 'object' } });
+  assert.equal('reasoning' in request, false);
   assert.match(request.input[0].content, /`열두 망으로 맞춰` is a READY quantity change/);
   assert.match(request.input[0].content, /<owner-transcript>열두 망으로 맞춰<\/owner-transcript>/);
 });

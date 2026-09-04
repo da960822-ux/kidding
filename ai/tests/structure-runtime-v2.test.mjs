@@ -1,8 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { validateStructureV2 } from '../lib/structure-v2-contract.mjs';
 
 const valid = { interpretation: 'READY', summary_ko: '양파 수확', location: { raw_text: null, kind: 'UNSPECIFIED', canonical_name: null }, task_family: 'ONION', quantity: { value: 20, unit: '망' }, deadline: null, safety: [], notes: null, steps: [{ sequence: 1, task_code: 'ONION_HARVEST', title_ko: '양파 수확', description_ko: '양파를 수확한다.', unsupported_reason: null }], ambiguities: [], schema_version: '2', contract_version: 'structure-v2', ontology_version: 'ontology-v2' };
+
+test('initial and supplement prompts keep omitted locations optional while preserving real conflicts', async () => {
+  for (const name of ['prompt-structure-005.md', 'prompt-structure-supplement-002.md']) {
+    const prompt = await readFile(new URL(`../prompts/${name}`, import.meta.url), 'utf8');
+    assert.match(prompt, /작업 장소를 아예 말하지 않았으면 UNSPECIFIED/);
+    assert.match(prompt, /LOCATION ambiguity를 만들지 않는다/);
+    assert.match(prompt, /실제로 말한 위치를 알아듣지 못했거나 서로 다른 장소 후보/);
+    assert.match(prompt, /blocking LOCATION/);
+  }
+});
 
 test('validateStructureV2 accepts a schema-complete executable v2 structure', () => {
   assert.deepEqual(validateStructureV2(valid), { ok: true });

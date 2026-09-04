@@ -86,7 +86,6 @@ test('step view plays stored full audio without browser speech and stops it on l
   await page.getByRole('button', { name: 'पूरा निर्देशन सुन्नुहोस्', exact: true }).click();
   await page.getByRole('button', { name: 'अर्को', exact: true }).click();
   await expect.poll(() => page.evaluate(() => (window as unknown as { __mediaEvents: string[] }).__mediaEvents.filter((event) => event === 'pause').length)).toBe(2);
-  await page.getByRole('button', { name: 'यो चरण सुन्नुहोस्', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('आवाज बजाउन सकिएन');
+  await expect(page.getByRole('button', { name: 'यो चरण सुन्नुहोस्', exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

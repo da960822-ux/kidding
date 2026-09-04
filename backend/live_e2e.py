@@ -135,11 +135,9 @@ def main() -> None:
         audio_url = urllib.parse.urlsplit(worker["tts"]["audio_url"])
         assert f"{audio_url.scheme}://{audio_url.netloc}" == ORIGIN, worker["tts"]["audio_url"]
     project_root = pathlib.Path(__file__).resolve().parents[1]
-    policy = json.loads((project_root / "ai/references/delivery-policy-v2.json").read_text(encoding="utf-8"))
-    excluded = set(policy["video_excluded_task_codes"])
     expected_videos = {
         (step["sequence"], step["task_code"]) for step in worker["steps"]
-        if step["task_code"] and step["task_code"] not in excluded
+        if step["task_code"]
     }
     actual_videos = {(video["step_sequence"], video["task_code"]) for video in worker["video"]}
     assert actual_videos == expected_videos, {"expected": sorted(expected_videos), "actual": sorted(actual_videos)}

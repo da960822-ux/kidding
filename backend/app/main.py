@@ -712,6 +712,12 @@ def work_state_from_structure_v2(output: StructureOutputV2, transcript: str = ""
     )
 
 
+def normalize_location_ambiguities(location: Location, ambiguities: list[Ambiguity]) -> list[Ambiguity]:
+    if location.kind != "UNSPECIFIED" or location.raw_text is not None or location.canonical_name is not None:
+        return ambiguities
+    return [item.model_copy(update={"blocking": False}) if item.kind == "LOCATION" else item for item in ambiguities]
+
+
 async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkState, list[Ambiguity], str]:
     validate_contract_schema(raw, "structure-v2.schema.json")
     try:
@@ -729,6 +735,7 @@ async def parse_structure_output(raw: Any, transcript: str = "") -> tuple[WorkSt
         else item
         for item in output.ambiguities
     ]
+    ambiguities = normalize_location_ambiguities(state.location, ambiguities)
     if state.location.kind == "DEICTIC" and not any(item.kind == "LOCATION" for item in ambiguities):
         ambiguities.append(Ambiguity(
             field="location", message="가리킨 장소를 현장에서 함께 확인하면 됩니다.", blocking=False, kind="LOCATION",
@@ -887,13 +894,14 @@ def parse_draft(row: dict[str, Any]) -> WorkDraft:
         raise ApiError(422, "SCHEMA_INVALID", "초안의 모호함 형식이 올바르지 않습니다.", {"errors": exc.errors()})
     if row.get("contract_version") != "structure-v2" or row.get("ontology_version") != "ontology-v2":
         raise ApiError(422, "LEGACY_READ_ONLY", "기존 v1 초안은 읽기 전용입니다.")
+    state = parse_state(row["state_json"])
     return WorkDraft(
         draft_id=str(row["id"]),
         draft_revision=row["draft_revision"],
         summary_ko=row["summary_ko"],
         interpretation=row["interpretation"],
-        state=parse_state(row["state_json"]),
-        ambiguities=ambiguities,
+        state=state,
+        ambiguities=normalize_location_ambiguities(state.location, ambiguities),
         transcript=row.get("transcript") or "",
         schema_version="2",
         contract_version="structure-v2",

@@ -43,6 +43,8 @@ test('published storyboard uses matched package video and keeps text after media
   await expect(video).toBeVisible();
   await expect(video).toHaveAttribute('controls', '');
   await expect(video).toHaveAttribute('playsinline', '');
+  expect(await video.evaluate((element) => getComputedStyle(element).objectFit)).toBe('contain');
+  expect(await video.evaluate((element) => element.getBoundingClientRect().height)).toBeLessThanOrEqual((await page.evaluate(() => innerHeight)) * 0.7 + 1);
   await expect(video.locator('track')).toHaveAttribute('srclang', 'vi');
   await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(1);
   await video.evaluate((element: HTMLVideoElement) => element.play());

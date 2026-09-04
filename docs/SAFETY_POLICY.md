@@ -4,6 +4,8 @@
 
 ## current contract guard
 
+장소 생략 자체는 안전 모호성이 아니며 게시 차단 사유가 아니다. 실제로 언급된 장소의 충돌이나 알아들을 수 없는 장소 표현은 blocking LOCATION으로 유지한다. 장소 생략 허용은 SAFETY/TASK/QUANTITY, HIGH/UNKNOWN 위험 또는 빈 실행 단계 차단을 완화하지 않는다.
+
 임시 팀 작성·관리 권한 변경은 아래 게시 gate를 완화하지 않는다. 첫 게시 실패 시 팀 활성화도 rollback한다. 근로자의 지시 확인은 이해·작업 완료·안전 승인으로 취급하지 않는다.
 
 `structure-v2`/`ontology-v2` current-code family/task-code mismatch, retired 또는 unknown code를 새 write에 쓰는 경우, schema invalidity, HIGH/UNKNOWN risk, no executable step은 publish blocker다. `structure-v1`은 read-only다. Worker response에는 risk assessment를 포함하지 않으며 video metadata는 APPROVED/LOW만 허용한다.

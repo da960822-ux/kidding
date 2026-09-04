@@ -1,33 +1,34 @@
 import { expect, test } from '@playwright/test';
 
-for (const blocking of [false, true]) {
-  test(`deictic location ${blocking ? 'conflict still requires clarification' : 'advisory allows one explicit in-person confirmation'}`, async ({ page }) => {
+for (const locationKind of ['DEICTIC', 'UNSPECIFIED'] as const) for (const blocking of [false, true]) {
+  test(`${locationKind} location ${blocking ? 'conflict still requires clarification' : 'advisory allows one explicit confirmation'}`, async ({ page }) => {
     await page.setViewportSize({ width: blocking ? 1024 : 360, height: 800 });
     await page.addInitScript(() => localStorage.setItem('batmeori-demo-owner-session', JSON.stringify({ authenticated: true, expires_at: new Date(Date.now() + 3600000).toISOString(), farm: { code: 'farm-demo', display_name: '밭머리 데모 농장' } })));
     await page.goto('/owner/new');
-    await page.evaluate(async (isBlocking) => {
+    await page.evaluate(async ({ isBlocking, kind }) => {
       const { api } = await import('/src/webapp/api.ts');
       const originalCreate = api.createDraft;
       const originalConfirm = api.confirmDraft;
       api.createDraft = async (audio: Blob) => {
         const draft = await originalCreate(audio);
-        return { ...draft, interpretation: 'AMBIGUOUS', state: { ...draft.state, location: { raw_text: '저짝 밭', kind: 'DEICTIC', canonical_name: null }, location_display: '저짝 밭' }, ambiguities: [{ field: 'location', kind: 'LOCATION', blocking: isBlocking, message: isBlocking ? '동쪽과 서쪽 중 어느 밭인가요?' : '가리킨 장소를 현장에서 함께 확인하면 됩니다.' }] };
+        return { ...draft, interpretation: 'AMBIGUOUS', state: { ...draft.state, location: { raw_text: kind === 'DEICTIC' ? '저짝 밭' : null, kind, canonical_name: null }, location_display: kind === 'DEICTIC' ? '저짝 밭' : '장소 미지정' }, ambiguities: [{ field: 'location', kind: 'LOCATION', blocking: isBlocking, message: isBlocking ? '동쪽과 서쪽 중 어느 밭인가요?' : kind === 'DEICTIC' ? '가리킨 장소를 현장에서 함께 확인하면 됩니다.' : '장소가 지정되지 않았습니다.' }] };
       };
       api.confirmDraft = async (...args: Parameters<typeof api.confirmDraft>) => {
         Object.defineProperty(window, '__confirmation', { configurable: true, value: args.slice(1) });
         return originalConfirm(...args);
       };
-    }, blocking);
+    }, { isBlocking: blocking, kind: locationKind });
     await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
-    await expect(page.getByText('저짝 밭', { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(locationKind === 'DEICTIC' ? '저짝 밭' : '장소 미지정', { exact: true }).first()).toBeVisible();
     if (blocking) {
       await expect(page.getByRole('button', { name: '이대로 전달', exact: true })).toBeDisabled();
       await expect(page.getByRole('button', { name: '현장에서 장소를 알려주고 전달' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: '장소 없이 확정하기' })).toHaveCount(0);
     } else {
       await expect(page.getByLabel('그대로 전달하는 이유')).toHaveCount(0);
-      await page.getByRole('button', { name: '현장에서 장소를 알려주고 전달' }).click();
+      await page.getByRole('button', { name: locationKind === 'DEICTIC' ? '현장에서 장소를 알려주고 전달' : '장소 없이 확정하기' }).click();
       await expect(page.getByRole('heading', { name: '작업 전달하기' })).toBeVisible();
-      expect(await page.evaluate(() => (window as unknown as { __confirmation: unknown }).__confirmation)).toEqual(['PUBLISH_AS_IS', 'IN_PERSON_BRIEFING']);
+      expect(await page.evaluate(() => (window as unknown as { __confirmation: unknown }).__confirmation)).toEqual(['PUBLISH_AS_IS', locationKind === 'DEICTIC' ? 'IN_PERSON_BRIEFING' : 'OWNER_ACCEPTED_OTHER']);
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });

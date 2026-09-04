@@ -77,7 +77,7 @@ P0는 양파·딸기만, vi/ne만, 수량 변경만 지원한다. 현재 상태�
 - 프론트는 https://batmeori.vercel.app, API는 https://batmeori-api.onrender.com 이다. Vercel과 Render 모두 `0ecc23e87168417256b97e6f7e7f20d4c10063eb` 배포 성공을 확인했다.
 - API `/health`·`/ready` 200과 revision 일치를 확인했다. 프론트의 같은 출처 `/api` 프록시를 통해 기존 농장 코드·PIN 인증 201 및 secure cookie를 확인했다. 이번 배포에서는 PIN 발급이나 DB migration을 실행하지 않았다.
 - 운영 `backend/live_e2e.py`가 실제 provider·Supabase로 PASS했다. 음성 입력·게시·원격 링크·수량 변경·CO_PRESENT·팀 QR 재발급·개별 배정, 실제 브라우저의 농장주/팀원 쿠키 유지를 확인했다.
-- 영상 기대값은 `delivery-policy-v2.json`을 따른다. 양파 수확 영상 재생을 확인했고, 양파 운반은 영상 없이 텍스트·TTS를 유지한다. 이전 테스트의 운반 영상 기대값을 수정했다.
+- 영상은 task code별 `APPROVED`·`LOW` current 자산을 매칭한다. 양파 운반도 검수된 수작업 운반 영상이 있으면 신규 package에 포함하고, 없으면 텍스트·TTS를 유지한다.
 - 이 배포 검증은 사투리 STT 전체 품질 통과를 의미하지 않는다. 남은 동작 누락·위치 오인식과 사전 비교 결과는 `evals/results/2026-09-04-dialect-resume-review.md`를 따른다.
 
 ### 적용 순서

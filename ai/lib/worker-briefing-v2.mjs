@@ -1,7 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-
-const { video_excluded_task_codes: videoExcludedTaskCodes } = JSON.parse(readFileSync(new URL('../references/delivery-policy-v2.json', import.meta.url), 'utf8'));
 
 const LANGUAGES = new Set(['vi', 'ne']);
 const FORBIDDEN = new Set(['transcript', 'raw_audio', 'risk_assessment', 'token', 'token_hash', 'cache_key', 'owner_id', 'farm_id', 'member_id', 'worker_id', 'display_name']);
@@ -71,7 +68,7 @@ export async function buildWorkerPackagesV2(work, languages, services) {
       const candidate = await (services.guideLookup?.({ languageCode, canonical_ko: step.description_ko }) ?? null);
       const guide = guideFor(languageCode, candidate);
       const description = localized(guide?.translated_text ?? await services.translate({ languageCode, text: step.description_ko, segment: 'ACTION' }));
-      const asset = videoExcludedTaskCodes.includes(step.task_code) ? null : services.matchVisualAsset(step.task_code);
+      const asset = services.matchVisualAsset(step.task_code);
       const video = asset ? { step_sequence: step.sequence, asset_id: asset.id, task_code: step.task_code, video_url: asset.public_path, provenance: 'AI_GENERATED_PREGENERATED', review_status: 'APPROVED', safety_level: 'LOW', captions_text: localized(await services.translate({ languageCode, text: asset.captions_text, segment: 'ACTION' })) } : null;
       return { sequence: step.sequence, task_code: step.task_code, title, description, delivery_mode: asset ? 'VIDEO' : 'TEXT_TTS', guide, video };
     }));

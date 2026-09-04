@@ -40,34 +40,33 @@ function SafetySources({ briefing }: { briefing: V2WorkerBriefing }) {
 }
 
 export function BriefingAudioControls({ briefing, step }: { briefing: V2WorkerBriefing; step?: V2WorkerStep }) {
-  const locale = briefing.language_code; const t = labels[locale]; const [speaking, setSpeaking] = useState<'full' | 'step' | null>(null); const [failed, setFailed] = useState(false); const audio = useRef<HTMLAudioElement | null>(null); const generation = useRef(0);
-  const stop = () => { generation.current += 1; if (audio.current) { audio.current.onended = null; audio.current.onerror = null; audio.current.pause(); audio.current = null; } window.speechSynthesis?.cancel(); setSpeaking(null); };
-  const play = async (mode: 'full' | 'step') => {
-    const stopping = speaking === mode; stop(); setFailed(false); if (stopping) return;
-    const request = generation.current; setSpeaking(mode);
+  const locale = briefing.language_code; const t = labels[locale]; const [speaking, setSpeaking] = useState(false); const [failed, setFailed] = useState(false); const audio = useRef<HTMLAudioElement | null>(null); const generation = useRef(0);
+  const stop = () => { generation.current += 1; if (audio.current) { audio.current.onended = null; audio.current.onerror = null; audio.current.pause(); audio.current = null; } window.speechSynthesis?.cancel(); setSpeaking(false); };
+  const play = async () => {
+    const stopping = speaking; stop(); setFailed(false); if (stopping) return;
+    const request = generation.current; setSpeaking(true);
     const browserSpeech = () => {
       if (request !== generation.current) return;
       if (audio.current) { audio.current.onended = null; audio.current.onerror = null; audio.current.pause(); audio.current = null; }
-      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { setFailed(true); setSpeaking(null); return; }
-      const text = mode === 'step' && step ? [...briefing.context.safety, `${step.title} ${step.description}`, briefing.context.notes].filter(Boolean).join('\n') : briefingSpeechText(briefing);
-      const speech = new SpeechSynthesisUtterance(text);
-      speech.lang = locale === 'vi' ? 'vi-VN' : 'ne-NP'; speech.onend = () => { if (request === generation.current) setSpeaking(null); }; speech.onerror = () => { if (request === generation.current) { setSpeaking(null); setFailed(true); } };
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) { setFailed(true); setSpeaking(false); return; }
+      const speech = new SpeechSynthesisUtterance(briefingSpeechText(briefing));
+      speech.lang = locale === 'vi' ? 'vi-VN' : 'ne-NP'; speech.onend = () => { if (request === generation.current) setSpeaking(false); }; speech.onerror = () => { if (request === generation.current) { setSpeaking(false); setFailed(true); } };
       window.speechSynthesis?.cancel(); window.speechSynthesis.speak(speech);
     };
-    if (mode === 'step' || !briefing.tts.audio_url) { browserSpeech(); return; }
+    if (!briefing.tts.audio_url) { browserSpeech(); return; }
     try {
       const bytes = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(briefingSpeechText(briefing)));
       if (request !== generation.current) return;
       const textHash = [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
       if (textHash !== briefing.tts.text_hash) { browserSpeech(); return; }
     } catch { browserSpeech(); return; }
-    const next = new Audio(briefing.tts.audio_url); audio.current = next; next.onended = () => { if (request === generation.current) setSpeaking(null); }; next.onerror = browserSpeech;
+    const next = new Audio(briefing.tts.audio_url); audio.current = next; next.onended = () => { if (request === generation.current) setSpeaking(false); }; next.onerror = browserSpeech;
     try { await next.play(); } catch { if (audio.current === next) browserSpeech(); }
   };
   useEffect(() => stop, [briefing.session_id, briefing.version, briefing.language_code, step?.sequence]);
   const label = locale === 'vi' ? 'Nghe toàn bộ hướng dẫn' : 'पूरा निर्देशन सुन्नुहोस्';
   const stopLabel = locale === 'vi' ? 'Dừng nghe' : 'सुन्न बन्द गर्नुहोस्';
-  return <div className="grid gap-2"><ActionButton className="w-full" onClick={() => play('full')}><Volume2 className={`h-5 w-5 ${speaking === 'full' ? 'animate-pulse' : ''}`} />{speaking === 'full' ? stopLabel : label}</ActionButton>{step && <ActionButton variant="secondary" className="w-full" onClick={() => play('step')}><Volume2 className={`h-5 w-5 ${speaking === 'step' ? 'animate-pulse' : ''}`} />{speaking === 'step' ? stopLabel : locale === 'vi' ? 'Nghe bước này' : 'यो चरण सुन्नुहोस्'}</ActionButton>}{failed && <p role="alert" className="mt-3 text-base font-extrabold text-[#8A302B]">{t.audioFailed}</p>}</div>;
+  return <div className="grid gap-2"><ActionButton className="w-full" onClick={play}><Volume2 className={`h-5 w-5 ${speaking ? 'animate-pulse' : ''}`} />{speaking ? stopLabel : label}</ActionButton>{failed && <p role="alert" className="mt-3 text-base font-extrabold text-[#8A302B]">{t.audioFailed}</p>}</div>;
 }
 
 const entryCopy = {

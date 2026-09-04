@@ -7,6 +7,7 @@
 | 구조화 JSON invalid | `422`, draft 저장·게시 금지 | 원문 유지·재시도 | schema validation | 계약 준수 |
 | 사투리·수량/동사 경계가 불명확 | 추측 치환 없이 blocking `TASK`/`QUANTITY` ambiguity | 해당 내용 보완 | 기존 게시 차단 유지 | 관련 사전 문맥만 참고 |
 | DEICTIC 위치 권고 누락 | non-blocking `LOCATION` 추가, 원문 보존 | 위치 입력 없이 현장 설명을 선택하는 전달 버튼 제공 | reason/audit 유지, 실제 blocking LOCATION은 낮추지 않음 | 지시어 자체로 blocking 금지 |
+| 언급하지 않은 작업 장소를 필수로 요구 | `UNSPECIFIED`/null 보존, LOCATION 질문 생성 금지 | 기존 초안도 장소 없이 확인 후 진행 | 순수 생략 LOCATION만 non-blocking 정규화, 원문이 있는 충돌·불명확은 계속 차단 | 초기·보완 prompt와 회귀 |
 | 양파·딸기 실행 지시 혼합 | 빈 단계·blocking `TASK`인 `AMBIGUOUS` 초안 | 작물별 분리 또는 선택 요청 | family mismatch 저장·게시 금지 | 부정문 작물과 실행 대상 구분 |
 | non-blocking ambiguity | owner가 `PUBLISH_AS_IS`/`SUPPLEMENT` 선택 | 배지·선택 UI | reason/audit 저장 | unknown 보존 |
 | safety ambiguity | `OVERRIDE_NOT_ALLOWED` | 강한 차단 | 게시 금지 | 위험 판정 |
@@ -18,7 +19,9 @@
 | guide MISS 안전표현 | 자동 게시 금지 | 확인 필요 | safety gate | source 검수 |
 | 안전 수준 HIGH 영상 | 게시 금지 | text fallback/차단 | gate | 영상 검수 |
 | 영상·TTS 실패 | text fallback | 재시도·텍스트 | 상태 반환 | provider retry |
-| 신규 양파 운반의 영상 제외 정책 | `ONION_TRANSPORT` 유지, text+TTS 제공 | 작업 안내 유지 | 저장된 기존 package는 그대로 읽음 | 데이터 정책을 신규 package 생성에만 적용 |
+| 양파 운반 영상 매칭 실패 | `ONION_TRANSPORT` 유지, text+TTS fallback | 작업 안내 유지 | 저장된 기존 package는 그대로 읽음 | 다른 작업과 같은 APPROVED·LOW·current 자산 gate |
+| 영상 프레임 잘림 | 원본 종횡비 유지, 프레임 전체 표시 | 화면 폭에 맞춰 축소 | 모바일·데스크톱 가로 스크롤 없음 | worker·owner 영상 회귀 |
+| 단계별 듣기와 전체 듣기 혼동 | 단계별 듣기 제거, 전체 지시 듣기만 표시 | 같은 전체 안내를 한 번에 재생 | hash 검증·기기 전체 음성 fallback 유지 | vi·ne UI 회귀 |
 | worker locale leakage 또는 unverified safety provenance | `422 SCHEMA_INVALID`, package·게시 금지 | 해당 언어 안내 | locale/provenance 재검증 | 번역/guide 재검증 |
 | worker DTO에 transcript/risk/identity/token/cache key 또는 UI의 TTS hash 노출 | `422 SCHEMA_INVALID`, package·게시 금지 | 비노출 | DTO/UI allowlist 검증 | package builder 검증 |
 | 신규 TTS 위치·객체 수량·마감·안전·단계·메모 누락 또는 조립/hash 불일치 | `422 SCHEMA_INVALID`, package·게시 금지 | 실패 안내 | 표시 package 기준 exact text/hash 재검증 | 동일 전체 텍스트로 package 재생성 |
@@ -51,7 +54,7 @@
 | 화면 이동 후 이전 요청 완료 | 현재 화면 변경 금지 | 화면·인증 세대 검사 | 이미 수행된 게시를 취소로 가장하지 않음 | - |
 | 다른 작업의 공유 링크 잔류 | 표시·복사 금지 | session_id 일치 검사와 작업 전환 초기화 | 링크의 session 결합 유지 | - |
 | 일반 근로자 진입 URL | 초대 토큰 없음 | QR/링크 입력 화면, URL 길이를 토큰으로 판정하지 않음 | 기존 join 검증 유지 | - |
-| 기기 음성 미지원 또는 재생 실패 | 글 안내 유지 | 전체/단계 범위를 명시하고 해당 언어 오류·재시도 제공 | 저장 TTS·TEXT fallback 계약 유지 | - |
+| 기기 음성 미지원 또는 재생 실패 | 글 안내 유지 | 전체 듣기 범위를 명시하고 해당 언어 오류·재시도 제공 | 저장 TTS·TEXT fallback 계약 유지 | - |
 | legacy v1 WorkVersion quantity preview/confirm | `422 LEGACY_READ_ONLY` | legacy version은 읽기 전용 안내 | remap·mutation 없이 차단 | version contract |
 | worker version 증가 | 5초 polling/focus 즉시 조회 | 화면/TTS 교체 | 최신 PUBLISHED 반환 | - |
 | API/DB 일시 장애 | 재시도·demo fallback | 마지막 상태와 오류 구분 | `/health`, `/ready` | - |

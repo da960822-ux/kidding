@@ -36,6 +36,12 @@ body {
 .batmeori-webapp .text-3xl { font-size: 34px !important; }
 .batmeori-webapp .text-4xl { font-size: 40px !important; }
 
+.batmeori-webapp video[controls] {
+  aspect-ratio: auto 16 / 9;
+  max-height: 70svh;
+  object-fit: contain;
+}
+
 @media (min-width: 640px) {
   .batmeori-webapp [class~="sm:text-lg"] { font-size: 22px !important; }
   .batmeori-webapp [class~="sm:text-2xl"] { font-size: 28px !important; }

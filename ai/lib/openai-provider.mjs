@@ -58,7 +58,7 @@ export function createOpenAiProvider({ env, fetchImpl, transcriptionPrompt = '',
       return { transcript: review.choice === 'A' ? primary.text : review.choice === 'B' ? verification.text : '' };
     },
     async interpretStructureV2({ prompt, transcript, schema }) {
-      return outputText(await requests.response([{ role: 'user', content: `${prompt}\n<owner-transcript>${transcript}</owner-transcript>` }], { type: 'json_schema', name: 'structure_v2', strict: true, schema }));
+      return outputText(await requests.response([{ role: 'user', content: `${prompt}\n<owner-transcript>${transcript}</owner-transcript>` }], { type: 'json_schema', name: 'structure_v2', strict: true, schema }, undefined, env?.OPENAI_STRUCTURE_REASONING_EFFORT || 'low'));
     },
     async translate({ languageCode, text, segment = 'OTHER', glossary = [], domainContext = [], taskFamily }) {
       const sackUnit = { vi: 'bao', ne: 'बोरा' }[languageCode];

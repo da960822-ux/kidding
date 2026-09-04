@@ -41,7 +41,7 @@ export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', transcri
     return response.json();
   }
   return {
-    response: (input, format, responseModel = model) => request('/responses', { model: responseModel, input, text: { format: { ...format, schema: providerSchema(format.schema) } } }),
+    response: (input, format, responseModel = model, reasoningEffort) => request('/responses', { model: responseModel, input, ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}), text: { format: { ...format, schema: providerSchema(format.schema) } } }),
     speech: (input, voice) => requestBytes('/audio/speech', { model: 'gpt-4o-mini-tts', input, voice, response_format: 'mp3' }),
     transcription,
     metadata: { provider: 'openai', model, transcription_model: transcriptionModel }

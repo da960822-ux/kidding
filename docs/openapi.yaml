@@ -109,8 +109,8 @@ paths:
   /api/v1/work-sessions/drafts/from-audio:
     post:
       tags: [Owner]
-      summary: Synchronously transcribe, structure, translate, and match video
-      description: Raw audio is temporary and deleted after processing. No version is created.
+      summary: Synchronously transcribe and structure an owner draft
+      description: Raw audio is temporary and deleted after processing. No version or localized media package is created. Translation and approved-video matching occur at publish; the published storyboard reads the stored briefing.
       security: [{ ownerSession: [] }]
       parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
       requestBody:
@@ -803,4 +803,15 @@ components:
         notices with verified provenance and omits transcript, risk assessment,
         identity/audit fields, token/cache metadata, and audio bytes. The
         opaque `tts.text_hash` is never displayed by worker UI.
+        New packages hash the exact newline-joined nonempty locale location,
+        object quantity formatted as value plus space plus unit, deadline,
+        all safety notices, ordered step title plus space plus description,
+        and notes. Non-object quantity is omitted. AI_CONTRACTS.md defines
+        the same full-audio assembly for generation, validation and browser fallback.
+        Notes remain visible before start and on step/CO_PRESENT screens.
+        Stored packages are immutable; mismatched or unverifiable full-text hashes
+        select browser speech or text fallback without rewriting stored audio.
+        For new agricultural quantity units, verified WORK_TERM exact HIT takes
+        precedence; a missing HIT for 망 uses vi bao or ne बोरा in the unit field
+        and sentence glossary. Other units retain their existing behavior.
       $ref: './schemas/worker-briefing-v2.schema.json'

@@ -1,0 +1,115 @@
+{
+  "cache_key": "c2aa4909f60c70a601d59ce2b5895f3287cb271d991fff5926464315d0f42f32",
+  "briefing": {
+    "session_id": "evaluation-case-1",
+    "version": 1,
+    "contract_version": "worker-briefing-v2",
+    "ontology_version": "ontology-v2",
+    "language_code": "vi",
+    "context": {
+      "task_family": "ONION",
+      "location_display": "cánh đồng phía dưới",
+      "quantity": {
+        "value": 20,
+        "unit": "mạng"
+      },
+      "deadline": null,
+      "notes": "Loại trừ những thứ đã bị hỏng.",
+      "safety": []
+    },
+    "badges": [],
+    "steps": [
+      {
+        "sequence": 1,
+        "task_code": "ONION_HARVEST",
+        "title": "thu hoạch hành tây",
+        "description": "Ở ruộng phía dưới, tôi thu hoạch 20 bao hành tây.",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 2,
+        "task_code": "ONION_SORTING",
+        "title": "Phân loại hành tây",
+        "description": "Loại bỏ hành tây bị hỏng.",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 3,
+        "task_code": "ONION_TRANSPORT",
+        "title": "vận chuyển hành tây",
+        "description": "Chuyển những củ hành tây đã được chọn lọc vào kho.",
+        "delivery_mode": "TEXT_TTS"
+      }
+    ],
+    "source_detail": [
+      {
+        "step_sequence": 1,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 2,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 3,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      }
+    ],
+    "tts": {
+      "status": "READY",
+      "text_hash": "01369aefb3c2a2eb821059098c8f12bc28820edb39822710b0649a540c7929e4",
+      "audio_url": null
+    },
+    "video": [
+      {
+        "step_sequence": 1,
+        "asset_id": "p0-onion-harvest-v1",
+        "task_code": "ONION_HARVEST",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_harvest.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "Thu hoạch hành tây bằng tay."
+      },
+      {
+        "step_sequence": 2,
+        "asset_id": "p0-onion-sorting-v1",
+        "task_code": "ONION_SORTING",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_sorting.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "Phân loại hành tây."
+      }
+    ]
+  },
+  "tts_transport": {
+    "status": "READY",
+    "text": "thu hoạch hành tây Ở ruộng phía dưới, tôi thu hoạch 20 bao hành tây.\nPhân loại hành tây Loại bỏ hành tây bị hỏng.\nvận chuyển hành tây Chuyển những củ hành tây đã được chọn lọc vào kho.",
+    "text_hash": "01369aefb3c2a2eb821059098c8f12bc28820edb39822710b0649a540c7929e4",
+    "audio_url": null
+  },
+  "evaluation": {
+    "source_repeat": 1,
+    "published": false,
+    "audio_generated": true
+  }
+}

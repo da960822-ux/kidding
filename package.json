@@ -9,7 +9,7 @@
     "build": "tsc --noEmit -p tsconfig.app.json && vite build --config vite.config.ts",
     "check:deployment": "node scripts/check-vercel-proxy.mjs",
     "check:contracts": "node scripts/check-frontend-contract.mjs",
-    "test:web": "playwright test tests/webapp/two-crop-team.spec.ts tests/webapp/full-p0-flow.spec.ts tests/webapp/ux-hardening.spec.ts tests/webapp/temporary-team.spec.ts tests/webapp/version-propagation.spec.ts tests/webapp/landing-copy.spec.ts",
+    "test:web": "playwright test tests/webapp/two-crop-team.spec.ts tests/webapp/full-p0-flow.spec.ts tests/webapp/ux-hardening.spec.ts tests/webapp/temporary-team.spec.ts tests/webapp/version-propagation.spec.ts tests/webapp/landing-copy.spec.ts tests/webapp/owner-ux-regressions.spec.ts tests/webapp/access-ux-regressions.spec.ts tests/webapp/worker-ux-regressions.spec.ts tests/webapp/worker-full-audio.spec.ts tests/webapp/navigation-media.spec.ts && playwright test --config playwright.api.config.ts",
     "preview": "vite preview",
     "test:live:workflow": "node scripts/check-live-workflow.mjs"
   },

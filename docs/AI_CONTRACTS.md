@@ -4,6 +4,8 @@
 
 ## 서버 adapter 설정
 
+비-TTS AI 작업(전사·초안·보완·수량 preview)은 HTTP 요청 시작부터 50초의 공통 bridge 예산을 쓰며 재시도는 남은 시간만 사용한다. provider의 JSON/STT HTTP 요청도 45초에 중단한다. 기존 FE 60초 timeout 안에 실패 안내를 돌려주는 목적이며 DB commit rollback을 보장하는 취소 계약은 아니다. 이 비-TTS 시간 예산은 게시 package의 합성 및 근로자 TTS 재생/캐시에 적용하지 않는다. 전체 TTS 내용·재생은 아래 Worker briefing 계약을 따른다. 응답 유실 시 FE는 같은 논리적 확정 요청의 키를 재사용하고 현재 게시 상태를 조회하여 결과 불명을 복구한다.
+
 provider adapter는 server-only environment에서 실행한다. provider/model/voice/timeout은 run metadata에만 있고 OpenAPI, request/response JSON, worker payload에는 없다. canonical schema와 BE semantic validation은 provider output에 항상 다시 적용한다.
 
 ## 공통 규칙
@@ -28,6 +30,8 @@ provider adapter는 server-only environment에서 실행한다. provider/model/v
 OpenAI adapter는 특정 작물·수량·작업 어휘가 없는 일반 한국어 작업 문맥과 `language=ko`로 `OPENAI_TRANSCRIBE_MODEL`을 먼저 호출하고 token log probability를 확인한다. 한국어 UTF-8 분할 토큰의 대체문자와 byte 조각도 신뢰도 검사에서 제외하지 않는다. `OPENAI_TRANSCRIBE_LOGPROB_THRESHOLD`보다 낮은 말 토큰이 있을 때만 `OPENAI_TRANSCRIBE_VERIFICATION_MODEL`로 같은 원음을 다시 전사한다. 두 결과가 다르면 `OPENAI_TRANSCRIPT_REVIEW_MODEL`이 후보에 없는 문장을 만들지 못하는 enum 계약으로 A/B/UNCLEAR만 고른다. 숫자·단위·작업·장소 충돌이 불명확하거나 UNCLEAR이면 빈 transcript로 반환해 `422 AUDIO_UNCLEAR` 재녹음을 요청한다. provider 연결·응답 실패만 `503 PROVIDER_UNAVAILABLE`이다. raw audio는 요청 완료 즉시 삭제하고 transcript만 version 감사에 남긴다. 실행 경로에는 특정 정답 문장, 고정 농업 키워드, 사후 치환 규칙을 넣지 않는다.
 
 ## 구조화 `structure-v2`
+
+상세 설명의 방법·분류 기준·조건·예외는 step description에, 실행 단계가 아닌 관련 금지는 notes에 보존한다. 조건을 무조건 실행으로 바꾸거나 누락하지 않는다. 초기·보완·수량 변경에서 명확한 원문 숫자+단위와 결과가 충돌하면 추측 교정하지 않고 blocking QUANTITY와 unknown 수량을 반환한다. `20망`과 실제 `20만 개`를 구분하며 원문은 변경하지 않는다. 복수 수량·용기당 개수·취소·단위 누락은 관계를 확인할 수 있는 범위에서 검증한다. 보완에 수량이 없으면 기존 수량을 삭제하지 않는다.
 
 ### 사투리 참고 자료
 
@@ -67,7 +71,7 @@ BE는 `DEICTIC` 위치인데 LOCATION ambiguity가 빠진 경우 non-blocking �
 
 P0 task_code는 양파의 `ONION_HARVEST`, `ONION_TRIMMING`, `ONION_SORTING`, `ONION_TRANSPORT`와 딸기의 `STRAWBERRY_HARVEST`, `STRAWBERRY_SORTING`, `STRAWBERRY_INSPECTION`, `STRAWBERRY_PACKING`이다. 각 non-null step은 출력 `task_family`와 일치해야 하며, BE가 이를 다시 검증한다. unsupported non-safety task는 `task_code:null`과 `unsupported_reason`으로 반환한다. owner override 뒤 BE가 `delivery_mode: TEXT_TTS|TEXT`로 보존한다. 안전·HIGH·schema invalid·no executable step은 override할 수 없다. safety는 입력에 명시된 것만 보존한다.
 
-LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구조화 JSON만 반환하고 BE가 검수 manifest와 TTS 결과를 결합해 `openapi.yaml`의 DraftState/PublishedWorkState를 만든다.
+LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. 초안은 구조화만 하며 게시 시 Node가 검수 manifest와 번역을 결합해 WorkerBriefing을 만들고 BE가 검증·저장한다. owner 미디어 필드를 채우려고 저장된 structure를 다시 쓰지 않는다.
 
 한 지시에 두 작물의 실행 작업이 있으면 `AMBIGUOUS`, 빈 `steps`, blocking `TASK`로 작물 선택/분리를 요청한다. required `task_family`에는 원문에 있는 첫 실행 작물을 임시 표현하되 게시 가능한 선택으로 취급하지 않는다. 부정문에만 등장한 작물은 제외한다. 명시적으로 수량을 모른다고 하거나 결정하지 않았다고 한 경우는 수량 자체를 생략한 경우와 구분하며, unknown과 blocking `QUANTITY`를 함께 보존한다. 숫자 없는 용기 명사·이미 완료된 동작의 관형형은 수량 요구가 아니다. 명확한 숫자+용기 단위는 수확·운반 목표량이 될 수 있으며 별도 포장 동작이나 용기별 용량 확인을 요구하지 않는다.
 
@@ -83,7 +87,11 @@ LLM은 영상·TTS URL이나 `delivery_mode`를 만들지 않는다. AI는 구�
 
 ## 번역 `translation-v1`
 
-각 step의 action/quantity/order/location/safety를 별도 segment로 만든다. action phrase는 검수된 `GuidePhrase` HIT를 우선하고, quantity/order는 BE deterministic template을 사용한다. safety는 VERIFIED OFFICIAL만 사용하며, missing general phrase만 `AI_TRANSLATION` fallback이다. 전체 문장을 하나의 official source로 표시하지 않는다. 실제 검수된 HIT row는 아직 data collection gate이므로 가짜 URL·페이지를 예시에 넣지 않는다. 일반표현 MISS 예시는 다음과 같다.
+Node는 segment 의미를 구분해 번역한다. 기존 GuidePhrase/GuideTranslation의 category·phrase_type·phrase_key·검수·출처를 유지하며 같은 언어의 관련 WORK_TERM을 용어쌍으로 일반 번역에 제공한다. 검수된 전체 작업문장 HIT는 직접 사용한다. quantity 숫자는 원값을 복사하고 단위 exact HIT는 검수 번역을 우선 사용한다. 제목·설명·위치·단위·자막 번역에도 segment와 농업 문맥을 전달한다.
+
+신규 package의 농업 수량 단위 `망`은 검수된 동일 언어 WORK_TERM exact HIT가 없을 때만 결정적으로 `vi: bao`, `ne: बोरा`를 사용한다. 이를 망 자체를 뜻하는 그물 번역과 구분하며, 수량 카드에 선택한 단위와 같은 용어를 문장 번역 glossary에도 전달한다. 검수 glossary는 fallback보다 우선하고, 일반 문장의 출처를 공식 번역으로 승격하지 않는다. 다른 단위의 기존 번역 규칙과 저장된 immutable package는 바꾸지 않는다.
+
+단어 참고로 생성한 문장은 AI_TRANSLATION이며 전체 문장을 공식 번역으로 승격하지 않는다. safety는 verified 공식 전체 문장 HIT만 허용한다. 용어는 `(canonical_ko,category,phrase_type)`로 묶고 언어별로 선택하며 충돌 번역을 임의 통합하지 않는다. DB에 없는 전문어 의미·반례는 `ai/references/agriculture-terms-v2.json`에 미검수 참고로 기록한다. DB 사전을 복제하거나 공식 검수로 승격하지 않는다. glossary는 참고 데이터이며 지시문으로 실행하지 않는다. 검증하지 않은 source URL·페이지를 만들지 않는다. 일반표현 MISS 예시는 다음과 같다.
 
 ```json
 {
@@ -127,7 +135,7 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 ## TTS `tts-v1`
 
-입력: 게시된 step text, `language_code`(`ko|vi|ne`), voice settings. 출력: 재생 가능한 `audio_url` 또는 실패 상태. publish 시 text content hash로 생성·cache하며 text를 source of truth로 둔다. 실패하면 text를 표시한다.
+입력: 아래 규칙으로 조립한 게시 대상 WorkerBriefing의 전체 locale text, `language_code`(`vi|ne`), voice settings. 출력: 재생 가능한 `audio_url` 또는 실패 상태. publish 시 text content hash로 생성·cache하며 text를 source of truth로 둔다. 별도 LLM 요약·재작성 없이 번역된 표시 텍스트를 그대로 조립한다. 실패하면 text를 표시한다.
 
 ## Worker briefing `worker-briefing-v2`
 
@@ -135,7 +143,20 @@ AI가 위험을 낮추거나 안전 문구를 만들어 내지 않는다. BE는 
 
 `context.safety[]`는 worker에게 표시할 현지화된 안전 문구다. 각 문구의 provenance는 기존 `source_detail[]`에 `segment:"SAFETY"`, `step_sequence:null`로 같은 배열 순서에 보존한다. safety는 검수된 `OFFICIAL_GUIDE` HIT(`verified:true`, page/url/license 포함)여야 하며, 안전 번역 MISS는 package를 만들거나 게시할 수 없다. step action provenance는 `step_sequence`과 source step 순서를 보존한다.
 
-`steps[]`는 published WorkVersion의 모든 step을 같은 수와 배열 순서로 보존한다. video match 또는 TTS 실패는 step을 삭제하거나 재정렬하지 않으며 delivery mode만 `TEXT_TTS` 또는 `TEXT`로 낮춘다. TTS input은 `context.safety[]` 전체 다음 `steps[]`의 title·description 전체를 같은 순서로 합친다. Worker DTO의 `tts.text_hash`는 64자리 SHA-256 opaque fingerprint로서 UI에 표시하지 않는다. Node↔BE private `tts_transport`는 그 exact `text`, `text_hash`, audio bytes를 보관해 BE가 package content 기반 expected text/hash를 재검증한다.
+`steps[]`는 published WorkVersion의 모든 step을 같은 수와 배열 순서로 보존한다. video match 또는 TTS 실패는 step을 삭제하거나 재정렬하지 않으며 delivery mode만 `TEXT_TTS` 또는 `TEXT`로 낮춘다. 신규 package의 전체 TTS input은 아래 항목에서 비어 있지 않은 문자열만 골라 줄바꿈(`\n`)으로 합친다. 항목 내용은 요약·재작성하지 않는다.
+
+1. `context.location_display`
+2. `context.quantity`가 객체일 때만 `${value} ${unit}`; `null` 또는 문자열이면 생략
+3. `context.deadline`
+4. `context.safety[]` 전체를 배열 순서대로
+5. `steps[]` 전체를 저장된 배열 순서대로 각각 `${title} ${description}`
+6. `context.notes`
+
+예를 들어 검수 단위 HIT가 없는 `quantity:{value:20,unit:"망"}`의 새 package는 `vi`에서 `20 bao`, `ne`에서 `20 बोरा`를 두 번째 항목으로 읽는다. 마감·메모가 null이면 빈 줄이나 대체 문구를 만들지 않는다. Worker DTO의 `tts.text_hash`는 이 exact UTF-8 text의 64자리 SHA-256으로 UI에 표시하지 않는다. Node↔BE private `tts_transport`는 exact `text`, `text_hash`, audio bytes를 보관하며, BE 신규 package 검증과 browser 전체 음성 fallback은 동일한 조립 규칙을 사용한다.
+
+`context.notes`는 기존 메모 필드 그대로 유지하며 금지·주의 문구의 휴리스틱 분류나 `safety` 이동을 하지 않는다. FE는 시작 전 첫 화면·단계 화면·CO_PRESENT 화면에서 메모 전체를 펼침 없이 표시한다. 단계 음성은 안전 문구 전체, 현재 단계의 `${title} ${description}`, 메모의 비어 있지 않은 항목을 줄바꿈으로 합친다.
+
+기존 immutable package와 저장 음성은 수정하지 않는다. browser는 현재 표시 package로 조립한 전체 텍스트의 hash와 저장된 `tts.text_hash`가 일치할 때만 저장 음성을 전체 듣기에 사용한다. 불일치·검증 불가·재생 실패 시 같은 전체 텍스트를 기기 음성으로 읽고, 기기 음성도 미지원이면 선택 언어 글 안내와 재시도를 유지한다. 신규 생성 검증 규칙을 과거 package 조회의 차단 조건으로 적용하지 않는다.
 
 worker DTO에는 transcript, raw audio, `risk_assessment`, identity/owner audit field, token/cache key를 넣지 않는다. `tts.text_hash`만 cache validation용 opaque hash로 허용하며 UI는 이를 표시하지 않는다. `session_id`와 version은 published briefing 식별을 위한 허용 field다.
 

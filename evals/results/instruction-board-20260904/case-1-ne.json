@@ -1,0 +1,115 @@
+{
+  "cache_key": "63c7bb0c3c6b9cc4ada3aba5188cac5da43688ce232bf66d8a2eac44576e3afc",
+  "briefing": {
+    "session_id": "evaluation-case-1",
+    "version": 1,
+    "contract_version": "worker-briefing-v2",
+    "ontology_version": "ontology-v2",
+    "language_code": "ne",
+    "context": {
+      "task_family": "ONION",
+      "location_display": "तल्लो खेत",
+      "quantity": {
+        "value": 20,
+        "unit": "जाल"
+      },
+      "deadline": null,
+      "notes": "बिग्रिएका वस्तुहरू बाहेक राखिन्छन्।",
+      "safety": []
+    },
+    "badges": [],
+    "steps": [
+      {
+        "sequence": 1,
+        "task_code": "ONION_HARVEST",
+        "title": "प्याजको कटनी",
+        "description": "तल्लो खेतबाट प्याजका २० जाल निकाल्छौं।",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 2,
+        "task_code": "ONION_SORTING",
+        "title": "प्याज छनोट",
+        "description": "बिग्रिएका प्याजहरू हटाउनुहोस्।",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 3,
+        "task_code": "ONION_TRANSPORT",
+        "title": "प्याज ढुवानी",
+        "description": "छानिएका प्याजहरू गोदाममा सारिन्छन्।",
+        "delivery_mode": "TEXT_TTS"
+      }
+    ],
+    "source_detail": [
+      {
+        "step_sequence": 1,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 2,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 3,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      }
+    ],
+    "tts": {
+      "status": "READY",
+      "text_hash": "10ad5a5589ad4c9e11cca5cfbbd8be7f78eeb0a92384f40d4501f05dfceeab71",
+      "audio_url": null
+    },
+    "video": [
+      {
+        "step_sequence": 1,
+        "asset_id": "p0-onion-harvest-v1",
+        "task_code": "ONION_HARVEST",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_harvest.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "प्याज हातले कटनी गरिन्छ।"
+      },
+      {
+        "step_sequence": 2,
+        "asset_id": "p0-onion-sorting-v1",
+        "task_code": "ONION_SORTING",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_sorting.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "प्याजलाई वर्गीकरण गरिन्छ।"
+      }
+    ]
+  },
+  "tts_transport": {
+    "status": "READY",
+    "text": "प्याजको कटनी तल्लो खेतबाट प्याजका २० जाल निकाल्छौं।\nप्याज छनोट बिग्रिएका प्याजहरू हटाउनुहोस्।\nप्याज ढुवानी छानिएका प्याजहरू गोदाममा सारिन्छन्।",
+    "text_hash": "10ad5a5589ad4c9e11cca5cfbbd8be7f78eeb0a92384f40d4501f05dfceeab71",
+    "audio_url": null
+  },
+  "evaluation": {
+    "source_repeat": 1,
+    "published": false,
+    "audio_generated": true
+  }
+}

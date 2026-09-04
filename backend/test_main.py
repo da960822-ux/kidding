@@ -53,6 +53,7 @@ from app.main import (
     sign_team_member,
     validate_contract_schema,
     validate_worker_briefing,
+    worker_tts_text,
 )
 from app.ai import AiProviderError
 from app.p0_runtime import OwnerIdentity
@@ -80,7 +81,7 @@ def worker_briefing(language_code="vi", steps=None, safety=None, source_detail=N
     steps = steps or [{"sequence": 1, "task_code": "ONION_HARVEST", "title": "Thu hoạch", "description": "Thu hoạch hành", "delivery_mode": "TEXT_TTS"}]
     safety = safety or []
     source_detail = source_detail or [{"step_sequence": 1, "segment": "ACTION", "source": "AI_TRANSLATION", "guide_lookup": "MISS", "verified": False, "source_page": None, "source_url": None, "license": None}]
-    text = "\n".join([*safety, *(f'{step["title"]} {step["description"]}' for step in steps)])
+    text = "\n".join(["Khu A", "20 bao", *safety, *(f'{step["title"]} {step["description"]}' for step in steps)])
     return {
         "session_id": "session-1", "version": 1, "contract_version": "worker-briefing-v2", "ontology_version": "ontology-v2", "language_code": language_code,
         "context": {"task_family": "ONION", "location_display": "Khu A", "quantity": {"value": 20, "unit": "bao"}, "deadline": None, "notes": None, "safety": safety},
@@ -537,7 +538,7 @@ class BackendP0Tests(unittest.TestCase):
                 "briefing": briefing,
                 "tts_transport": {
                     "status": "READY",
-                    "text": "\n".join([*briefing["context"]["safety"], *(f'{step["title"]} {step["description"]}' for step in briefing["steps"])]),
+                    "text": "\n".join(["Khu A", "20 bao", *briefing["context"]["safety"], *(f'{step["title"]} {step["description"]}' for step in briefing["steps"])]),
                     "text_hash": briefing["tts"]["text_hash"],
                     "audio_url": None,
                     "audio_bytes_base64": base64.b64encode(b"audio").decode(),
@@ -633,7 +634,47 @@ class BackendP0Tests(unittest.TestCase):
             validate_worker_briefing(package, "vi", "session-1", 1, state)
         self.assertEqual(step_error.exception.code, "SCHEMA_INVALID")
 
-    def test_tts_transport_must_match_safety_then_steps(self):
+    def test_full_tts_includes_context_safety_source_order_steps_and_notes(self):
+        briefing = worker_briefing(safety=["Đeo găng tay."])
+        briefing["context"].update(deadline="Trước 11 giờ", notes="Không ném hành.")
+        briefing["steps"].insert(0, {"sequence": 2, "title": "Cắt", "description": "Cắt lá hành"})
+        expected = "Khu A\n20 bao\nTrước 11 giờ\nĐeo găng tay.\nCắt Cắt lá hành\nThu hoạch Thu hoạch hành\nKhông ném hành."
+        self.assertEqual(worker_tts_text(briefing), expected)
+        text_hash = hashlib.sha256(expected.encode()).hexdigest()
+        briefing["tts"]["text_hash"] = text_hash
+        result = finalize_tts_package(None, "vi", {
+            "briefing": briefing,
+            "tts_transport": {"status": "FALLBACK", "text": expected, "text_hash": text_hash},
+        })
+        self.assertEqual(result["tts"]["status"], "FALLBACK")
+        for line in expected.splitlines():
+            with self.subTest(omitted=line):
+                incomplete = "\n".join(part for part in expected.splitlines() if part != line)
+                incomplete_hash = hashlib.sha256(incomplete.encode()).hexdigest()
+                briefing["tts"]["text_hash"] = incomplete_hash
+                with self.assertRaises(ApiError) as raised:
+                    finalize_tts_package(None, "vi", {
+                        "briefing": briefing,
+                        "tts_transport": {"status": "FALLBACK", "text": incomplete, "text_hash": incomplete_hash},
+                    })
+                self.assertEqual(raised.exception.code, "SCHEMA_INVALID")
+
+    def test_full_tts_omits_unknown_quantity_and_absent_optional_context(self):
+        for quantity in [None, "UNSPECIFIED"]:
+            briefing = worker_briefing()
+            briefing["context"]["quantity"] = quantity
+            self.assertEqual(worker_tts_text(briefing), "Khu A\nThu hoạch Thu hoạch hành")
+
+    def test_full_tts_rejects_malformed_quantity_before_speaking(self):
+        for quantity in [{}, {"value": None, "unit": "bao"}, {"value": 20, "unit": None}]:
+            with self.subTest(quantity=quantity):
+                briefing = worker_briefing()
+                briefing["context"]["quantity"] = quantity
+                with self.assertRaises(ApiError) as raised:
+                    worker_tts_text(briefing)
+                self.assertEqual(raised.exception.code, "SCHEMA_INVALID")
+
+    def test_tts_transport_must_match_complete_briefing(self):
         briefing = worker_briefing(safety=["Đeo găng tay."])
         with self.assertRaises(ApiError) as raised:
             finalize_tts_package(
@@ -810,6 +851,8 @@ class BackendP0Tests(unittest.TestCase):
 
     def test_quantity_confirm_reuses_prior_structure_metadata_in_atomic_snapshot(self):
         state, ambiguities, interpretation = asyncio.run(parse_structure_output(structure(), "양파 20망 수확"))
+        state.steps[0].description_ko = "20번 밭에서 양파 20망을 수확한다"
+        state.notes = "스무 망을 창고에 둔다"
         state_json = structure_v2_state_json(state, interpretation, "양파 20망을 수확합니다.", ambiguities)
         previous = {
             "version": 1,
@@ -885,6 +928,9 @@ class BackendP0Tests(unittest.TestCase):
         self.assertEqual(sent["rpc_args"]["p_state_json"]["interpretation"], "READY")
         self.assertEqual(build.call_args.args[4], "READY")
         self.assertIn("15망", build.call_args.args[5])
+        self.assertEqual(sent["rpc_args"]["p_state_json"]["steps"][0]["description_ko"], "20번 밭에서 양파 15망을 수확한다")
+        self.assertEqual(sent["rpc_args"]["p_state_json"]["notes"], "15 망을 창고에 둔다")
+        self.assertEqual(previous["state_json"]["notes"], "스무 망을 창고에 둔다")
 
     def test_family_mismatch_is_rejected_before_publish(self):
         with self.assertRaises(ApiError) as raised:

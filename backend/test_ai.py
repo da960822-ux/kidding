@@ -1,5 +1,6 @@
 import asyncio
 import unittest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from app.ai import AiProviderError, bridge_call, provider_ready
@@ -7,6 +8,31 @@ from app.p0_runtime import BridgeError
 
 
 class NodeOnlyAiTests(unittest.TestCase):
+    def test_bridge_retry_uses_remaining_request_budget(self):
+        from app import ai
+        limits = []
+        async def fake_call(_operation, _payload):
+            if len(limits) == 1:
+                raise BridgeError()
+            return {"transcript": "양파"}
+        def bridge(_binary, _path, timeout):
+            limits.append(timeout)
+            return SimpleNamespace(call=fake_call)
+        with patch.object(ai, "request_deadline", create=True) as deadline, patch.object(ai, "NodeBridge", side_effect=bridge), patch.object(ai, "monotonic", create=True, side_effect=[100.0, 105.0]):
+            deadline.get.return_value = 110.0
+            result = asyncio.run(ai.bridge_call("TRANSCRIBE_AUDIO", {}))
+        self.assertEqual(result, {"transcript": "양파"})
+        self.assertEqual(limits, [10.0, 5.0])
+
+    def test_expired_request_does_not_start_another_bridge(self):
+        from app import ai
+        with patch.object(ai, "request_deadline", create=True) as deadline, patch.object(ai, "NodeBridge") as bridge, patch.object(ai, "monotonic", create=True, return_value=111.0):
+            deadline.get.return_value = 110.0
+            bridge.return_value.call = AsyncMock(return_value={})
+            with self.assertRaises(AiProviderError):
+                asyncio.run(ai.bridge_call("PARSE_QUANTITY_CHANGE", {}))
+        bridge.assert_not_called()
+
     def test_ready_rejects_a_missing_openai_key(self):
         with patch.dict("os.environ", {"OPENAI_API_KEY": ""}, clear=False):
             self.assertFalse(provider_ready())

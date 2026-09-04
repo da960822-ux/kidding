@@ -1,0 +1,124 @@
+{
+  "case": 3,
+  "repeat": 3,
+  "transcript": "오전까지 아랫밭 양파 20망을 캐고, 상했거나 물러진 건 따로 빼. 다 끝나면 던지지 말고 상자에 담아서 창고로 옮겨.",
+  "raw": {
+    "interpretation": "READY",
+    "summary_ko": "오전까지 아랫밭에서 양파 20망을 수확하고, 상했거나 물러진 양파는 따로 분류한 뒤, 상자에 담아 창고로 운반합니다. 던지지 않습니다.",
+    "location": {
+      "raw_text": "아랫밭",
+      "kind": "NAMED",
+      "canonical_name": "아랫밭"
+    },
+    "task_family": "ONION",
+    "quantity": {
+      "value": 20,
+      "unit": "망"
+    },
+    "deadline": "오전까지",
+    "safety": [],
+    "notes": "양파를 던지지 말라는 금지 지시가 있습니다.",
+    "steps": [
+      {
+        "sequence": 1,
+        "task_code": "ONION_HARVEST",
+        "title_ko": "양파 수확",
+        "description_ko": "아랫밭에서 양파 20망을 캡니다.",
+        "unsupported_reason": null
+      },
+      {
+        "sequence": 2,
+        "task_code": "ONION_SORTING",
+        "title_ko": "손상 양파 분리",
+        "description_ko": "상했거나 물러진 양파를 따로 뺍니다.",
+        "unsupported_reason": null
+      },
+      {
+        "sequence": 3,
+        "task_code": "ONION_TRANSPORT",
+        "title_ko": "창고로 운반",
+        "description_ko": "작업이 끝나면 양파를 상자에 담아 창고로 옮깁니다.",
+        "unsupported_reason": null
+      }
+    ],
+    "ambiguities": [],
+    "schema_version": "2",
+    "contract_version": "structure-v2",
+    "ontology_version": "ontology-v2"
+  },
+  "draft": {
+    "draft_id": "evaluation-3-3",
+    "draft_revision": 1,
+    "summary_ko": "오전까지 아랫밭에서 양파 20망을 수확하고, 상했거나 물러진 양파는 따로 분류한 뒤, 상자에 담아 창고로 운반합니다. 던지지 않습니다.",
+    "interpretation": "READY",
+    "state": {
+      "task_family": "ONION",
+      "location": {
+        "raw_text": "아랫밭",
+        "kind": "NAMED",
+        "canonical_name": "아랫밭"
+      },
+      "location_display": "아랫밭",
+      "quantity": {
+        "value": 20,
+        "unit": "망"
+      },
+      "deadline": "오전까지",
+      "safety": [],
+      "notes": "양파를 던지지 말라는 금지 지시가 있습니다.",
+      "steps": [
+        {
+          "sequence": 1,
+          "task_code": "ONION_HARVEST",
+          "title_ko": "양파 수확",
+          "description_ko": "아랫밭에서 양파 20망을 캡니다.",
+          "video": null,
+          "audio_url": null,
+          "delivery_mode": "TEXT",
+          "unsupported_reason": null,
+          "translations": []
+        },
+        {
+          "sequence": 2,
+          "task_code": "ONION_SORTING",
+          "title_ko": "손상 양파 분리",
+          "description_ko": "상했거나 물러진 양파를 따로 뺍니다.",
+          "video": null,
+          "audio_url": null,
+          "delivery_mode": "TEXT",
+          "unsupported_reason": null,
+          "translations": []
+        },
+        {
+          "sequence": 3,
+          "task_code": "ONION_TRANSPORT",
+          "title_ko": "창고로 운반",
+          "description_ko": "작업이 끝나면 양파를 상자에 담아 창고로 옮깁니다.",
+          "video": null,
+          "audio_url": null,
+          "delivery_mode": "TEXT",
+          "unsupported_reason": null,
+          "translations": []
+        }
+      ],
+      "risk_assessment": {
+        "level": "LOW",
+        "reasons": [],
+        "schema_version": "1",
+        "contract_version": "safety-policy-v1"
+      },
+      "schema_version": "2",
+      "contract_version": "structure-v2",
+      "ontology_version": "ontology-v2"
+    },
+    "ambiguities": [],
+    "transcript": "오전까지 아랫밭 양파 20망을 캐고, 상했거나 물러진 건 따로 빼. 다 끝나면 던지지 말고 상자에 담아서 창고로 옮겨.",
+    "schema_version": "2",
+    "contract_version": "structure-v2",
+    "ontology_version": "ontology-v2"
+  },
+  "confirm_gates": {
+    "CONFIRM": "ELIGIBLE_NOT_PUBLISHED",
+    "PUBLISH_AS_IS": "ELIGIBLE_NOT_PUBLISHED"
+  }
+}

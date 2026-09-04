@@ -6,6 +6,52 @@ import { createOpenAiProvider } from '../lib/openai-provider.mjs';
 const transcriptionPrompt = await readFile(new URL('../prompts/prompt-transcription-002.md', import.meta.url), 'utf8');
 const transcriptionReviewPrompt = await readFile(new URL('../prompts/prompt-transcription-review-001.md', import.meta.url), 'utf8');
 
+test('quantity sack units use the same canonical terms without a provider request', async () => {
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, fetchImpl: async () => {
+    assert.fail('Exact quantity units must not require a provider request');
+  } });
+  assert.equal(await provider.translate({ languageCode: 'vi', segment: 'QUANTITY', text: '망' }), 'bao');
+  assert.equal(await provider.translate({ languageCode: 'ne', segment: 'QUANTITY', text: '망' }), 'बोरा');
+});
+
+test('sentence translation shares sack terminology while retaining source text and glossary priority', async () => {
+  const requests = [];
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, fetchImpl: async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    return { ok: true, json: async () => ({ output_text: '{"text":"translated"}' }) };
+  } });
+  const text = '양파 20망을 캐고, 2망씩 옮겨. 던지지 말고 11시까지 끝내.';
+  for (const [languageCode, term] of [['vi', 'bao'], ['ne', 'बोरा']]) {
+    const glossary = [{ canonical_ko: '망', language_code: languageCode, translated_text: 'reviewed-sack', verified: true }];
+    for (const segment of ['ACTION', 'OTHER']) {
+      assert.equal(await provider.translate({ languageCode, segment, text, glossary }), 'translated');
+      const request = requests.at(-1);
+      const system = request.input.find((item) => item.role === 'system').content;
+      assert.ok(system.includes(term));
+      assert.match(system, /망/);
+      assert.match(system, /verified glossary.*precedence/i);
+      assert.match(system, /numbers.*units.*conditions.*prohibitions.*notes/i);
+      assert.match(system, /Do not summarize or add missing facts/);
+      assert.match(system, /requested language.*particles/i);
+      assert.equal(JSON.parse(request.input.find((item) => item.role === 'user').content).text, text);
+      assert.deepEqual(JSON.parse(request.input.find((item) => item.role === 'user').content).glossary, glossary);
+    }
+  }
+  assert.equal(requests.length, 4);
+});
+
+test('other units and non-quantity text still use provider translation', async () => {
+  const requests = [];
+  const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, fetchImpl: async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    return { ok: true, json: async () => ({ output_text: '{"text":"translated"}' }) };
+  } });
+  for (const [segment, text] of [['QUANTITY', '상자'], ['QUANTITY', '20망'], ['OTHER', '망']]) {
+    assert.equal(await provider.translate({ languageCode: 'vi', segment, text }), 'translated');
+  }
+  assert.equal(requests.length, 3);
+});
+
 test('transcription uses Korean and accepts a high-confidence primary result', async () => {
   const requests = [];
   const provider = createOpenAiProvider({ env: { OPENAI_API_KEY: 'test' }, transcriptionPrompt, fetchImpl: async (_url, init) => {

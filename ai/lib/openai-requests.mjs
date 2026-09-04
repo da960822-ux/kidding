@@ -17,10 +17,10 @@ function providerSchema(value, root = true) {
   return result;
 }
 
-export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', transcriptionModel = 'gpt-transcribe', fetchImpl = globalThis.fetch }) {
+export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', transcriptionModel = 'gpt-transcribe', fetchImpl = globalThis.fetch, requestTimeoutMs = 45_000 }) {
   if (!apiKey || !fetchImpl) throw new TypeError('OPENAI_CONFIGURATION_REQUIRED');
   async function request(path, body) {
-    const response = await fetchImpl(`${API_BASE}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const response = await fetchImpl(`${API_BASE}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(requestTimeoutMs) });
     if (!response.ok) throw requestFailure(response);
     return response.json();
   }
@@ -36,7 +36,7 @@ export function createOpenAiRequests({ apiKey, model = 'gpt-5.6-terra', transcri
     body.append('language', languageHint === 'ko' ? languageHint : 'ko');
     if (typeof prompt === 'string' && prompt.trim()) body.append('prompt', prompt.trim());
     if (logprobs) { body.append('response_format', 'json'); body.append('include[]', 'logprobs'); }
-    const response = await fetchImpl(`${API_BASE}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body });
+    const response = await fetchImpl(`${API_BASE}/audio/transcriptions`, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body, signal: AbortSignal.timeout(requestTimeoutMs) });
     if (!response.ok) throw requestFailure(response);
     return response.json();
   }

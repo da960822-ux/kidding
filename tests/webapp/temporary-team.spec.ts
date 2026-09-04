@@ -7,6 +7,9 @@ test('owner starts without credentials and receives reusable team access after f
   await expect(page.locator('input')).toHaveCount(0);
   await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
   await page.getByRole('button', { name: '확정하기' }).click();
+  await page.getByRole('button', { name: '홈', exact: true }).click();
+  await expect(page.getByLabel('팀 PIN')).toBeHidden();
+  await page.getByText('팀 관리 정보', { exact: true }).click();
   await expect(page.getByRole('heading', { name: '이 팀 다시 열기' })).toBeVisible();
   await expect(page.getByLabel('팀 PIN')).toHaveText(/^\d{6}$/);
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -17,6 +20,8 @@ test('owner starts without credentials and receives reusable team access after f
   const link = await page.getByRole('link', { name: /관리 링크/ }).getAttribute('href');
   const pin = await page.getByLabel('팀 PIN').innerText();
   await page.reload();
+  await expect(page.getByLabel('팀 PIN')).toBeHidden();
+  await page.getByText('팀 관리 정보', { exact: true }).click();
   await expect(page.getByLabel('팀 PIN')).toHaveText(pin);
   await page.evaluate(() => localStorage.removeItem('batmeori-demo-owner-session'));
   await page.goto(link!);
@@ -74,6 +79,8 @@ test('starting a new team preserves the old team behind its saved management lin
   await page.getByRole('button', { name: /농장주예요/ }).click();
   await page.getByRole('button', { name: '데모 음성으로 진행' }).click();
   await page.getByRole('button', { name: '확정하기' }).click();
+  await page.getByRole('button', { name: '홈', exact: true }).click();
+  await page.getByText('팀 관리 정보', { exact: true }).click();
   const link = await page.getByRole('link', { name: /관리 링크/ }).getAttribute('href');
   const pin = await page.getByLabel('팀 PIN').innerText();
   await page.getByRole('button', { name: '새 팀 시작', exact: true }).click();
@@ -84,6 +91,9 @@ test('starting a new team preserves the old team behind its saved management lin
   await page.getByLabel('PIN', { exact: true }).fill(pin);
   await page.getByRole('button', { name: '이 팀 열기', exact: true }).click();
   await expect(page.getByRole('img', { name: '오늘 작업팀 참여 QR 코드' })).toBeVisible();
+  await expect(page.getByLabel('팀 PIN')).toHaveCount(0);
+  await page.getByRole('button', { name: '홈', exact: true }).click();
+  await page.getByText('팀 관리 정보', { exact: true }).click();
   await expect(page.getByLabel('팀 PIN')).toHaveText(pin);
 });
 

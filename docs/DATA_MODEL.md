@@ -16,6 +16,8 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `work_versions`
 
+수량 변경은 새 quantity와 이전 목표량을 명확히 참조하는 단계/메모를 함께 갱신한다. 다른 수치나 관계가 불명확한 문구를 전역 치환하지 않는다. 정합성을 확보하지 못하면 저장 전 거부하며 이전 state와 package는 그대로 유지한다.
+
 `id`, `work_session_id`, `version`, `status`(`PUBLISHED|SUPERSEDED`), `state_json`, `transcript`, `confirmed_at`, `confirmation_decision`, `ambiguity_override`, `override_reason`, `overridden_at`, `created_at`를 저장한다. session별 `(work_session_id, version)`은 unique이며 PUBLISHED는 하나만 허용한다. WorkVersion content는 수정하지 않고 새 version을 만든다.
 
 `state_json`은 `structure-v2` snapshot이다. 새 쓰기의 non-null `task_code`는 8개 current two-crop code만 허용하며 같은 state의 `task_family`와 일치해야 한다. null은 LOW 비안전 미지원 작업을 owner가 승인한 경우에만 허용한다.
@@ -50,6 +52,8 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `guide_phrases` / `guide_translations`
 
+기존 테이블이 번역 용어 자료의 원본이다. BE는 category·phrase_type·원본 phrase_key를 유지해 Node에 전달한다. 같은 canonical_ko/category/phrase_type의 언어별 자료를 묶되 다른 뜻이나 충돌 번역을 임의 통합하지 않는다. 자체 전문어 의미는 로컬 JSON 참고로 관리하며 검증되지 않은 자료를 verified 공식 row로 넣지 않는다. 연결 수정에 DB schema 변경이나 기존 row 덮어쓰기는 없다.
+
 `guide_phrases`: `phrase_key`, `category`(`WORK_TERM|WORK_INSTRUCTION|SAFETY`), `canonical_ko`, `phrase_type`, `source_name`, `source_page`, `source_url`, `license`, `verified`.
 
 `guide_translations`: `phrase_key`, `language_code`, `translated_text`, `verified`. source/page/license와 사람 검수가 없으면 공식 번역으로 부르지 않는다. 실제 PDF 대조 전에는 data collection gate 상태다.
@@ -60,7 +64,7 @@ PostgreSQL 기준 논리 모델. Supabase를 써도 같은 field/status/constrai
 
 ## `tts_assets`
 
-게시된 step의 언어별 텍스트를 SHA-256 `text_hash`로 cache한다. `text_hash`, `language_code`(`vi|ne`), `audio_bytes`, `content_type`, `created_at`를 가지며 `(text_hash, language_code)`는 unique다. TTS는 이 cache를 먼저 조회하고, 성공한 audio만 `audio_url`로 노출한다. 생성 실패는 row를 만들지 않고 해당 언어 step을 `audio_url:null`, `delivery_mode:TEXT`로 전달한다. audio는 cache일 뿐 text가 source of truth다.
+신규 package는 [AI_CONTRACTS](AI_CONTRACTS.md)의 위치·객체 수량·마감·안전·전체 단계·메모 순서로 조립한 언어별 전체 텍스트를 SHA-256 `text_hash`로 cache한다. `text_hash`, `language_code`(`vi|ne`), `audio_bytes`, `content_type`, `created_at`를 가지며 `(text_hash, language_code)`는 unique다. TTS는 이 cache를 먼저 조회하고, 성공한 audio만 `audio_url`로 노출한다. 생성 실패는 row를 만들지 않고 해당 언어 package를 `audio_url:null`과 text fallback으로 전달한다. audio는 cache일 뿐 text가 source of truth다. 기존 부분 음성 cache와 immutable package의 단위·번역·hash는 재작성하지 않으며 새 column·schema version·migration은 필요하지 않다.
 
 ## owner PIN session과 공개 경계
 

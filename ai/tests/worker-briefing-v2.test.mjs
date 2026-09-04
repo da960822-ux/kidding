@@ -38,6 +38,38 @@ test('quantity regeneration changes briefing text and content cache key', async 
   const changed = await buildWorkerPackagesV2({ ...work, version: 2, quantity: { value: 15, unit: '망' }, summary_ko: '양파 15망을 수확합니다.' }, ['vi'], services);
   assert.notEqual(first.vi.cache_key, changed.vi.cache_key);
   assert.notEqual(first.vi.briefing.context.quantity.value, changed.vi.briefing.context.quantity.value);
+  assert.notEqual(first.vi.briefing.tts.text_hash, changed.vi.briefing.tts.text_hash);
+});
+
+test('full audio includes common context, safety, source-order steps, and final notes in both languages', async () => {
+  const source = {
+    ...work, location: { raw_text: 'Field 1', kind: 'NAMED', canonical_name: 'Field 1' },
+    quantity: { value: 20, unit: 'bags' }, deadline: 'Before 11', notes: 'Do not throw onions.', safety: ['Wear gloves.'],
+    steps: [
+      { sequence: 2, task_code: 'ONION_TRIMMING', title_ko: 'Trim', description_ko: 'Trim onions.' },
+      { sequence: 1, task_code: 'ONION_HARVEST', title_ko: 'Harvest', description_ko: 'Harvest onions.' },
+    ],
+  };
+  const packages = await buildWorkerPackagesV2(source, ['vi', 'ne'], {
+    ...services,
+    translate: async ({ languageCode, text }) => `${languageCode}:${text}`,
+    guideLookup: async ({ languageCode, segment }) => segment === 'SAFETY'
+      ? { language_code: languageCode, verified: true, translated_text: `${languageCode}:Wear gloves.`, source_page: 2, source_url: 'https://guide.example/2', license: 'CC-BY' }
+      : null,
+  });
+  for (const language of ['vi', 'ne']) {
+    assert.equal(packages[language].tts_transport.text, [
+      `${language}:Field 1`, `20 ${language}:bags`, `${language}:Before 11`, `${language}:Wear gloves.`,
+      `${language}:Trim ${language}:Trim onions.`, `${language}:Harvest ${language}:Harvest onions.`, `${language}:Do not throw onions.`,
+    ].join('\n'));
+  }
+});
+
+test('full audio omits unspecified quantity and absent deadline or notes', async () => {
+  for (const quantity of [null, 'UNSPECIFIED']) {
+    const packages = await buildWorkerPackagesV2({ ...work, quantity, deadline: null, notes: null }, ['vi'], services);
+    assert.equal(packages.vi.tts_transport.text, 'vi-localized\nvi-localized vi-localized');
+  }
 });
 
 test('packages localize context, including the quantity unit, per language', async () => {
@@ -117,7 +149,7 @@ test('worker packages preserve every step, localize safety and captions, and has
   assert.deepEqual(briefing.source_detail.map((detail) => [detail.segment, detail.step_sequence]), [['SAFETY', null], ['ACTION', 2], ['ACTION', 1]]);
   assert.match(briefing.video[0].captions_text, /^vi-/);
   assert.equal(/\p{Script=Hangul}/u.test(JSON.stringify(briefing.context)), false);
-  assert.equal(transport.text, ['Đeo găng tay.', ...briefing.steps.map((step) => `${step.title} ${step.description}`)].join('\n'));
+  assert.equal(transport.text, ['vi-localized', '20 vi-localized', 'Đeo găng tay.', ...briefing.steps.map((step) => `${step.title} ${step.description}`)].join('\n'));
   assert.equal(briefing.tts.text_hash, createHash('sha256').update(transport.text).digest('hex'));
   for (const field of ['transcript', 'raw_audio', 'risk_assessment', 'owner_id', 'farm_id', 'member_id', 'worker_id', 'token', 'cache_key', 'audio_bytes_base64']) assert.equal(JSON.stringify(briefing).includes(field), false, `${field} must not reach worker DTO`);
 });

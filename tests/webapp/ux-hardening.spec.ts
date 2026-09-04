@@ -100,7 +100,7 @@ test('reduced motion preserves color feedback and forced colors preserve control
     Object.defineProperty(window, 'SpeechSynthesisUtterance', { configurable: true, value: class { onend = null; onerror = null; lang = ''; constructor(public text: string) {} } });
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { cancel() {}, speak() {} } });
   });
-  await page.getByRole('button', { name: 'Nghe hướng dẫn' }).click();
+  await page.getByRole('button', { name: 'Nghe toàn bộ hướng dẫn' }).click();
   await expect(page.locator('.animate-pulse')).toHaveCSS('animation-name', 'none');
 });
 

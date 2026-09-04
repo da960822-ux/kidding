@@ -1,0 +1,115 @@
+{
+  "cache_key": "069533b224ff825b8eea087553582dd863afbda3bca33700654eae8c79ed7ecf",
+  "briefing": {
+    "session_id": "evaluation-case-3",
+    "version": 1,
+    "contract_version": "worker-briefing-v2",
+    "ontology_version": "ontology-v2",
+    "language_code": "vi",
+    "context": {
+      "task_family": "ONION",
+      "location_display": "ruộng phía dưới",
+      "quantity": {
+        "value": 20,
+        "unit": "bao"
+      },
+      "deadline": "Đến buổi sáng",
+      "notes": "Không được ném hành tây.",
+      "safety": []
+    },
+    "badges": [],
+    "steps": [
+      {
+        "sequence": 1,
+        "task_code": "ONION_HARVEST",
+        "title": "Thu hoạch hành tây",
+        "description": "Thu hoạch 20 bao hành tây ở ruộng phía dưới.",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 2,
+        "task_code": "ONION_SORTING",
+        "title": "Phân loại hành tây bị hư hỏng",
+        "description": "Loại riêng hành tây bị hỏng hoặc bị mềm.",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 3,
+        "task_code": "ONION_TRANSPORT",
+        "title": "Vận chuyển hành tây",
+        "description": "Sau khi hoàn thành công việc, cho hành tây vào thùng và chuyển đến kho.",
+        "delivery_mode": "TEXT_TTS"
+      }
+    ],
+    "source_detail": [
+      {
+        "step_sequence": 1,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 2,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 3,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      }
+    ],
+    "tts": {
+      "status": "READY",
+      "text_hash": "5d31737184451e6108d4b0dd8152296bcd4bcabc886f04698d605680473df01b",
+      "audio_url": null
+    },
+    "video": [
+      {
+        "step_sequence": 1,
+        "asset_id": "p0-onion-harvest-v1",
+        "task_code": "ONION_HARVEST",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_harvest.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "Thu hoạch hành tây bằng tay."
+      },
+      {
+        "step_sequence": 2,
+        "asset_id": "p0-onion-sorting-v1",
+        "task_code": "ONION_SORTING",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_sorting.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "Phân loại hành tây."
+      }
+    ]
+  },
+  "tts_transport": {
+    "status": "READY",
+    "text": "ruộng phía dưới\n20 bao\nĐến buổi sáng\nThu hoạch hành tây Thu hoạch 20 bao hành tây ở ruộng phía dưới.\nPhân loại hành tây bị hư hỏng Loại riêng hành tây bị hỏng hoặc bị mềm.\nVận chuyển hành tây Sau khi hoàn thành công việc, cho hành tây vào thùng và chuyển đến kho.\nKhông được ném hành tây.",
+    "text_hash": "5d31737184451e6108d4b0dd8152296bcd4bcabc886f04698d605680473df01b",
+    "audio_url": null
+  },
+  "evaluation": {
+    "published": false,
+    "source": "saved user transcript structure, fresh real translation and TTS",
+    "audio_generated": true
+  }
+}

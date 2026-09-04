@@ -1,0 +1,115 @@
+{
+  "cache_key": "b910b056f0574031a555c4237627262e5a9a244a06949a8c5db05807ebc7e4fe",
+  "briefing": {
+    "session_id": "evaluation-case-3",
+    "version": 1,
+    "contract_version": "worker-briefing-v2",
+    "ontology_version": "ontology-v2",
+    "language_code": "ne",
+    "context": {
+      "task_family": "ONION",
+      "location_display": "तल्लो खेत",
+      "quantity": {
+        "value": 20,
+        "unit": "बोरा"
+      },
+      "deadline": "बिहानसम्म",
+      "notes": "प्याज नफ्याँक्नुहोस्।",
+      "safety": []
+    },
+    "badges": [],
+    "steps": [
+      {
+        "sequence": 1,
+        "task_code": "ONION_HARVEST",
+        "title": "प्याज कटनी",
+        "description": "तल्लो खेतमा प्याज 20 बोरा खन्नुहोस्।",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 2,
+        "task_code": "ONION_SORTING",
+        "title": "क्षतिग्रस्त प्याज अलग गर्नु",
+        "description": "बिग्रेका वा नरम भएका प्याजहरूलाई छुट्टै निकाल्नुहोस्।",
+        "delivery_mode": "VIDEO"
+      },
+      {
+        "sequence": 3,
+        "task_code": "ONION_TRANSPORT",
+        "title": "प्याज ढुवानी",
+        "description": "काम सकेपछि प्याजलाई बक्समा राखेर गोदाममा सार्नुहोस्।",
+        "delivery_mode": "TEXT_TTS"
+      }
+    ],
+    "source_detail": [
+      {
+        "step_sequence": 1,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 2,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      },
+      {
+        "step_sequence": 3,
+        "segment": "ACTION",
+        "source": "AI_TRANSLATION",
+        "guide_lookup": "MISS",
+        "verified": false,
+        "source_page": null,
+        "source_url": null,
+        "license": null
+      }
+    ],
+    "tts": {
+      "status": "READY",
+      "text_hash": "6933e8c9b9582c4cfa0dc8c4ea2f6c01ec81dcd8ffb9cc5fdbefed9e7a2969cd",
+      "audio_url": null
+    },
+    "video": [
+      {
+        "step_sequence": 1,
+        "asset_id": "p0-onion-harvest-v1",
+        "task_code": "ONION_HARVEST",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_harvest.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "प्याज हातले कटनी गर्नुहोस्।"
+      },
+      {
+        "step_sequence": 2,
+        "asset_id": "p0-onion-sorting-v1",
+        "task_code": "ONION_SORTING",
+        "video_url": "https://fzhsbakynrlrxyhhfxqo.supabase.co/storage/v1/object/public/visual-assets/p0/2026-09-03/onion_sorting.mp4",
+        "provenance": "AI_GENERATED_PREGENERATED",
+        "review_status": "APPROVED",
+        "safety_level": "LOW",
+        "captions_text": "प्याजलाई वर्गीकरण गर्छौं।"
+      }
+    ]
+  },
+  "tts_transport": {
+    "status": "READY",
+    "text": "तल्लो खेत\n20 बोरा\nबिहानसम्म\nप्याज कटनी तल्लो खेतमा प्याज 20 बोरा खन्नुहोस्।\nक्षतिग्रस्त प्याज अलग गर्नु बिग्रेका वा नरम भएका प्याजहरूलाई छुट्टै निकाल्नुहोस्।\nप्याज ढुवानी काम सकेपछि प्याजलाई बक्समा राखेर गोदाममा सार्नुहोस्।\nप्याज नफ्याँक्नुहोस्।",
+    "text_hash": "6933e8c9b9582c4cfa0dc8c4ea2f6c01ec81dcd8ffb9cc5fdbefed9e7a2969cd",
+    "audio_url": null
+  },
+  "evaluation": {
+    "published": false,
+    "source": "saved user transcript structure, fresh real translation and TTS",
+    "audio_generated": true
+  }
+}

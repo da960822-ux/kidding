@@ -1,0 +1,103 @@
+{
+  "experiment_id": "E-20260904-UNIT-FALLBACK",
+  "created_at": "2026-09-04T01:55:49.360Z",
+  "contract_version": "translation-v1",
+  "metadata": {
+    "provider": "openai",
+    "model": "gpt-5.6-terra",
+    "transcription_model": "gpt-transcribe"
+  },
+  "provider_source_sha256": "6c9645c4635cf1bb86afe5d68838a64259ea18b6ba30cc7f652f23d0149cf768",
+  "source_unchanged": true,
+  "scope": "Two synthetic Korean text inputs; four live translation requests. No STT, TTS, DB read/write or native-speaker review.",
+  "results": [
+    {
+      "id": "case-1",
+      "language_code": "vi",
+      "source_text": "아랫밭 양파 20망 캐서 상한 건 빼고 창고로 옮겨.",
+      "translated_text": "Đào 20 bao hành tây ở ruộng dưới, loại bỏ những củ bị hỏng rồi chuyển vào kho.",
+      "quantity_unit": "bao",
+      "contains_canonical_unit": true
+    },
+    {
+      "id": "case-1",
+      "language_code": "ne",
+      "source_text": "아랫밭 양파 20망 캐서 상한 건 빼고 창고로 옮겨.",
+      "translated_text": "तल्लो खेतको प्याज 20 बोरा खनेर, बिग्रेका हटाई गोदाममा सार।",
+      "quantity_unit": "बोरा",
+      "contains_canonical_unit": true
+    },
+    {
+      "id": "quantity-negation",
+      "language_code": "vi",
+      "source_text": "양파 20망을 캐고, 2망씩 옮겨. 던지지 말고 11시까지 끝내.",
+      "translated_text": "Đào 20 bao hành tây và vận chuyển mỗi lần 2 bao. Không được ném, hãy hoàn thành trước 11 giờ.",
+      "quantity_unit": "bao",
+      "contains_canonical_unit": true
+    },
+    {
+      "id": "quantity-negation",
+      "language_code": "ne",
+      "source_text": "양파 20망을 캐고, 2망씩 옮겨. 던지지 말고 11시까지 끝내.",
+      "translated_text": "प्याज 20 बोरा खनेर निकाल, 2 बोरा씩 सार। नफाल, र 11 बजेसम्म सक।",
+      "quantity_unit": "बोरा",
+      "contains_canonical_unit": true
+    }
+  ],
+  "followup": {
+    "created_at": "2026-09-04T01:56:49.942Z",
+    "reason": "Initial Nepali output preserved Korean particle 씩; added target-language particle instruction.",
+    "metadata": {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "transcription_model": "gpt-transcribe"
+    },
+    "provider_source_sha256": "5b0b6c5fd6a3d7133465decb90a58514fdf0ebb17a4d8974a4a4ecb7c0483944",
+    "source_unchanged": true,
+    "results": [
+      {
+        "id": "quantity-negation",
+        "language_code": "vi",
+        "source_text": "양파 20망을 캐고, 2망씩 옮겨. 던지지 말고 11시까지 끝내.",
+        "translated_text": "Thu hoạch 20 bao hành tây, chuyển mỗi lần 2 bao. Không được ném, hãy hoàn thành trước 11 giờ.",
+        "quantity_unit": "bao",
+        "contains_canonical_unit": true,
+        "hangul_leak": false,
+        "arabic_numbers_preserved": true
+      },
+      {
+        "id": "quantity-negation",
+        "language_code": "ne",
+        "source_text": "양파 20망을 캐고, 2망씩 옮겨. 던지지 말고 11시까지 끝내.",
+        "translated_text": "प्याज 20 बोरा खन्नुहोस्, र 2 बोरा씩 सार्नुहोस्। नफ्याँकी 11 बजेसम्म सकाउनुहोस्।",
+        "quantity_unit": "बोरा",
+        "contains_canonical_unit": true,
+        "hangul_leak": true,
+        "arabic_numbers_preserved": true
+      }
+    ]
+  },
+  "distributive_followup": {
+    "created_at": "2026-09-04T01:57:35.934Z",
+    "reason": "Both initial and particle-instruction runs leaked 씩 in Nepali; made no-Korean-script and distributive-quantity instruction explicit.",
+    "metadata": {
+      "provider": "openai",
+      "model": "gpt-5.6-terra",
+      "transcription_model": "gpt-transcribe"
+    },
+    "provider_source_sha256": "da851168e9f097ca619abb4e35047e16766a3edd5bd9771190832015f8f85338",
+    "source_unchanged": true,
+    "results": [
+      {
+        "id": "quantity-negation",
+        "language_code": "ne",
+        "source_text": "양파 20망을 캐고, 2망씩 옮겨. 던지지 말고 11시까지 끝내.",
+        "translated_text": "प्याज 20 बोरा खनेर, प्रत्येक 2 बोरा सार्नुहोस्। नफ्याँक्नुहोस् र 11 बजेसम्म सक्नुहोस्।",
+        "quantity_unit": "बोरा",
+        "contains_canonical_unit": true,
+        "hangul_leak": false,
+        "arabic_numbers_preserved": true
+      }
+    ]
+  }
+}

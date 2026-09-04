@@ -1,0 +1,42 @@
+[
+  {
+    "language": "vi",
+    "width": 390,
+    "notes_before_start": true,
+    "notes_visible_step": true,
+    "actual_mp3_playback": true,
+    "duration_seconds": 22.656,
+    "audio_stopped_on_navigation": true,
+    "errors": []
+  },
+  {
+    "language": "vi",
+    "width": 1100,
+    "notes_before_start": true,
+    "notes_visible_step": true,
+    "actual_mp3_playback": true,
+    "duration_seconds": 22.656,
+    "audio_stopped_on_navigation": true,
+    "errors": []
+  },
+  {
+    "language": "ne",
+    "width": 390,
+    "notes_before_start": true,
+    "notes_visible_step": true,
+    "actual_mp3_playback": true,
+    "duration_seconds": 22.704,
+    "audio_stopped_on_navigation": true,
+    "errors": []
+  },
+  {
+    "language": "ne",
+    "width": 1100,
+    "notes_before_start": true,
+    "notes_visible_step": true,
+    "actual_mp3_playback": true,
+    "duration_seconds": 22.704,
+    "audio_stopped_on_navigation": true,
+    "errors": []
+  }
+]

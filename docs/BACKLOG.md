@@ -4,6 +4,13 @@
 
 | 코드 | 우선순위 | 항목 | DoD | 선행조건 | 주담당 |
 |---|---|---|---|---|---|
+| P0-R01 | P0 | DB 조회 지연·목록 반복 조회 개선 | event loop 비차단, owner/member 일괄 조회, 권한·만료·현재 version 불변 | P0-16 | BE |
+| P0-R02 | P0 | 목표량 변경의 단계·메모 정합성 | 옛 목표량만 안전하게 갱신, 다른 수치 보존, 불명확 시 저장 전 거부 | P0-13 | BE |
+| P0-R03 | P0 | DB 용어 사전의 번역 연결·전문어 보완 | 기존 용어 우선, vi/ne 문맥 전달, 공식/안전 gate 유지, 수량 의미 충돌 검사 | P0-05a | AI |
+| P0-R04 | P0 | 게시 스토리보드 영상·조회 복구·상세 메모 | 동일 version 영상, stale 응답 무효화, 텍스트 우선, 메모 가시성 | P0-07,P0-08 | FE |
+| P0-R05 | P0 | 전체 음성 조립·망 단위 fallback | 위치·객체 수량·마감·안전·전체 단계·메모 exact 조립, 요약 호출 없음, 검수 HIT 우선·MISS 망 bao/बोरा와 문장 glossary 일치 | P0-R03 | AI |
+| P0-R06 | P0 | 신규 전체 TTS text/hash 검증 | AI와 같은 조립 규칙, 누락·불일치 422, 과거 immutable package 조회·내용 유지 | P0-R05 | BE |
+| P0-R07 | P0 | 시작 전 메모·전체/단계 음성 전달 | notes 전체를 시작 전·단계·CO_PRESENT에 노출, 전체 hash 검증과 기기 fallback, 단계는 안전·현재 단계·메모, 미지원 글 안내·재시도 | P0-R04,P0-R06 | FE |
 | P0-01 | P0 | 양파·딸기 ontology 8코드 | family 일치 allowlist·JSON Schema·BE semantic validation 일치 | 없음 | AI |
 | P0-01a | P0 | current contract/legacy preservation | `structure-v2`/`ontology-v2` current 8-code family validation; immutable `structure-v1` legacy version read; never reset·rewrite·remap | P0-01 | BE |
 | P0-02 | P0 | AI 사전생성 LOW 영상 8개 | 8개 후보의 provenance·사람 검수 `APPROVED` manifest, worker-delivery URL | P0-01 | AI |
@@ -28,6 +35,7 @@
 | P0-17a | P0 | 새 배정·변경 알림과 확인 UI | vi/ne 화면 내 알림, 비선택 작업도 감지, 명시 확인, 재접속 미확인 유지, OS 푸시로 오인 금지 | P0-16a | FE |
 | P0-17 | P0 | 오늘 작업팀 mobile E2E | 두 근로자 QR join·언어별 개인 최신 지시 확인 | P0-16 | FE |
 | P1-01 | P1 | 농장주 계정관리 | 공유 PIN을 개인 계정으로 대체 | P0 완료 | BE |
+| P0-18 | P0 | 현재 UX 오류 회귀 수정 | 근로자 URL·QR 관리정보 비노출·기존 팀 진입·작업별 링크 격리·확정 전 상세·수량 후보/충돌·초안 복구·늦은 응답·로그아웃·전체/단계 음성·작업별 변경 알림 검증 | P0-07,P0-13,P0-17a | FE |
 | P1-02 | P1 | SMS link 전송 | consent·실패 처리 포함 | P1-01 | BE |
 | P1-03 | P1 | 기관 매칭/다중 테넌트 | 기관·농장·권한·RLS 별도 설계 | P0 완료 | BE |
 | P1-04 | P1 | 양파·딸기 이외 작물·추가 언어 | ontology·dataset·eval 별도 통과 | P0 완료 | AI |

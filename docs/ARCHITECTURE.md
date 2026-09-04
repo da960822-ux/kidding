@@ -38,6 +38,12 @@ Supabase Storage public `visual-assets` bucket (worker video CDN)
 
 ## 주요 데이터 흐름
 
+번역은 DB guide_phrases/guide_translations를 재사용한다. BE는 category·phrase_type·phrase_key·출처를 유지해 private guides 입력으로 전달하고 Node는 같은 언어의 관련 WORK_TERM을 참고한다. 검수된 전체 문장 HIT와 용어 참고를 구분하고 후자는 AI_TRANSLATION으로 표시한다. 누락 전문어의 자체 의미 자료는 미검수 참고로만 사용한다.
+
+신규 package의 수량 단위 `망`은 검수 WORK_TERM exact HIT를 우선하며, MISS에서만 Node가 `vi: bao`, `ne: बोरा`를 결정적으로 선택한다. 문장 번역에도 같은 glossary 우선순위를 전달한다. 기존 package를 다시 번역하거나 저장된 단위를 바꾸지 않는다.
+
+동기 DB I/O는 thread pool로 격리하여 async HTTP event loop를 막지 않는다. 인증·만료·Farm/member 범위를 유지하고 목록의 현재 version/package를 일괄 조회한다. rate-limit 갱신은 기존 요청 흐름에 두며 mutable query builder를 요청 간 공유하지 않는다. FE는 화면 이동을 미디어 다운로드와 분리하고 중복 polling 및 이전 session/언어 응답을 무효화한다.
+
 사투리 해석은 Node의 ontology-v2 참고 JSON을 LLM 문맥에 추가하는 로컬 검색 방식이다. 벡터DB·추가 provider 호출·전사문 강제 치환은 사용하지 않는다. 최초 지시, 보완, 수량 변경이 같은 참고 자료 선택 경로를 쓰며 기존 provider-neutral JSON 입출력은 유지한다. 영상 제외 정책은 별도 JSON 데이터이며 작업 분류와 분리한다. 현재 신규 ONION_TRANSPORT package는 text/TTS로 전달하고 기존 저장 package는 그대로 읽는다.
 
 `audio → transcript → structure-v2 WorkDraft → owner confirm → WorkSession v1 PUBLISHED + vi/ne packages → CO_PRESENT briefing, REMOTE link issue/resolve, 또는 TodayWorkTeam member assignment`.
@@ -45,6 +51,8 @@ Supabase Storage public `visual-assets` bucket (worker video CDN)
 owner client은 새로고침 뒤 tab에 남은 draft ID만으로 `GET /api/v1/work-sessions/drafts/{draftId}`를 다시 요청할 수 있다. BE는 cookie Farm filter, `expires_at`, `confirmed_session_id`, current v2 contract를 확인한 뒤 기존 `WorkDraft` DTO만 `Cache-Control: no-store`로 반환한다. raw audio, owner/farm claim, transcript가 든 오류는 반환하지 않는다.
 
 수량 변경은 저장 없는 preview → owner direct confirm(`quantity`, `expected_version`)으로만 다음 immutable version을 만든다. 새 state와 두 package 삽입이 성공한 뒤에만 이전 `PUBLISHED`를 `SUPERSEDED`로 바꾸며, remote 링크는 같은 토큰으로 최신 `PUBLISHED` 버전을 읽는다.
+
+owner 화면의 비동기 완료 처리는 화면 이동 세대와 인증 세대를 확인한다. 화면을 떠난 뒤 완료된 요청은 현재 선택과 이동을 덮지 않으며, 서버 게시 결과는 기존 session 조회로 복구한다. worker의 전체/단계 듣기는 같은 재생 컴포넌트를 재사용하지만 전체만 저장된 TTS URL을 사용한다. API DTO나 저장된 package는 변경하지 않는다. `/owner/manage`는 저장한 같은 origin의 관리 링크를 검증해 기존 `/owner/manage/{team_id}` PIN 화면으로 연결하는 클라이언트 진입 화면이다. 관리 PIN과 링크는 농장주 홈의 기본 접힌 관리 영역에만 표시하며 QR·전달 화면에서 제외한다.
 
 ## Atomic v2 publish RPC
 
@@ -61,6 +69,8 @@ REMOTE 발급은 별도 `public.issue_worker_link_v2(p_farm_id uuid, p_session_i
 - TodayWorkTeam: owner cookie의 활성 팀 QR URL을 연다. 같은 팀에는 저장된 발급 키로 동일 URL을 복원하고, 명시적 재발급에서만 기존 QR을 폐기한다. 참가자는 그 URL에서 별명·`vi|ne`만 제출한다. 서버는 임시 TeamMember browser cookie를 발급하며, cookie는 team 만료와 함께 끝난다. 농장주는 TeamAssignment로 하나 이상 WorkSession을 연결한다. 근로자는 ID를 입력하지 않고 자기 cookie로만 연결된 최신 `PUBLISHED` state를 읽는다.
 
 `worker-briefing-v2` package builder는 source WorkVersion step 배열을 삭제·정렬 변경 없이 locale별로 변환한다. `context.safety[]`는 locale text를 담고 verified guide provenance는 `source_detail[]`의 `SAFETY`/`step_sequence:null` entries로 보존하며, video caption도 같은 locale로 변환한다. worker DTO의 TTS `text_hash`는 UI 비표시 opaque fingerprint이고, exact text/audio bytes/cache key는 Node↔BE private transport에만 남긴다.
+
+전체 TTS는 [AI_CONTRACTS](AI_CONTRACTS.md)의 위치·객체 수량·마감·안전·전체 단계·메모 순서로 조립한다. Node 생성, BE 신규 package exact text/hash 검증, FE browser 전체 음성 fallback이 같은 규칙을 사용하며 LLM 음성 요약은 없다. FE는 저장 hash와 표시 텍스트 hash가 일치할 때만 저장 음성을 전체 듣기에 사용한다. 기존 package의 부분 음성이나 hash 검증 불가는 기기 전체 음성으로 전환하고, 미지원이면 텍스트와 재시도를 제공한다. 기존 저장 package 조회·불변 내용은 보존한다. 단계 음성은 안전·현재 단계·메모를 읽는다. FE는 notes 전체를 시작 전·단계·CO_PRESENT 화면에 펼침 없이 표시하며 재분류하지 않는다. 필드·schema version·DB 구조 변경은 없다.
 
 ## 인증·게시 gate
 
@@ -79,7 +89,7 @@ P0 ontology는 `ONION|STRAWBERRY` 두 family와 8개 canonical task code로 닫�
 - anonymous link token은 128-bit 이상 random, DB에는 hash만 저장한다. URL·로그·referrer에 secret을 남기지 않는다.
 - WorkVersion은 content immutable이며 session별 version unique/current-version 증가를 DB transaction으로 보장한다.
 - TTS cache key는 text content hash이며 text가 source of truth다.
-- TTS는 PUBLISHED version의 `vi|ne` step text만 생성한다. cache miss/provider failure는 publish를 막지 않으며 worker/briefing은 `audio_url:null`과 `TEXT` fallback을 받는다. FastAPI는 storage/auth/transaction과 DB read만 소유하고 STT·structure·quantity parse·guide lookup·translation·TTS·visual match는 private JSONL/stdio Node bridge 하나만 호출한다. STT bridge operation은 `TRANSCRIBE_AUDIO`이며 validated `audio_base64`, MIME, filename, `language_hint`만 받고 `{transcript}`를 반환한다. 기준 전사의 token log probability가 설정 임계값보다 낮을 때만 독립 모델로 같은 원음을 재검증하며, 불일치는 `AUDIO_UNCLEAR`로 닫는다. raw audio·owner/farm/member identity는 결과와 metadata에 남기지 않는다.
+- TTS는 게시 대상 version의 `vi|ne` 전체 briefing text로 생성한다. cache miss/provider failure는 publish를 막지 않으며 worker/briefing은 `audio_url:null`과 `TEXT` fallback을 받는다. FastAPI는 storage/auth/transaction과 DB read만 소유하고 STT·structure·quantity parse·guide lookup·translation·TTS·visual match는 private JSONL/stdio Node bridge 하나만 호출한다. STT bridge operation은 `TRANSCRIBE_AUDIO`이며 validated `audio_base64`, MIME, filename, `language_hint`만 받고 `{transcript}`를 반환한다. 기준 전사의 token log probability가 설정 임계값보다 낮을 때만 독립 모델로 같은 원음을 재검증하며, 불일치는 `AUDIO_UNCLEAR`로 닫는다. raw audio·owner/farm/member identity는 결과와 metadata에 남기지 않는다.
 - `PUBLIC_WEB_BASE_URL`은 browser worker route의 host다. REMOTE 발급 URL은 `${PUBLIC_WEB_BASE_URL}/w/{token}`이고 browser가 API assignment endpoint를 호출한다. production `/ready`는 이 값, DB, owner auth, provider가 모두 없으면 실패한다. `DEMO_FALLBACK=1`은 명시적 demo 전용으로 첫 exact frontend Origin을 local browser host로 허용한다.
 - `OWNER_SESSION_SECRET` rotation invalidates owner sessions, TodayWorkTeam QR URLs, TeamMember browser cookies, and WorkerLinks because their signatures or token hashes use that secret. Reissue QR and remote links after rotation.
 - `/health`는 process liveness와 실행 중인 source revision을 반환한다. `/ready`는 같은 revision과 함께 DB의 `p0_readiness`, worker briefing package 저장소, provider, public-web/public-API deployment 설정을 검증한다.

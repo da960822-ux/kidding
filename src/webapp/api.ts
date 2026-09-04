@@ -29,7 +29,9 @@ function resolveApiBase() {
 
 const API_BASE = resolveApiBase();
 let ownerAuthGeneration = 0;
-export const setOwnerAuthGeneration = (generation: number) => { ownerAuthGeneration = generation; };
+const pendingMutationKeys = new Map<string, string>();
+const audioKeys = new WeakMap<Blob, string>();
+export const setOwnerAuthGeneration = (generation: number) => { ownerAuthGeneration = generation; pendingMutationKeys.clear(); };
 
 export class ApiError extends Error {
   constructor(public status: number, public code: ApiErrorCode, message: string) {
@@ -41,19 +43,35 @@ export class ApiError extends Error {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const requestAuthGeneration = ownerAuthGeneration;
   const response = await fetch(`${API_BASE}${path}`, { credentials: 'include', signal: AbortSignal.timeout(60_000), ...init });
+  const finishMutation = () => {
+    const key = new Headers(init.headers).get('Idempotency-Key');
+    for (const [operation, pending] of pendingMutationKeys) if (pending === key) pendingMutationKeys.delete(operation);
+  };
   if (!response.ok) {
+    if (response.status < 500) finishMutation();
     const fallback = { code: 'INTERNAL_ERROR' as const, message: '요청을 처리하지 못했습니다. 다시 시도해주세요.' };
     const error = await response.json().catch(() => fallback) as Partial<typeof fallback>;
     const apiError = new ApiError(response.status, error.code ?? fallback.code, error.message ?? fallback.message);
     if (response.status === 401 && !path.startsWith('/api/v1/owner/') && !path.startsWith('/api/v1/work-team-members/')) window.dispatchEvent(new CustomEvent(ownerUnauthorizedEvent, { detail: { generation: requestAuthGeneration } }));
     throw apiError;
   }
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
+  if (response.status === 204) { finishMutation(); return undefined as T; }
+  const result = await response.json() as T;
+  finishMutation();
+  return result;
 }
 
-function idempotencyKey() {
-  return crypto.randomUUID();
+function idempotencyKey(operation?: string) {
+  if (!operation) return crypto.randomUUID();
+  const key = pendingMutationKeys.get(operation) ?? crypto.randomUUID();
+  pendingMutationKeys.set(operation, key);
+  return key;
+}
+
+function audioKey(audio: Blob) {
+  const key = audioKeys.get(audio) ?? crypto.randomUUID();
+  audioKeys.set(audio, key);
+  return key;
 }
 
 function audioForm(audio: Blob, fields: Record<string, string | number> = {}) {
@@ -81,16 +99,16 @@ const realApi = {
   getOwnerSession: () => request<OwnerSession>('/api/v1/owner/session'),
   deleteOwnerSession: () => request<void>('/api/v1/owner/session', { method: 'DELETE' }),
   createDraft: (audio: Blob) => request<WorkDraft>('/api/v1/work-sessions/drafts/from-audio', {
-    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey() }, body: audioForm(audio, { language_hint: 'ko' }),
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey(`draft:${audioKey(audio)}`) }, body: audioForm(audio, { language_hint: 'ko' }),
   }),
   getDraft: (draftId: string) => request<WorkDraft>(`/api/v1/work-sessions/drafts/${encodeURIComponent(draftId)}`),
   supplementDraft: (draftId: string, audio: Blob, expectedDraftRevision: number) => request<WorkDraft>(`/api/v1/work-sessions/drafts/${encodeURIComponent(draftId)}/supplement`, {
-    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey() }, body: audioForm(audio, { expected_draft_revision: expectedDraftRevision, language_hint: 'ko' }),
+    method: 'POST', headers: { 'Idempotency-Key': idempotencyKey(`supplement:${draftId}:${expectedDraftRevision}:${audioKey(audio)}`) }, body: audioForm(audio, { expected_draft_revision: expectedDraftRevision, language_hint: 'ko' }),
   }),
   confirmDraft: async (draftId: string, decision: 'CONFIRM' | 'PUBLISH_AS_IS', overrideReason?: OverrideReason): Promise<InitialPublishResult> => {
     const result = await request<{ work_session: OwnerWorkSession; issued_worker_links: Array<IssuedWorkerLink['issued_worker_link']> }>(`/api/v1/work-sessions/drafts/${encodeURIComponent(draftId)}/confirm`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey() },
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey(JSON.stringify(['confirm', draftId, decision, overrideReason ?? null])) },
     body: JSON.stringify(decision === 'CONFIRM'
       ? { expected_version: 0, decision }
       : { expected_version: 0, decision, ambiguity_override: true, override_reason: overrideReason }),
@@ -103,7 +121,7 @@ const realApi = {
     method: 'POST', headers: {}, body: audioForm(audio, { expected_version: expectedVersion, language_hint: 'ko' }),
   }),
   confirmQuantityChange: (sessionId: string, quantity: Quantity, expectedVersion: number) => request<OwnerWorkSession>(`/api/v1/work-sessions/${encodeURIComponent(sessionId)}/quantity-changes/confirm`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey() }, body: JSON.stringify({ quantity, expected_version: expectedVersion }),
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey(JSON.stringify(['quantity', sessionId, expectedVersion, quantity.value, quantity.unit])) }, body: JSON.stringify({ quantity, expected_version: expectedVersion }),
   }),
   issueWorkerLink: async (sessionId: string, languageCode: WorkerLocale) => {
     const result = await request<{ session_id: string; issued_worker_links: Array<{ language_code: WorkerLocale; url: string; expires_at: string }> }>(`/api/v1/work-sessions/${encodeURIComponent(sessionId)}/worker-links`, {
@@ -113,14 +131,14 @@ const realApi = {
   },
   getAssignment: (token: string) => request<WorkerBriefing>(`/api/v1/worker-links/${encodeURIComponent(token)}/assignment`),
   getBriefing: (sessionId: string, languageCode: WorkerLocale) => request<WorkerBriefing>(`/api/v1/brief?${new URLSearchParams({ session_id: sessionId, language_code: languageCode })}`),
-  createTodayTeam: () => request<TodayWorkTeam>('/api/v1/work-teams/today', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey() } }),
-  rotateTodayTeamInvite: () => request<TodayWorkTeam>('/api/v1/work-teams/today/invite/rotate', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey() } }),
+  createTodayTeam: () => request<TodayWorkTeam>('/api/v1/work-teams/today', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey('today-team') } }),
+  rotateTodayTeamInvite: () => request<TodayWorkTeam>('/api/v1/work-teams/today/invite/rotate', { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey('rotate-team') } }),
   getTodayTeam: () => request<TodayWorkTeam>('/api/v1/work-teams/today'),
   joinTodayTeam: (token: string, input: { display_name: string; language_code: WorkerLocale }) => request<TeamMember>(`/api/v1/work-team-invites/${encodeURIComponent(token)}/join`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey() }, body: JSON.stringify(input),
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey(JSON.stringify(['join', token, input.display_name, input.language_code])) }, body: JSON.stringify(input),
   }),
   assignTodayTeamMember: (memberId: string, workSessionId: string) => request<TeamAssignmentMeta>(`/api/v1/work-teams/today/members/${encodeURIComponent(memberId)}/assignments`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey() }, body: JSON.stringify({ work_session_id: workSessionId }),
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': idempotencyKey(JSON.stringify(['assign', memberId, workSessionId])) }, body: JSON.stringify({ work_session_id: workSessionId }),
   }),
   getMyTodayAssignments: async () => {
     const result = await request<{ assignments: WorkerAssignment[] }>('/api/v1/work-team-members/me/assignments');

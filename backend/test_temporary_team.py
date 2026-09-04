@@ -168,13 +168,14 @@ class TemporaryTeamTests(unittest.TestCase):
     def test_assignment_reads_expose_receipts_without_acknowledging(self):
         self.rows["today_work_team_members"] = [{"id": "member-1", "team_id": self.team_id, "farm_id": "farm-1", "display_name": "Min", "language_code": "vi", "joined_at": self.now.isoformat()}]
         self.rows["today_work_assignments"] = [{"team_member_id": "member-1", "work_session_id": "session-1", "farm_id": "farm-1", "acknowledged_version": 1, "acknowledged_at": self.now.isoformat(), "revoked_at": None}]
-        self.rows["work_sessions"] = [{"id": "session-1", "current_version": 2, "status": "PUBLISHED"}]
+        self.rows["work_sessions"] = [{"id": "session-1", "farm_id": "farm-1", "current_version": 2, "status": "PUBLISHED", "contract_version": "structure-v2", "ontology_version": "ontology-v2"}]
+        self.rows["work_versions"] = [{"id": "version-2", "work_session_id": "session-1", "version": 2, "status": "PUBLISHED"}]
         cookie = main.sign_team_member(self.team_id, "member-1", self.now + timedelta(hours=24))
         self.client.cookies.set(main.TEAM_MEMBER_COOKIE_NAME, cookie)
         package = worker_briefing()
         package["version"] = 2
-        with patch.object(main, "stored_worker_briefing", return_value=package):
-            result = self.client.get("/api/v1/work-team-members/me/assignments")
+        self.rows["worker_briefing_packages"] = [{"work_version_id": "version-2", "language_code": "vi", "package_json": package}]
+        result = self.client.get("/api/v1/work-team-members/me/assignments")
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()["assignments"], [package])
         self.assertEqual(result.json()["receipts"][0]["current_version"], 2)

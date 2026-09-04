@@ -1,0 +1,72 @@
+[
+  {
+    "case": 1,
+    "view": "owner",
+    "notes_visible": true,
+    "visible_text": "제가 이렇게 이해했어요\n\nAI는 추측하지 않습니다. 미확정 내용은 농장주가 결정해주세요.\n\n아랫밭에서 양파 20망을 수확하고, 상한 양파를 제외한 뒤 창고로 옮깁니다.\n\n장소\n아랫밭\n작업 단계\n1. 양파 수확\n\n아랫밭에서 양파 20망을 캡니다.\n\n2. 양파 선별\n\n상한 양파를 제외합니다.\n\n3. 양파 운반\n\n선별한 양파를 창고로 옮깁니다.\n\n수량\n20망\n수량 다시 말하기\n완료 시간\n미확정\n메모\n상한 것은 제외합니다.\n안전 내용\n입력된 안전 안내 없음\n원음 듣기\n확정하기\n다시 녹음\n기록과 위험 근거 보기"
+  },
+  {
+    "case": 2,
+    "view": "owner",
+    "notes_visible": true,
+    "visible_text": "제가 이렇게 이해했어요\n\nAI는 추측하지 않습니다. 미확정 내용은 농장주가 결정해주세요.\n\n양파를 던지지 말고, 상한 양파를 정상 양파와 섞지 말라는 금지 지시입니다. 실행할 작업은 특정되지 않았습니다.\n\n장소\n장소 미지정\n작업 단계\n\n실행 단계 없음\n\n수량\n미확정\n수량 다시 말하기\n완료 시간\n미확정\n메모\n양파를 던지지 말 것. 상한 양파를 정상 양파와 섞지 말 것.\n안전 내용\n입력된 안전 안내 없음\n반드시 보완 · 금지 사항만 언급되어 있으며 실행할 양파 작업이 특정되지 않았습니다. 수행할 작업을 알려 주세요.\n위험 판정 낮음 · 지금은 전달할 수 없습니다.\n\n안전 내용과 빠진 작업을 다시 말씀하세요.\n\n말로 알려주세요\n\n안전 내용 또는 빠진 내용 한 가지만 말해주세요.\n\n원음 듣기\n이대로 전달\n다시 녹음\n기록과 위험 근거 보기"
+  },
+  {
+    "case": 3,
+    "view": "owner",
+    "notes_visible": true,
+    "visible_text": "제가 이렇게 이해했어요\n\nAI는 추측하지 않습니다. 미확정 내용은 농장주가 결정해주세요.\n\n오전까지 아랫밭에서 양파 20망을 수확하고, 상했거나 물러진 양파를 따로 선별한 뒤, 상자에 담아 창고로 옮깁니다. 던지지 말라는 금지 지시는 참고사항으로 보존합니다.\n\n장소\n아랫밭\n작업 단계\n1. 양파 수확\n\n아랫밭에서 양파 20망을 캡니다.\n\n2. 손상 양파 분리\n\n상했거나 물러진 양파를 따로 뺍니다.\n\n3. 양파 운반\n\n작업을 마친 뒤 양파를 상자에 담아 창고로 옮깁니다.\n\n수량\n20망\n수량 다시 말하기\n완료 시간\n오전까지\n메모\n양파를 던지지 말 것.\n안전 내용\n입력된 안전 안내 없음\n원음 듣기\n확정하기\n다시 녹음\n기록과 위험 근거 보기"
+  },
+  {
+    "case": 1,
+    "language": "vi",
+    "notes_visible_initially": false,
+    "notes_visible_expanded": true,
+    "expanded_text": "Công việc mới nhất\n\nCông việc hôm nay\n\nTiếng Việt\nthu hoạch hành tây\nBắt đầu bước 1\nĐịa điểm\ncánh đồng phía dưới\nSố lượng\n20 mạng\nHoàn thành\n—\nXem các bước và nghe hướng dẫn\nCông việc hôm nay\n3\n1\nthu hoạch hành tây\n2\nPhân loại hành tây\n3\nvận chuyển hành tây\nGhi chú\nLoại trừ những thứ đã bị hỏng.\nNghe toàn bộ hướng dẫn",
+    "browser_full_speech": "thu hoạch hành tây. Ở ruộng phía dưới, tôi thu hoạch 20 bao hành tây.. Phân loại hành tây. Loại bỏ hành tây bị hỏng.. vận chuyển hành tây. Chuyển những củ hành tây đã được chọn lọc vào kho.",
+    "notes_visible_step": false,
+    "last_step_text": "Bước 3 / 3\n\nvận chuyển hành tây\n\nDanh sách\n\nKhông có video đã kiểm duyệt. Hãy đọc hoặc nghe hướng dẫn.\n\nNghe toàn bộ hướng dẫn\nNghe bước này\nTrước\nTiếp theo\nvận chuyển hành tây\n\nChuyển những củ hành tây đã được chọn lọc vào kho.\n\nĐịa điểm\ncánh đồng phía dưới\nSố lượng\n20 mạng\nHoàn thành\n—\nQuay lại danh sách công việc",
+    "tts_contains_notes": false,
+    "tts_contains_deadline": false,
+    "errors": []
+  },
+  {
+    "case": 1,
+    "language": "ne",
+    "notes_visible_initially": false,
+    "notes_visible_expanded": true,
+    "expanded_text": "नयाँ काम\n\nआजको काम\n\nनेपाली\nप्याजको कटनी\nचरण १ सुरु गर्नुहोस्\nस्थान\nतल्लो खेत\nपरिमाण\n20 जाल\nसमय सीमा\n—\nचरणहरू हेर्नुहोस् र निर्देशन सुन्नुहोस्\nआजको काम\n3\n1\nप्याजको कटनी\n2\nप्याज छनोट\n3\nप्याज ढुवानी\nटिप्पणी\nबिग्रिएका वस्तुहरू बाहेक राखिन्छन्।\nपूरा निर्देशन सुन्नुहोस्",
+    "browser_full_speech": "प्याजको कटनी. तल्लो खेतबाट प्याजका २० जाल निकाल्छौं।. प्याज छनोट. बिग्रिएका प्याजहरू हटाउनुहोस्।. प्याज ढुवानी. छानिएका प्याजहरू गोदाममा सारिन्छन्।",
+    "notes_visible_step": false,
+    "last_step_text": "चरण 3 / 3\n\nप्याज ढुवानी\n\nसूची\n\nजाँच गरिएको भिडियो छैन। निर्देशन पढ्नुहोस् वा सुन्नुहोस्।\n\nपूरा निर्देशन सुन्नुहोस्\nयो चरण सुन्नुहोस्\nअघिल्लो\nअर्को\nप्याज ढुवानी\n\nछानिएका प्याजहरू गोदाममा सारिन्छन्।\n\nस्थान\nतल्लो खेत\nपरिमाण\n20 जाल\nसमय सीमा\n—\nकाम सूचीमा फर्कनुहोस्",
+    "tts_contains_notes": false,
+    "tts_contains_deadline": false,
+    "errors": []
+  },
+  {
+    "case": 3,
+    "language": "vi",
+    "notes_visible_initially": false,
+    "notes_visible_expanded": true,
+    "expanded_text": "Công việc mới nhất\n\nCông việc hôm nay\n\nTiếng Việt\nThu hoạch hành tây\nBắt đầu bước 1\nĐịa điểm\nCánh đồng phía dưới\nSố lượng\n20 lưới\nHoàn thành\nđến buổi sáng\nXem các bước và nghe hướng dẫn\nCông việc hôm nay\n3\n1\nThu hoạch hành tây\n2\nPhân loại hành tây bị hư hỏng\n3\nVận chuyển hành tây\nGhi chú\nKhông được ném hành tây.\nNghe toàn bộ hướng dẫn",
+    "browser_full_speech": "Thu hoạch hành tây. Ở ruộng phía dưới, tôi thu hoạch 20 bao hành tây.. Phân loại hành tây bị hư hỏng. Loại riêng những củ hành bị hỏng hoặc bị mềm nhũn.. Vận chuyển hành tây. Sau khi hoàn thành công việc, cho hành vào thùng rồi chuyển vào kho.",
+    "notes_visible_step": false,
+    "last_step_text": "Bước 3 / 3\n\nVận chuyển hành tây\n\nDanh sách\n\nKhông có video đã kiểm duyệt. Hãy đọc hoặc nghe hướng dẫn.\n\nNghe toàn bộ hướng dẫn\nNghe bước này\nTrước\nTiếp theo\nVận chuyển hành tây\n\nSau khi hoàn thành công việc, cho hành vào thùng rồi chuyển vào kho.\n\nĐịa điểm\nCánh đồng phía dưới\nSố lượng\n20 lưới\nHoàn thành\nđến buổi sáng\nQuay lại danh sách công việc",
+    "tts_contains_notes": false,
+    "tts_contains_deadline": false,
+    "errors": []
+  },
+  {
+    "case": 3,
+    "language": "ne",
+    "notes_visible_initially": false,
+    "notes_visible_expanded": true,
+    "expanded_text": "नयाँ काम\n\nआजको काम\n\nनेपाली\nप्याजको फसल कटाई\nचरण १ सुरु गर्नुहोस्\nस्थान\nतल्लो खेत\nपरिमाण\n20 जाल\nसमय सीमा\nबिहानसम्म\nचरणहरू हेर्नुहोस् र निर्देशन सुन्नुहोस्\nआजको काम\n3\n1\nप्याजको फसल कटाई\n2\nक्षतिग्रस्त प्याज छुट्याउने\n3\nप्याज ढुवानी\nटिप्पणी\nप्याज नफ्याँक्नुहोस्।\nपूरा निर्देशन सुन्नुहोस्",
+    "browser_full_speech": "प्याजको फसल कटाई. तल्लो खेतमा प्याजका २० जाल झिक्छौं।. क्षतिग्रस्त प्याज छुट्याउने. घाउ लागेको वा नरम भएको प्याजलाई छुट्टै निकाल्नुहोस्।. प्याज ढुवानी. काम सकेपछि प्याजलाई बाकसमा राखेर गोदाममा सारिन्छ।",
+    "notes_visible_step": false,
+    "last_step_text": "चरण 3 / 3\n\nप्याज ढुवानी\n\nसूची\n\nजाँच गरिएको भिडियो छैन। निर्देशन पढ्नुहोस् वा सुन्नुहोस्।\n\nपूरा निर्देशन सुन्नुहोस्\nयो चरण सुन्नुहोस्\nअघिल्लो\nअर्को\nप्याज ढुवानी\n\nकाम सकेपछि प्याजलाई बाकसमा राखेर गोदाममा सारिन्छ।\n\nस्थान\nतल्लो खेत\nपरिमाण\n20 जाल\nसमय सीमा\nबिहानसम्म\nकाम सूचीमा फर्कनुहोस्",
+    "tts_contains_notes": false,
+    "tts_contains_deadline": false,
+    "errors": []
+  }
+]

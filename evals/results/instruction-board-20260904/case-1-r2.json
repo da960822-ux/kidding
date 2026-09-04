@@ -1,0 +1,138 @@
+{
+  "case": 1,
+  "repeat": 2,
+  "transcript": "아랫밭 양파 20망 캐서 상한 건 빼고 창고로 옮겨.",
+  "raw": {
+    "interpretation": "AMBIGUOUS",
+    "summary_ko": "아랫밭에서 양파 20망을 수확하고, 상한 양파를 제외한 뒤 창고로 옮깁니다.",
+    "location": {
+      "raw_text": "아랫밭",
+      "kind": "DEICTIC",
+      "canonical_name": null
+    },
+    "task_family": "ONION",
+    "quantity": {
+      "value": 20,
+      "unit": "망"
+    },
+    "deadline": null,
+    "safety": [],
+    "notes": null,
+    "steps": [
+      {
+        "sequence": 1,
+        "task_code": "ONION_HARVEST",
+        "title_ko": "양파 수확",
+        "description_ko": "아랫밭에서 양파 20망을 캡니다.",
+        "unsupported_reason": null
+      },
+      {
+        "sequence": 2,
+        "task_code": "ONION_SORTING",
+        "title_ko": "상한 양파 제외",
+        "description_ko": "수확한 양파 중 상한 것은 뺍니다.",
+        "unsupported_reason": null
+      },
+      {
+        "sequence": 3,
+        "task_code": "ONION_TRANSPORT",
+        "title_ko": "창고로 운반",
+        "description_ko": "상한 양파를 제외한 양파를 창고로 옮깁니다.",
+        "unsupported_reason": null
+      }
+    ],
+    "ambiguities": [
+      {
+        "field": "location",
+        "message": "'아랫밭'은 현장 지시적 위치 표현으로 기록했습니다. 실행 전 실제 작업 위치를 확인하는 것이 권고됩니다.",
+        "blocking": false,
+        "kind": "LOCATION"
+      }
+    ],
+    "schema_version": "2",
+    "contract_version": "structure-v2",
+    "ontology_version": "ontology-v2"
+  },
+  "draft": {
+    "draft_id": "evaluation-1-2",
+    "draft_revision": 1,
+    "summary_ko": "아랫밭에서 양파 20망을 수확하고, 상한 양파를 제외한 뒤 창고로 옮깁니다.",
+    "interpretation": "AMBIGUOUS",
+    "state": {
+      "task_family": "ONION",
+      "location": {
+        "raw_text": "아랫밭",
+        "kind": "DEICTIC",
+        "canonical_name": null
+      },
+      "location_display": "아랫밭",
+      "quantity": {
+        "value": 20,
+        "unit": "망"
+      },
+      "deadline": null,
+      "safety": [],
+      "notes": null,
+      "steps": [
+        {
+          "sequence": 1,
+          "task_code": "ONION_HARVEST",
+          "title_ko": "양파 수확",
+          "description_ko": "아랫밭에서 양파 20망을 캡니다.",
+          "video": null,
+          "audio_url": null,
+          "delivery_mode": "TEXT",
+          "unsupported_reason": null,
+          "translations": []
+        },
+        {
+          "sequence": 2,
+          "task_code": "ONION_SORTING",
+          "title_ko": "상한 양파 제외",
+          "description_ko": "수확한 양파 중 상한 것은 뺍니다.",
+          "video": null,
+          "audio_url": null,
+          "delivery_mode": "TEXT",
+          "unsupported_reason": null,
+          "translations": []
+        },
+        {
+          "sequence": 3,
+          "task_code": "ONION_TRANSPORT",
+          "title_ko": "창고로 운반",
+          "description_ko": "상한 양파를 제외한 양파를 창고로 옮깁니다.",
+          "video": null,
+          "audio_url": null,
+          "delivery_mode": "TEXT",
+          "unsupported_reason": null,
+          "translations": []
+        }
+      ],
+      "risk_assessment": {
+        "level": "LOW",
+        "reasons": [],
+        "schema_version": "1",
+        "contract_version": "safety-policy-v1"
+      },
+      "schema_version": "2",
+      "contract_version": "structure-v2",
+      "ontology_version": "ontology-v2"
+    },
+    "ambiguities": [
+      {
+        "field": "location",
+        "message": "'아랫밭'은 현장 지시적 위치 표현으로 기록했습니다. 실행 전 실제 작업 위치를 확인하는 것이 권고됩니다.",
+        "blocking": false,
+        "kind": "LOCATION"
+      }
+    ],
+    "transcript": "아랫밭 양파 20망 캐서 상한 건 빼고 창고로 옮겨.",
+    "schema_version": "2",
+    "contract_version": "structure-v2",
+    "ontology_version": "ontology-v2"
+  },
+  "confirm_gates": {
+    "CONFIRM": "OVERRIDE_NOT_ALLOWED",
+    "PUBLISH_AS_IS": "ELIGIBLE_NOT_PUBLISHED"
+  }
+}

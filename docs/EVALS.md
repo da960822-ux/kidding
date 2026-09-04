@@ -1,5 +1,15 @@
 # AI·제품 평가
 
+## 상세 지시·사전·수량 회귀
+
+농업 용어는 기존 DB 자료를 관련 문장의 glossary로 전달하는지, vi/ne가 섞이지 않는지, 용어 HIT를 문장 전체 공식 출처로 승격하지 않는지 검사한다. 수량 대조군은 20망/스무 망/이십 망 대 20만 개/이십만 개, 장소 번호, 복수 수량, 용기당 수량, 취소, 비수량 보완을 포함한다. 의미 충돌은 unknown/blocking으로 남기고 원문을 변경하지 않는다.
+
+30~60초 상세 지시에서는 행동·방법·조건·금지·예외·장소·목표량·마감을 각각 채점한다. 요약 유사도나 단계 수만으로 통과시키지 않는다. 수량 변경 후 source/번역 텍스트의 옛 목표량 잔류와 관련 없는 숫자 훼손은 실패다. 로컬 stub 회귀는 실제 STT/번역 정확도 또는 원어민 검수 결과로 주장하지 않는다. 앞선 상세 지시 평가는 근로자 TTS를 제외했으며, 후속 전체 음성 조립 회귀와 실제 합성 품질 평가는 구분한다.
+
+전체 음성 조립 회귀는 `vi`·`ne` 각각 위치·객체 수량·마감·안전 전체·모든 단계의 제목/설명·메모가 정확한 순서와 줄바꿈으로 포함되는지 확인한다. null/빈 마감·메모와 null/문자열 수량 생략, 원본 단계 순서, 조건·금지 문구 보존, 음성용 추가 요약 호출 없음도 검사한다. BE 신규 package 검증은 조립 텍스트 또는 hash가 누락·변경되면 `422 SCHEMA_INVALID`로 거부해야 한다. 과거 부분 음성 hash는 package 조회를 막지 않고 browser 전체 음성 fallback을 선택하며 저장값은 바꾸지 않아야 한다.
+
+단위 회귀는 검수 WORK_TERM exact HIT가 없을 때 `망`이 카드에서 `20 bao`/`20 बोरा`로 표시되고 문장 번역에도 같은 glossary가 전달되는지 검사한다. 검수 HIT가 있을 때의 우선순위, 다른 단위 기존 동작, 원본 숫자, 기존 immutable package 불변도 검사한다. 이는 결정 규칙과 prompt 전달 검증이며 실제 번역 의미·발음 품질 통과로 보고하지 않는다.
+
 ## 고정 평가 세트
 
 P0 release gate는 서로 섞지 않는 두 tier다.
@@ -27,12 +37,14 @@ P0 release gate는 서로 섞지 않는 두 tier다.
 | Deployment cookie | Vercel preview browser login and team join each retain its `HttpOnly` cookie on a following same-origin `/api` request; API upstream never appears in browser URL | 100% PASS |
 | Today team QR | 같은 farm/work_date의 POST 재호출·GET 복원이 같은 URL이고 명시적 재발급만 URL을 변경; 이전 URL 즉시 거부 | 100% PASS |
 | Worker package locale/provenance | `vi`·`ne` 각각 location/quantity/deadline/notes/safety/caption locale purity, safety verified provenance, 모든 source step 수·순서 보존 | 100% PASS |
-| Worker disclosure/TTS | worker DTO에 transcript/risk/identity/token/cache key 없음, `tts.text_hash` UI 비표시; TTS가 safety와 모든 step을 source order로 포함 | 100% PASS |
+| Worker disclosure/TTS | worker DTO에 transcript/risk/identity/token/cache key 없음, `tts.text_hash` UI 비표시; TTS 위치·객체 수량·마감·안전·전체 단계·메모 exact 조립, BE 검증/browser fallback 일치 | 100% PASS |
 | Mobile E2E | `CO_PRESENT` owner briefing과 `REMOTE` 익명 링크 두 branch의 휴대폰 2대 흐름 성공 회수 | 각 3회 연속 |
 
 추가 관찰: translation meaning preservation, video match accuracy, TTS success, latency P50/P95, token usage. 추가 지표는 gate를 낮추지 않는다.
 
 ## 비교 실험
+
+금지·주의사항 상시 표시, 전체 음성의 마감·메모 포함, `망` 단위 통일의 수정 결과는 [2026-09-04 지시보드·음성 전달 검증](../evals/results/instruction-fixes-20260904/REPORT.md)에 기록한다. 실제 번역·TTS 패키지와 브라우저 재생을 검증했으며 STT·원어민 검수와 구분한다.
 
 전체 제품 흐름의 운영 통합 검증은 [2026-09-04 full workflow E2E](../evals/results/2026-09-04-full-workflow-e2e.md)에 기록한다. 실제 녹음 업로드·STT·게시 전 수정·vi/ne 영상/TTS·QR 해독·개별 배정·확인·수량 새 버전·모든 전달 화면 갱신을 검증했다. 농장주 current/home/team의 오래된 표시를 수정했으며, 합성 음성 기반 자동 검증과 실기기·사람 검수의 한계를 구분한다.
 
@@ -53,7 +65,17 @@ P0 release gate는 서로 섞지 않는 두 tier다.
 
 schema validity, step/task_code, ambiguity preservation, input-grounded safety, official HIT, translation provenance, quantity, STT smoke, mobile E2E, contract negative cases 중 하나라도 기준 미달이면 P0 release를 차단한다. [Safety Policy](SAFETY_POLICY.md)의 HIGH/UNKNOWN risk, HIGH asset, 검수되지 않은 안전 번역, invented government source, anonymous remote transcript 노출도 즉시 차단 사유다. 실패 시 FE/BE/AI 중 해당 주담당이 재현·재검증한다.
 
-current contract negative set은 서로 다른 두 농장 코드의 데이터 격리, 잘못된 PIN, owner session 만료·로그아웃·복귀, 같은 농장/날짜의 QR 안정성, 명시적 QR 재발급과 이전 URL 폐기, retired task code new write, family mismatch, legacy-code quantity confirm, worker response의 transcript/risk-assessment/identity/token/cache key 비노출과 TTS hash UI 비표시, locale leakage, unverified safety provenance, TTS safety/step omission, production `PUBLIC_WEB_BASE_URL` 누락, Vercel same-origin `/api` rewrite에서 owner·TeamMember cookie 유지, browser URL의 upstream 비노출, browser `/w/{token}` assignment와 명시적 mock opt-in을 모두 검증해야 한다. `backend/live_e2e.py`의 수동 Cookie header 재전송은 이 browser 검증을 대신할 수 없다.
+current contract negative set은 서로 다른 두 농장 코드의 데이터 격리, 잘못된 PIN, owner session 만료·로그아웃·복귀, 같은 농장/날짜의 QR 안정성, 명시적 QR 재발급과 이전 URL 폐기, retired task code new write, family mismatch, legacy-code quantity confirm, worker response의 transcript/risk-assessment/identity/token/cache key 비노출과 TTS hash UI 비표시, locale leakage, unverified safety provenance, TTS location/quantity/deadline/safety/step/notes omission 또는 exact text/hash 불일치, production `PUBLIC_WEB_BASE_URL` 누락, Vercel same-origin `/api` rewrite에서 owner·TeamMember cookie 유지, browser URL의 upstream 비노출, browser `/w/{token}` assignment와 명시적 mock opt-in을 모두 검증해야 한다. `backend/live_e2e.py`의 수동 Cookie header 재전송은 이 browser 검증을 대신할 수 없다.
+
+## UX 오류 회귀 검증
+
+시작 화면의 기존 작업팀 진입은 관리 링크 입력 뒤 기존 PIN 인증으로 복귀해야 한다. 다른 origin이나 잘못된 관리 경로는 거부한다. 근로자 참가 QR·전달 화면에는 관리 PIN과 링크가 없어야 하며, 농장주 홈의 관리 정보는 새로고침 후에도 기본으로 접혀 있어야 한다.
+
+근로자 일반 URL과 query가 팀 토큰으로 해석되지 않아야 한다. 작업을 전환한 뒤 이전 공유 링크가 보이지 않고, 새 수량 녹음 중 이전 후보를 확인할 수 없어야 한다. 확정 전 단계 설명·메모가 표시되며, 수량 충돌·응답 유실은 최신 조회로 복구한다. 일시적인 초안 조회 실패와 재인증은 유효한 같은 팀 초안을 보존한다. 화면 이동 후 늦은 요청 완료는 현재 화면을 덮지 않는다. 로그아웃 후 재진입해도 로그아웃 동작을 다시 사용할 수 있다.
+
+근로자 첫 화면에서 시작 버튼을 누르기 전 메모의 금지·주의 문구 전체가 펼침 없이 보여야 하며, 단계·CO_PRESENT 화면도 동일하다. 빈 메모는 빈 안내 영역을 만들지 않는다. notes를 safety로 재분류하거나 새 필드를 만들지 않는다.
+
+전체 듣기는 표시 텍스트와 hash가 맞는 서버 TTS를 사용하고 단계 듣기와 구분한다. 저장 음성 hash 불일치·검증 불가·재생 실패는 동일한 전체 텍스트의 기기 음성으로 전환해야 한다. 단계 듣기는 안전 전체·현재 단계·메모만 읽는다. 기기 음성 미지원은 글 안내·해당 언어 오류·재시도를 유지하고 화면 진입을 막지 않아야 하며, 이동·버전 변경 후 이전 음성이 다시 시작하지 않아야 한다. 작업별 변경 알림은 해당 작업의 확인 상태와 일치해야 한다. 브라우저 mock 검증은 실제 STT·번역 의미 품질과 DB transaction 검증을 대신하지 않는다.
 
 ## 역할
 

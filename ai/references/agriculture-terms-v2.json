@@ -1,0 +1,18 @@
+{
+  "reference_version": "agriculture-terms-v2",
+  "provenance": "SELF_AUTHORED_MEANING_REFERENCE",
+  "verified": false,
+  "review_status": "PENDING",
+  "entries": [
+    {"term": "망", "meaning": "A mesh sack used as a container or counting unit for produce.", "counterexamples": ["Not the Korean numeric multiplier 만 (ten thousand).", "Does not specify a sack's weight or number of individual onions."]},
+    {"term": "포대", "meaning": "A sack or large bag used to contain produce.", "counterexamples": ["No fixed weight or item count is implied."]},
+    {"term": "상자", "meaning": "A box or crate used to contain produce.", "counterexamples": ["A box count is not an individual fruit count."]},
+    {"term": "양파", "meaning": "Onion, the crop in the ONION task family.", "counterexamples": ["The crop noun alone does not imply harvesting."]},
+    {"term": "딸기", "meaning": "Strawberry, the crop in the STRAWBERRY task family.", "counterexamples": ["The crop noun alone does not imply harvesting or packing."]},
+    {"term": "수확", "meaning": "Harvesting a crop from its growing place.", "counterexamples": ["Do not infer trimming, sorting or transport."]},
+    {"term": "선별", "meaning": "Sorting or separating produce by an explicitly stated criterion.", "counterexamples": ["Do not invent a size, ripeness or quality threshold."]},
+    {"term": "포장", "meaning": "Packing produce into packaging.", "counterexamples": ["Not transporting the package to an unstated destination."]},
+    {"term": "꼭지", "meaning": "The stalk or calyx attachment at the top of a fruit; the exact part depends on crop and instruction.", "counterexamples": ["Mentioning the attachment does not instruct removal; preserve hold, leave or remove as stated."]},
+    {"term": "줄기", "meaning": "A plant stem or stalk.", "counterexamples": ["Not a row of crops; do not infer a cutting length or tool."]}
+  ]
+}

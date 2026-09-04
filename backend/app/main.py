@@ -22,12 +22,14 @@ from fastapi import Cookie, FastAPI, File, Form, Header, Request, Response, Uplo
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from httpx import TransportError
 from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from supabase import Client, create_client
+from starlette.concurrency import run_in_threadpool
 
-from .ai import AiProviderError, bridge_call, provider_ready
+from .ai import AiProviderError, bridge_call, provider_ready, request_deadline
 from .p0_runtime import OwnerIdentity, sign_owner_cookie, verify_owner_cookie
 
 
@@ -58,6 +60,7 @@ TEAM_JOIN_REQUEST_LIMIT = 12
 
 # ponytail: process-local rate limit; use a shared limiter before multi-worker deployment.
 pin_failures: dict[tuple[str, str], list[float]] = {}
+pin_pending: dict[tuple[str, str], int] = {}
 ai_requests: dict[str, list[float]] = {}
 team_join_requests: dict[str, list[float]] = {}
 owner_start_requests: dict[str, list[float]] = {}
@@ -179,7 +182,11 @@ async def request_validation_handler(_: Request, exc: RequestValidationError) ->
 
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
-    response = await call_next(request)
+    token = request_deadline.set(time.monotonic() + 50)
+    try:
+        response = await call_next(request)
+    finally:
+        request_deadline.reset(token)
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = "no-store"
     return response
@@ -750,6 +757,56 @@ def parse_quantity_output(raw: Any, expected_version: int) -> QuantityChangePars
 
 def replace_quantity_for_v2(state: WorkState, quantity: Quantity) -> WorkState:
     state_data = state.model_dump(mode="json")
+    previous = state.quantity
+    if isinstance(previous, Quantity) and previous != quantity:
+        spellings = {str(previous.value), f"{previous.value:,}"}
+        if previous.value < 100:
+            tens = ("", "열", "스물", "서른", "마흔", "쉰", "예순", "일흔", "여든", "아흔")
+            ones = ("", "한", "두", "세", "네", "다섯", "여섯", "일곱", "여덟", "아홉")
+            spellings.add(tens[previous.value // 10] + ones[previous.value % 10])
+            full_ones = ("", "하나", "둘", "셋", "넷", *ones[5:])
+            spellings.add(tens[previous.value // 10] + full_ones[previous.value % 10])
+            if previous.value == 20:
+                spellings.add("스무")
+        if previous.value < 10000:
+            digits = "영일이삼사오육칠팔구"
+            korean = ""
+            for divisor, unit in ((1000, "천"), (100, "백"), (10, "십"), (1, "")):
+                digit = previous.value // divisor % 10
+                if digit:
+                    korean += (digits[digit] if digit != 1 or divisor == 1 else "") + unit
+            spellings.add(korean)
+        # Only explicit target number+unit spans are editable. Unknown references fail closed.
+        reference_span = (
+            r"(?<![0-9.,])(?P<number>[0-9][0-9,]*(?:\.[0-9]+)?[만천백십]*|[영공일이삼사오육칠팔구십백천만한하나두둘세셋네넷다섯여섯곱덟아홉열스무물서른마흔쉰예순일흔여든]+)"
+            r"(?P<space>\s*)" + re.escape(previous.unit)
+        )
+        references = re.compile(
+            reference_span
+            + r"(?=$|[\s.,!?;:)\]]|을|를|은|는|이|가|으로|로|만|씩|의|과|와|도|에|까지|부터|보다|짜리|하고)"
+        )
+
+        def replace_text(text: str | None) -> str | None:
+            if not text:
+                return text
+            if re.search(r"절반|반만|나머지|[0-9]+\s*분의", text) or re.search(re.escape(previous.unit) + r"\s*씩", text):
+                raise ApiError(422, "SCHEMA_INVALID", "수량 관계를 확인할 수 없습니다. 새 지시를 작성하세요.")
+            for candidate in re.finditer(reference_span, text):
+                if references.match(text, candidate.start()) is None or re.match(r"\s*짜리", text[candidate.end():]):
+                    raise ApiError(422, "SCHEMA_INVALID", "수량 참조를 확인할 수 없습니다. 새 지시를 작성하세요.")
+
+            def replace(match: re.Match[str]) -> str:
+                before = text[:match.start()]
+                if match["number"] not in spellings or re.search(r"(?:당|마다)\s*$|(?:한|1)\s*[^\s]+에\s*$", before):
+                    raise ApiError(422, "SCHEMA_INVALID", "수량 참조를 확인할 수 없습니다. 새 지시를 작성하세요.")
+                return f'{quantity.value}{match["space"]}{quantity.unit}'
+
+            return references.sub(replace, text)
+
+        for step in state_data["steps"]:
+            for field in ("title_ko", "description_ko"):
+                step[field] = replace_text(step[field])
+        state_data["notes"] = replace_text(state_data["notes"])
     state_data["quantity"] = quantity.model_dump(mode="json")
     return WorkState.model_validate(state_data)
 
@@ -881,9 +938,13 @@ def worker_link_meta(client: Client, session_id: str) -> list[WorkerLinkMeta]:
         .order("issued_at", desc=True)
         .execute()
     )
+    return worker_link_meta_from_rows(row_data(result))
+
+
+def worker_link_meta_from_rows(rows: list[dict[str, Any]]) -> list[WorkerLinkMeta]:
     items: list[WorkerLinkMeta] = []
     seen: set[str] = set()
-    for row in row_data(result):
+    for row in rows:
         language_code = row["language_code"]
         if language_code in seen:
             continue
@@ -958,14 +1019,14 @@ def today_team_response(client: Client, team_row: dict[str, Any], join_url: str)
     )
 
 
-def owner_session_response(client: Client, session_row: dict[str, Any], version_row: dict[str, Any]) -> OwnerWorkSession:
+def owner_session_response(client: Client, session_row: dict[str, Any], version_row: dict[str, Any], links: list[WorkerLinkMeta] | None = None) -> OwnerWorkSession:
     return OwnerWorkSession(
         session_id=str(session_row["id"]),
         current_version=session_row["current_version"],
         contract_version=session_row.get("contract_version") or "structure-v1",
         ontology_version=session_row.get("ontology_version") or "ontology-v1",
         version=parse_version(version_row),
-        worker_link_meta=worker_link_meta(client, str(session_row["id"])),
+        worker_link_meta=worker_link_meta(client, str(session_row["id"])) if links is None else links,
     )
 
 
@@ -1045,7 +1106,7 @@ def check_pin_rate_limit(request: Request, farm_code: str) -> None:
     key = pin_failure_key(request, farm_code)
     recent = [timestamp for timestamp in pin_failures.get(key, []) if now - timestamp < PIN_FAILURE_WINDOW_SECONDS]
     pin_failures[key] = recent
-    if len(recent) >= PIN_FAILURE_LIMIT:
+    if len(recent) + pin_pending.get(key, 0) >= PIN_FAILURE_LIMIT:
         raise ApiError(429, "RATE_LIMITED", "잠시 후 다시 시도하세요.")
 
 
@@ -1273,16 +1334,19 @@ def require_initial_instruction(transcript: str) -> None:
 
 
 def current_assets(client: Client) -> list[dict[str, Any]]:
-    return row_data(
-        client.table("visual_assets")
-        .select(
-            "id,task_code,asset_type,content_type,public_path,provenance,review_status,safety_level,is_current,captions_text"
+    try:
+        return row_data(
+            client.table("visual_assets")
+            .select(
+                "id,task_code,asset_type,content_type,public_path,provenance,review_status,safety_level,is_current,captions_text"
+            )
+            .eq("review_status", "APPROVED")
+            .eq("safety_level", "LOW")
+            .eq("is_current", True)
+            .execute()
         )
-        .eq("review_status", "APPROVED")
-        .eq("safety_level", "LOW")
-        .eq("is_current", True)
-        .execute()
-    )
+    except TransportError:
+        return []
 
 
 def current_verified_guides(client: Client) -> list[dict[str, Any]]:
@@ -1290,7 +1354,7 @@ def current_verified_guides(client: Client) -> list[dict[str, Any]]:
     try:
         phrases = row_data(
             client.table("guide_phrases")
-            .select("phrase_key,canonical_ko,source_page,source_url,license")
+            .select("phrase_key,canonical_ko,category,phrase_type,source_name,source_page,source_url,license")
             .eq("verified", True)
             .execute()
         )
@@ -1317,6 +1381,9 @@ def current_verified_guides(client: Client) -> list[dict[str, Any]]:
             {
                 "phrase_key": phrase["phrase_key"],
                 "canonical_ko": phrase["canonical_ko"],
+                "category": phrase["category"],
+                "phrase_type": phrase["phrase_type"],
+                "source_name": phrase["source_name"],
                 "language_code": translation["language_code"],
                 "translated_text": translation["translated_text"],
                 "source_page": phrase["source_page"],
@@ -1397,7 +1464,15 @@ def worker_tts_text(briefing: dict[str, Any]) -> str:
     steps = briefing.get("steps")
     if not isinstance(context, dict) or not isinstance(context.get("safety"), list) or not isinstance(steps, list):
         raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
-    texts = [*context["safety"]]
+    quantity = context.get("quantity")
+    quantity_text = None
+    if isinstance(quantity, dict):
+        value, unit = quantity.get("value"), quantity.get("unit")
+        if type(value) is not int or value < 1 or not isinstance(unit, str) or not unit.strip():
+            raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
+        quantity_text = f"{value} {unit}"
+    texts = [text for text in (context.get("location_display"), quantity_text, context.get("deadline")) if text is not None and text != ""]
+    texts.extend(context["safety"])
     for step in steps:
         if not isinstance(step, dict):
             raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
@@ -1405,6 +1480,8 @@ def worker_tts_text(briefing: dict[str, Any]) -> str:
         if not isinstance(title, str) or not isinstance(description, str):
             raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
         texts.append(f"{title} {description}")
+    if context.get("notes") is not None and context["notes"] != "":
+        texts.append(context["notes"])
     if any(not isinstance(text, str) or not text.strip() for text in texts):
         raise ApiError(422, "SCHEMA_INVALID", "AI TTS 입력이 올바르지 않습니다.")
     return "\n".join(texts)
@@ -1547,8 +1624,8 @@ async def build_worker_packages(
         {
             "work": work,
             "languages": ["vi", "ne"],
-            "assets": current_assets(client),
-            "guides": current_verified_guides(client),
+            "assets": await run_in_threadpool(lambda: current_assets(client)),
+            "guides": await run_in_threadpool(lambda: current_verified_guides(client)),
         },
     )
     packages: list[dict[str, Any]] = []
@@ -1638,8 +1715,56 @@ def stored_worker_briefing(client: Client, session_id: str, language_code: str, 
         .execute(),
         "ACCESS_DENIED",
     ).get("package_json")
-    validate_contract_schema(package, "worker-briefing-v2.schema.json")
+    validate_stored_briefing(package, str(session["id"]), session["current_version"], language_code)
     return package
+
+
+def validate_stored_briefing(package: Any, session_id: str, version: int, language_code: str) -> None:
+    validate_contract_schema(package, "worker-briefing-v2.schema.json")
+    if (package["session_id"], package["version"], package["language_code"]) != (session_id, version, language_code):
+        raise ApiError(422, "SCHEMA_INVALID", "저장된 안내의 작업 버전이 일치하지 않습니다.")
+
+
+def stored_worker_briefings(client: Client, session_ids: list[str], language_code: str, farm_id: str) -> list[dict[str, Any]]:
+    if not session_ids:
+        return []
+    for attempt in range(2):
+        sessions = {
+            str(row["id"]): row for row in row_data(
+                client.table("work_sessions").select("id,current_version,status,contract_version,ontology_version")
+                .in_("id", session_ids).eq("farm_id", farm_id).eq("status", "PUBLISHED").execute()
+            )
+        }
+        if any(session_id not in sessions for session_id in session_ids):
+            raise ApiError(404, "ACCESS_DENIED", "접근할 수 없습니다.")
+        versions = {
+            (str(row["work_session_id"]), row["version"]): row
+            for row in row_data(client.table("work_versions").select("*").in_("work_session_id", session_ids).eq("status", "PUBLISHED").execute())
+        }
+        if all((session_id, session["current_version"]) in versions for session_id, session in sessions.items()):
+            break
+    else:
+        raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
+    current_ids = [str(versions[(session_id, session["current_version"])]["id"]) for session_id, session in sessions.items() if session["contract_version"] == "structure-v2"]
+    packages = {
+        str(row["work_version_id"]): row["package_json"]
+        for row in row_data(client.table("worker_briefing_packages").select("work_version_id,package_json").in_("work_version_id", current_ids).eq("language_code", language_code).execute())
+    } if current_ids else {}
+    result = []
+    for session_id in session_ids:
+        session = sessions[session_id]
+        version = versions[(session_id, session["current_version"])]
+        if (session["contract_version"], session["ontology_version"]) == ("structure-v1", "ontology-v1"):
+            result.append(legacy_worker_briefing(session_id, parse_version(version), language_code))
+        elif (session["contract_version"], session["ontology_version"]) == ("structure-v2", "ontology-v2"):
+            package = packages.get(str(version["id"]))
+            if package is None:
+                raise ApiError(404, "ACCESS_DENIED", "접근할 수 없습니다.")
+            validate_stored_briefing(package, session_id, version["version"], language_code)
+            result.append(package)
+        else:
+            raise ApiError(422, "SCHEMA_INVALID", "알 수 없는 작업 계약입니다.")
+    return result
 
 
 def issue_link(language_code: str) -> tuple[dict[str, Any], IssuedWorkerLink]:
@@ -1695,10 +1820,10 @@ async def ready() -> dict[str, str]:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "Supabase 또는 AI 제공자가 준비되지 않았습니다.")
     try:
         client = db_client()
-        readiness = row_data(client.rpc("p0_readiness").execute())
+        readiness = row_data(await run_in_threadpool(lambda: client.rpc("p0_readiness").execute()))
         if not readiness or readiness[0].get("ready") is not True:
             raise RuntimeError("p0 migration not ready")
-        client.table("worker_briefing_packages").select("work_version_id").limit(1).execute()
+        await run_in_threadpool(lambda: client.table("worker_briefing_packages").select("work_version_id").limit(1).execute())
     except Exception:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "Supabase 또는 AI 제공자가 준비되지 않았습니다.")
     return {"status": "ready", "revision": settings.app_revision}
@@ -1730,19 +1855,19 @@ async def start_owner_team(
     existing = verify_session(batmeori_owner_session)
     if existing and existing.team_id:
         try:
-            return temporary_owner_response(owner_team_row(db_client(), existing), response)
+            return temporary_owner_response(await run_in_threadpool(lambda: owner_team_row(db_client(), existing)), response)
         except ApiError as exc:
             if exc.status_code != 401:
                 raise
     team_id, owner_id, farm_id = (str(uuid.uuid4()) for _ in range(3))
     issue_key = secrets.token_hex(32)
     try:
-        team = one_row(db_client().rpc("start_temporary_work_team", {
+        team = one_row(await run_in_threadpool(lambda: db_client().rpc("start_temporary_work_team", {
             "p_team_id": team_id, "p_owner_id": owner_id, "p_farm_id": farm_id,
             "p_bootstrap_key_hash": hash_link_token(f"team-bootstrap:{key}"),
             "p_pin": team_management_pin(team_id),
             "p_invite_token_hash": hash_link_token(today_team_token(team_id, issue_key)), "p_invite_issue_key": issue_key,
-        }).execute())
+        }).execute()))
     except Exception as exc:
         if "expired_team" in str(exc):
             raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
@@ -1759,10 +1884,16 @@ async def issue_team_owner_session(payload: TeamPinLoginRequest, request: Reques
     check_pin_rate_limit(request, team_id)
     if not settings.auth_configured:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    key = pin_failure_key(request, team_id)
+    pin_pending[key] = pin_pending.get(key, 0) + 1
     try:
-        rows = row_data(db_client().rpc("authenticate_temporary_team", {"p_team_id": team_id, "p_pin": payload.pin}).execute())
+        rows = row_data(await run_in_threadpool(lambda: db_client().rpc("authenticate_temporary_team", {"p_team_id": team_id, "p_pin": payload.pin}).execute()))
     except Exception:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    finally:
+        pin_pending[key] -= 1
+        if not pin_pending[key]:
+            pin_pending.pop(key)
     if not rows or not rows[0].get("activated_at") or utc_datetime(rows[0]["expires_at"]) <= now_utc():
         record_pin_failure(request, team_id)
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
@@ -1776,15 +1907,21 @@ async def issue_owner_session(payload: PinLoginRequest, request: Request, respon
     check_pin_rate_limit(request, payload.farm_code)
     if not settings.auth_configured:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    key = pin_failure_key(request, payload.farm_code)
+    pin_pending[key] = pin_pending.get(key, 0) + 1
     try:
         rows = row_data(
-            db_client().rpc(
+            await run_in_threadpool(lambda: db_client().rpc(
                 "authenticate_farm_owner",
                 {"p_farm_code": payload.farm_code, "p_pin": payload.pin},
-            ).execute()
+            ).execute())
         )
     except Exception:
         raise ApiError(503, "PROVIDER_UNAVAILABLE", "인증이 준비되지 않았습니다.")
+    finally:
+        pin_pending[key] -= 1
+        if not pin_pending[key]:
+            pin_pending.pop(key)
     if not rows:
         record_pin_failure(request, payload.farm_code)
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
@@ -1812,12 +1949,12 @@ async def issue_owner_session(payload: PinLoginRequest, request: Request, respon
 async def current_owner_session(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> OwnerSession:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     if owner.team_id:
-        return temporary_owner_response(owner_team_row(db_client(), owner))
+        return temporary_owner_response(await run_in_threadpool(lambda: owner_team_row(db_client(), owner)))
     try:
         farm = one_row(
-            db_client().table("farms").select("slug,display_name").eq("id", owner.farm_id).limit(1).execute(),
+            await run_in_threadpool(lambda: db_client().table("farms").select("slug,display_name").eq("id", owner.farm_id).limit(1).execute()),
             "UNAUTHORIZED",
         )
     except ApiError as exc:
@@ -1852,7 +1989,7 @@ async def draft_from_audio(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkDraft:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     require_idempotency(idempotency_key)
     check_ai_rate_limit(request)
@@ -1879,7 +2016,7 @@ async def draft_from_audio(
             "farm_id": owner.farm_id,
         }
         try:
-            result = db_client().table("work_drafts").insert(draft_data).select("*").execute()
+            result = await run_in_threadpool(lambda: db_client().table("work_drafts").insert(draft_data).select("*").execute())
         except Exception as exc:
             raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.") from exc
         return parse_draft(one_row(result))
@@ -1898,9 +2035,9 @@ async def get_draft(
     response: Response,
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkDraft:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     row = one_row(
-        db_client().table("work_drafts").select("*").eq("id", draftId).eq("farm_id", owner.farm_id).limit(1).execute()
+        await run_in_threadpool(lambda: db_client().table("work_drafts").select("*").eq("id", draftId).eq("farm_id", owner.farm_id).limit(1).execute())
     )
     if utc_datetime(row["expires_at"]) <= now_utc():
         raise ApiError(404, "NOT_FOUND", "찾을 수 없습니다.")
@@ -1921,7 +2058,7 @@ async def supplement_draft(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkDraft:
     draft_id = draftId
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     audio_bytes: bytes | None = None
     try:
@@ -1931,7 +2068,7 @@ async def supplement_draft(
         if expected_draft_revision < 0:
             raise ApiError(422, "SCHEMA_INVALID", "expected_draft_revision이 필요합니다.")
         client = db_client()
-        row = one_row(client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute())
+        row = one_row(await run_in_threadpool(lambda: client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute()))
         if row["draft_revision"] != expected_draft_revision:
             raise ApiError(409, "VERSION_CONFLICT", "최신 작업 초안을 다시 확인하세요.")
         draft = parse_draft(row)
@@ -1944,7 +2081,7 @@ async def supplement_draft(
         )
         summary_ko = draft_summary(state)
         result = (
-            client.table("work_drafts")
+            await run_in_threadpool(lambda: client.table("work_drafts")
             .update(
                 {
                     "draft_revision": expected_draft_revision + 1,
@@ -1959,7 +2096,7 @@ async def supplement_draft(
             .eq("farm_id", owner.farm_id)
             .eq("draft_revision", expected_draft_revision)
             .select("*")
-            .execute()
+            .execute())
         )
         if not row_data(result):
             raise ApiError(409, "VERSION_CONFLICT", "최신 작업 초안을 다시 확인하세요.")
@@ -1982,12 +2119,12 @@ async def confirm_draft(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> InitialPublishResponse:
     draft_id = draftId
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
     draft_row = one_row(
-        client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute()
+        await run_in_threadpool(lambda: client.table("work_drafts").select("*").eq("id", draft_id).eq("farm_id", owner.farm_id).execute())
     )
     issued: list[IssuedWorkerLink] = []
     session_id = str(draft_row.get("confirmed_session_id") or "")
@@ -2000,7 +2137,7 @@ async def confirm_draft(
             packages = await build_worker_packages(
                 client, session_id, 1, draft.state, draft.interpretation, draft.summary_ko, draft.ambiguities
             )
-            rpc_result = client.rpc(
+            rpc_result = await run_in_threadpool(lambda: client.rpc(
                 "publish_work_version_with_packages",
                 {
                     "p_farm_id": owner.farm_id,
@@ -2013,13 +2150,13 @@ async def confirm_draft(
                     "p_ambiguity_override": payload.ambiguity_override,
                     "p_override_reason": payload.override_reason,
                 },
-            ).execute()
+            ).execute())
             published = row_data(rpc_result)
             if published:
                 session_id = str(published[0]["session_id"])
             else:
                 confirmed = one_row(
-                    client.table("work_drafts").select("confirmed_session_id").eq("id", draft_id).eq("farm_id", owner.farm_id).execute()
+                    await run_in_threadpool(lambda: client.table("work_drafts").select("confirmed_session_id").eq("id", draft_id).eq("farm_id", owner.farm_id).execute())
                 ).get("confirmed_session_id")
                 if not confirmed:
                     raise ApiError(409, "VERSION_CONFLICT", "작업이 이미 변경됐습니다. 최신 내용을 다시 확인해주세요.")
@@ -2032,12 +2169,12 @@ async def confirm_draft(
             if "expired_team" in str(exc):
                 raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.") from exc
             raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
-    session_row = one_row(client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
+    session_row = one_row(await run_in_threadpool(lambda: client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute()))
     version_row = one_row(
-        client.table("work_versions").select("*").eq("work_session_id", session_id).eq("version", session_row["current_version"]).execute()
+        await run_in_threadpool(lambda: client.table("work_versions").select("*").eq("work_session_id", session_id).eq("version", session_row["current_version"]).execute())
     )
     return InitialPublishResponse(
-        work_session=owner_session_response(client, session_row, version_row),
+        work_session=await run_in_threadpool(lambda: owner_session_response(client, session_row, version_row)),
         issued_worker_links=issued,
     )
 
@@ -2046,22 +2183,30 @@ async def confirm_draft(
 async def list_sessions(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> dict[str, list[OwnerWorkSession]]:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     client = db_client()
-    sessions = row_data(
-        client.table("work_sessions").select("*").eq("farm_id", owner.farm_id).order("updated_at", desc=True).execute()
-    )
-    items: list[OwnerWorkSession] = []
-    for session in sessions:
-        version = one_row(
-            client.table("work_versions")
-            .select("*")
-            .eq("work_session_id", session["id"])
-            .eq("version", session["current_version"])
-            .execute()
+    for attempt in range(2):
+        sessions = row_data(
+            await run_in_threadpool(lambda: client.table("work_sessions").select("*").eq("farm_id", owner.farm_id).eq("status", "PUBLISHED").order("updated_at", desc=True).execute())
         )
-        items.append(owner_session_response(client, session, version))
-    return {"items": items}
+        if not sessions:
+            return {"items": []}
+        ids = [str(session["id"]) for session in sessions]
+        versions = {
+            (str(row["work_session_id"]), row["version"]): row
+            for row in row_data(await run_in_threadpool(lambda: client.table("work_versions").select("*").in_("work_session_id", ids).eq("status", "PUBLISHED").execute()))
+        }
+        if all((str(session["id"]), session["current_version"]) in versions for session in sessions):
+            break
+    else:
+        raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
+    links_by_session: dict[str, list[dict[str, Any]]] = {session_id: [] for session_id in ids}
+    for link in row_data(await run_in_threadpool(lambda: client.table("worker_links").select("work_session_id,language_code,expires_at,revoked_at,issued_at").in_("work_session_id", ids).order("issued_at", desc=True).execute())):
+        links_by_session[str(link["work_session_id"])].append(link)
+    return {"items": [
+        await run_in_threadpool(lambda: owner_session_response(client, session, versions[(str(session["id"]), session["current_version"])], worker_link_meta_from_rows(links_by_session[str(session["id"])])))
+        for session in sessions
+    ]}
 
 
 @app.get("/api/v1/work-sessions/{sessionId}", response_model=OwnerWorkSession)
@@ -2070,17 +2215,17 @@ async def get_session(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> OwnerWorkSession:
     session_id = sessionId
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     client = db_client()
-    session = one_row(client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
+    session = one_row(await run_in_threadpool(lambda: client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute()))
     version = one_row(
-        client.table("work_versions")
+        await run_in_threadpool(lambda: client.table("work_versions")
         .select("*")
         .eq("work_session_id", session_id)
         .eq("version", session["current_version"])
-        .execute()
+        .execute())
     )
-    return owner_session_response(client, session, version)
+    return await run_in_threadpool(lambda: owner_session_response(client, session, version))
 
 
 @app.post(
@@ -2096,7 +2241,7 @@ async def parse_quantity_change(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> dict[str, Any]:
     session_id = sessionId
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     audio_bytes: bytes | None = None
     try:
@@ -2106,11 +2251,11 @@ async def parse_quantity_change(
             raise ApiError(422, "SCHEMA_INVALID", "expected_version이 필요합니다.")
         client = db_client()
         session = one_row(
-            client.table("work_sessions")
+            await run_in_threadpool(lambda: client.table("work_sessions")
             .select("current_version,status,contract_version,ontology_version")
             .eq("id", session_id)
             .eq("farm_id", owner.farm_id)
-            .execute()
+            .execute())
         )
         if session.get("contract_version") != "structure-v2" or session.get("ontology_version") != "ontology-v2":
             raise ApiError(422, "LEGACY_READ_ONLY", "기존 v1 버전은 수량 변경할 수 없습니다.")
@@ -2138,28 +2283,28 @@ async def confirm_quantity_change(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> OwnerWorkSession:
     session_id = sessionId
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
     session_before = one_row(
-        client.table("work_sessions")
+        await run_in_threadpool(lambda: client.table("work_sessions")
         .select("id,current_version,status,contract_version,ontology_version")
         .eq("id", session_id)
         .eq("farm_id", owner.farm_id)
-        .execute()
+        .execute())
     )
     if session_before.get("contract_version") != "structure-v2" or session_before.get("ontology_version") != "ontology-v2":
         raise ApiError(422, "LEGACY_READ_ONLY", "기존 v1 버전은 수량 변경할 수 없습니다.")
     if session_before["status"] != "PUBLISHED" or session_before["current_version"] != payload.expected_version:
         raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
     previous = one_row(
-        client.table("work_versions")
+        await run_in_threadpool(lambda: client.table("work_versions")
         .select("*")
         .eq("work_session_id", session_id)
         .eq("version", payload.expected_version)
         .eq("status", "PUBLISHED")
-        .execute()
+        .execute())
     )
     previous_state_json = previous["state_json"]
     validate_contract_schema(previous_state_json, "structure-v2.schema.json")
@@ -2183,7 +2328,7 @@ async def confirm_quantity_change(
             summary_ko,
             previous_structure.ambiguities,
         )
-        result = client.rpc(
+        result = await run_in_threadpool(lambda: client.rpc(
             "publish_work_version_with_packages",
             {
                 "p_farm_id": owner.farm_id,
@@ -2196,7 +2341,7 @@ async def confirm_quantity_change(
                 "p_ambiguity_override": bool(previous.get("ambiguity_override", False)),
                 "p_override_reason": previous.get("override_reason"),
             },
-        ).execute()
+        ).execute())
     except AiProviderError:
         raise
     except Exception as exc:
@@ -2206,16 +2351,16 @@ async def confirm_quantity_change(
     if not row_data(result):
         raise ApiError(409, "VERSION_CONFLICT", "최신 작업 버전을 다시 확인하세요.")
     session = one_row(
-        client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute()
+        await run_in_threadpool(lambda: client.table("work_sessions").select("*").eq("id", session_id).eq("farm_id", owner.farm_id).execute())
     )
     version = one_row(
-        client.table("work_versions")
+        await run_in_threadpool(lambda: client.table("work_versions")
         .select("*")
         .eq("work_session_id", session_id)
         .eq("version", session["current_version"])
-        .execute()
+        .execute())
     )
-    return owner_session_response(client, session, version)
+    return await run_in_threadpool(lambda: owner_session_response(client, session, version))
 
 
 @app.post("/api/v1/work-teams/today", response_model=TodayWorkTeam)
@@ -2225,16 +2370,16 @@ async def create_today_team(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
     if owner.team_id:
-        team_row = owner_today_team(client, owner)
-        return today_team_response(client, team_row, today_team_join_url(team_row, request))
+        team_row = await run_in_threadpool(lambda: owner_today_team(client, owner))
+        return await run_in_threadpool(lambda: today_team_response(client, team_row, today_team_join_url(team_row, request)))
     work_date, expires_at = today_seoul()
     rows = row_data(
-        client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+        await run_in_threadpool(lambda: client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute())
     )
     created = not rows
     if created:
@@ -2250,17 +2395,17 @@ async def create_today_team(
             "expires_at": expires_at.isoformat(),
         }
         try:
-            result = client.table("today_work_teams").insert(invite).select("*").execute()
+            result = await run_in_threadpool(lambda: client.table("today_work_teams").insert(invite).select("*").execute())
             team_row = one_row(result)
         except Exception:
             created = False
             team_row = one_row(
-                client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute()
+                await run_in_threadpool(lambda: client.table("today_work_teams").select("*").eq("farm_id", owner.farm_id).eq("work_date", work_date).limit(1).execute())
             )
     else:
         team_row = rows[0]
     response.status_code = 201 if created else 200
-    return today_team_response(client, team_row, today_team_join_url(team_row, request))
+    return await run_in_threadpool(lambda: today_team_response(client, team_row, today_team_join_url(team_row, request)))
 
 
 @app.get("/api/v1/work-teams/today", response_model=TodayWorkTeam)
@@ -2268,10 +2413,10 @@ async def get_today_team(
     request: Request,
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     client = db_client()
-    team_row = owner_today_team(client, owner)
-    return today_team_response(client, team_row, today_team_join_url(team_row, request))
+    team_row = await run_in_threadpool(lambda: owner_today_team(client, owner))
+    return await run_in_threadpool(lambda: today_team_response(client, team_row, today_team_join_url(team_row, request)))
 
 
 @app.post("/api/v1/work-teams/today/invite/rotate", response_model=TodayWorkTeam)
@@ -2280,14 +2425,14 @@ async def rotate_today_team(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TodayWorkTeam:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
-    team_row = owner_today_team(client, owner)
+    team_row = await run_in_threadpool(lambda: owner_today_team(client, owner))
     token = today_team_token(str(team_row["id"]), issue_key)
     team_row = one_row(
-        client.rpc(
+        await run_in_threadpool(lambda: client.rpc(
             "rotate_today_work_team_invite",
             {
                 "p_farm_id": owner.farm_id,
@@ -2297,9 +2442,9 @@ async def rotate_today_team(
                 "p_issued_at": now_utc().isoformat(),
                 "p_expires_at": utc_datetime(team_row["expires_at"]).isoformat(),
             },
-        ).execute()
+        ).execute())
     )
-    return today_team_response(client, team_row, today_team_join_url(team_row, request))
+    return await run_in_threadpool(lambda: today_team_response(client, team_row, today_team_join_url(team_row, request)))
 
 
 @app.post("/api/v1/work-team-invites/{token}/join", status_code=201, response_model=TeamMember)
@@ -2315,11 +2460,11 @@ async def join_today_team(
     join_key = require_idempotency(idempotency_key)
     client = db_client()
     team_row = one_row(
-        client.table("today_work_teams")
+        await run_in_threadpool(lambda: client.table("today_work_teams")
         .select("*")
         .eq("invite_token_hash", hash_link_token(token))
         .limit(1)
-        .execute(),
+        .execute()),
         "ACCESS_DENIED",
     )
     expires_at = utc_datetime(team_row["expires_at"])
@@ -2331,29 +2476,29 @@ async def join_today_team(
     rows = []
     if member_identity and member_identity[0] == str(team_row["id"]):
         rows = row_data(
-            client.table("today_work_team_members")
+            await run_in_threadpool(lambda: client.table("today_work_team_members")
             .select("*")
             .eq("id", member_identity[1])
             .eq("team_id", team_row["id"])
             .eq("farm_id", team_row["farm_id"])
             .limit(1)
-            .execute()
+            .execute())
         )
     if not rows:
         rows = row_data(
-            client.table("today_work_team_members")
+            await run_in_threadpool(lambda: client.table("today_work_team_members")
             .select("*")
             .eq("team_id", team_row["id"])
             .eq("join_idempotency_key", join_key)
             .limit(1)
-            .execute()
+            .execute())
         )
     if rows:
         member_row = rows[0]
     else:
         try:
             member_row = one_row(
-                client.table("today_work_team_members")
+                await run_in_threadpool(lambda: client.table("today_work_team_members")
                 .insert(
                     {
                         "team_id": team_row["id"],
@@ -2364,16 +2509,16 @@ async def join_today_team(
                     }
                 )
                 .select("*")
-                .execute()
+                .execute())
             )
         except Exception:
             member_row = one_row(
-                client.table("today_work_team_members")
+                await run_in_threadpool(lambda: client.table("today_work_team_members")
                 .select("*")
                 .eq("team_id", team_row["id"])
                 .eq("join_idempotency_key", join_key)
                 .limit(1)
-                .execute()
+                .execute())
             )
     response.set_cookie(
         TEAM_MEMBER_COOKIE_NAME,
@@ -2400,59 +2545,59 @@ async def assign_today_team_member(
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> TeamAssignmentMeta:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     require_idempotency(idempotency_key)
     client = db_client()
-    team_row = owner_today_team(client, owner)
+    team_row = await run_in_threadpool(lambda: owner_today_team(client, owner))
     one_row(
-        client.table("today_work_team_members")
+        await run_in_threadpool(lambda: client.table("today_work_team_members")
         .select("id")
         .eq("id", memberId)
         .eq("team_id", team_row["id"])
         .eq("farm_id", owner.farm_id)
         .limit(1)
-        .execute()
+        .execute())
     )
     one_row(
-        client.table("work_sessions")
+        await run_in_threadpool(lambda: client.table("work_sessions")
         .select("id")
         .eq("id", payload.work_session_id)
         .eq("status", "PUBLISHED")
         .eq("farm_id", owner.farm_id)
         .limit(1)
-        .execute()
+        .execute())
     )
     rows = row_data(
-        client.table("today_work_assignments")
+        await run_in_threadpool(lambda: client.table("today_work_assignments")
         .select("*")
         .eq("team_member_id", memberId)
         .eq("work_session_id", payload.work_session_id)
         .eq("farm_id", owner.farm_id)
         .is_("revoked_at", "null")
         .limit(1)
-        .execute()
+        .execute())
     )
     if rows:
         assignment = rows[0]
     else:
         try:
             assignment = one_row(
-                client.table("today_work_assignments")
+                await run_in_threadpool(lambda: client.table("today_work_assignments")
                 .insert({"team_member_id": memberId, "work_session_id": payload.work_session_id, "farm_id": owner.farm_id})
                 .select("*")
-                .execute()
+                .execute())
             )
         except Exception:
             assignment = one_row(
-                client.table("today_work_assignments")
+                await run_in_threadpool(lambda: client.table("today_work_assignments")
                 .select("*")
                 .eq("team_member_id", memberId)
                 .eq("work_session_id", payload.work_session_id)
                 .eq("farm_id", owner.farm_id)
                 .is_("revoked_at", "null")
                 .limit(1)
-                .execute()
+                .execute())
             )
     return TeamAssignmentMeta(member_id=memberId, work_session_id=payload.work_session_id, assigned_at=assignment["assigned_at"])
 
@@ -2464,33 +2609,30 @@ async def get_my_today_assignments(
     team_id, member_id = require_team_member(batmeori_team_member)
     client = db_client()
     team_row = one_row(
-        client.table("today_work_teams").select("expires_at,farm_id").eq("id", team_id).limit(1).execute(), "UNAUTHORIZED"
+        await run_in_threadpool(lambda: client.table("today_work_teams").select("expires_at,farm_id").eq("id", team_id).limit(1).execute()), "UNAUTHORIZED"
     )
     if utc_datetime(team_row["expires_at"]) <= now_utc():
         raise ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.")
     member = one_row(
-        client.table("today_work_team_members")
+        await run_in_threadpool(lambda: client.table("today_work_team_members")
         .select("language_code")
         .eq("id", member_id)
         .eq("team_id", team_id)
         .eq("farm_id", team_row["farm_id"])
         .limit(1)
-        .execute(),
+        .execute()),
         "UNAUTHORIZED",
     )
     assignment_rows = row_data(
-        client.table("today_work_assignments")
+        await run_in_threadpool(lambda: client.table("today_work_assignments")
         .select("work_session_id,acknowledged_version,acknowledged_at")
         .eq("team_member_id", member_id)
         .eq("farm_id", team_row["farm_id"])
         .is_("revoked_at", "null")
         .order("assigned_at")
-        .execute()
+        .execute())
     )
-    assignments = [
-        stored_worker_briefing(client, str(row["work_session_id"]), member["language_code"], str(team_row["farm_id"]))
-        for row in assignment_rows
-    ]
+    assignments = await run_in_threadpool(stored_worker_briefings, client, [str(row["work_session_id"]) for row in assignment_rows], member["language_code"], str(team_row["farm_id"]))
     return {"assignments": assignments, "receipts": [assignment_receipt(row, package["version"]) for row, package in zip(assignment_rows, assignments)]}
 
 
@@ -2502,10 +2644,10 @@ async def acknowledge_my_assignment(
     require_origin(request)
     team_id, member_id = require_team_member(batmeori_team_member)
     try:
-        row = one_row(db_client().rpc("acknowledge_team_assignment", {
+        row = one_row(await run_in_threadpool(lambda: db_client().rpc("acknowledge_team_assignment", {
             "p_team_id": team_id, "p_member_id": member_id, "p_session_id": str(sessionId),
             "p_expected_version": payload.expected_version,
-        }).execute())
+        }).execute()))
     except Exception as exc:
         reason = str(exc)
         if "expired_team" in reason:
@@ -2527,22 +2669,22 @@ async def issue_worker_link(
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> WorkerLinkIssueResponse:
     session_id = sessionId
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     require_origin(request)
     issue_key = require_idempotency(idempotency_key)
     client = db_client()
     one_row(
-        client.table("work_sessions")
+        await run_in_threadpool(lambda: client.table("work_sessions")
         .select("id")
         .eq("id", session_id)
         .eq("status", "PUBLISHED")
         .eq("farm_id", owner.farm_id)
-        .execute()
+        .execute())
     )
     link_row, issued = issue_link(payload.language_code)
     link_row["issue_idempotency_key"] = issue_key
     try:
-        client.rpc(
+        await run_in_threadpool(lambda: client.rpc(
             "issue_worker_link_v2",
             {
                 "p_farm_id": owner.farm_id,
@@ -2550,7 +2692,7 @@ async def issue_worker_link(
                 "p_language_code": payload.language_code,
                 "p_link": link_row,
             },
-        ).execute()
+        ).execute())
     except Exception:
         raise ApiError(500, "INTERNAL_ERROR", "일시적인 오류입니다.")
     return WorkerLinkIssueResponse(session_id=session_id, issued_worker_links=[issued])
@@ -2562,11 +2704,11 @@ async def get_worker_assignment(token: str) -> dict[str, Any]:
         raise ApiError(404, "ACCESS_DENIED", "접근할 수 없습니다.")
     client = db_client()
     row = one_row(
-        client.table("worker_links")
+        await run_in_threadpool(lambda: client.table("worker_links")
         .select("work_session_id,language_code,expires_at,revoked_at,farm_id")
         .eq("token_hash", hash_link_token(token))
         .limit(1)
-        .execute(),
+        .execute()),
         "ACCESS_DENIED",
     )
     if row.get("revoked_at") is not None:
@@ -2576,7 +2718,7 @@ async def get_worker_assignment(token: str) -> dict[str, Any]:
         expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     if expires_at <= now_utc():
         raise ApiError(410, "LINK_EXPIRED", "접근할 수 없습니다. 링크를 다시 발급받으세요.")
-    return stored_worker_briefing(client, str(row["work_session_id"]), row["language_code"], str(row["farm_id"]))
+    return await run_in_threadpool(lambda: stored_worker_briefing(client, str(row["work_session_id"]), row["language_code"], str(row["farm_id"])))
 
 
 @app.get("/api/v1/tts/{text_hash}/{language_code}")
@@ -2610,8 +2752,8 @@ async def get_brief(
     language_code: str,
     batmeori_owner_session: str | None = Cookie(default=None, alias=COOKIE_NAME),
 ) -> dict[str, Any]:
-    owner = require_owner(batmeori_owner_session)
+    owner = await run_in_threadpool(lambda: require_owner(batmeori_owner_session))
     if language_code not in LANGUAGES:
         raise ApiError(422, "SCHEMA_INVALID", "지원하지 않는 언어입니다.")
     client = db_client()
-    return stored_worker_briefing(client, session_id, language_code, owner.farm_id)
+    return await run_in_threadpool(lambda: stored_worker_briefing(client, session_id, language_code, owner.farm_id))

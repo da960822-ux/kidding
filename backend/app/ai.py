@@ -5,7 +5,9 @@ from __future__ import annotations
 import os
 import shutil
 import logging
+from contextvars import ContextVar
 from pathlib import Path
+from time import monotonic
 from typing import Any
 
 from .p0_runtime import BridgeError, NodeBridge
@@ -13,6 +15,7 @@ from .p0_runtime import BridgeError, NodeBridge
 
 ROOT = Path(__file__).resolve().parents[2]
 logger = logging.getLogger(__name__)
+request_deadline: ContextVar[float | None] = ContextVar("request_deadline", default=None)
 
 
 class AiProviderError(Exception):
@@ -36,12 +39,21 @@ def provider_ready() -> bool:
 
 
 async def bridge_call(operation: str, payload: dict[str, Any]) -> dict[str, Any]:
+    deadline = request_deadline.get()
+    if deadline is None:
+        deadline = monotonic() + 50
     for attempt in range(2):
         try:
+            timeout = float(os.getenv("AI_BRIDGE_TIMEOUT_SECONDS", "60"))
+            if operation != "BUILD_WORKER_PACKAGES_V2":
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise AiProviderError()
+                timeout = min(timeout, remaining)
             return await NodeBridge(
                 os.getenv("NODE_BINARY", "node").strip() or "node",
                 str(ROOT / "ai" / "bridge.mjs"),
-                float(os.getenv("AI_BRIDGE_TIMEOUT_SECONDS", "60")),
+                timeout,
             ).call(operation, payload)
         except (BridgeError, ValueError) as exc:
             code = getattr(exc, "code", type(exc).__name__)

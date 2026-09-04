@@ -1,0 +1,17 @@
+{
+  "started_at": "2026-09-04T01:38:55.524160+00:00",
+  "revision": "ff68b9595fbaae6849ed3df0108a4e49947f8b49",
+  "model": "gpt-5.6-terra",
+  "asset_count": 8,
+  "verified_guide_count": 100,
+  "source_sha256": {
+    "ai\\index.mjs": "e3d14b03b6c891e4ec6416334f5ec7046854c8cf2c0487eb02a332893829266c",
+    "ai\\prompts\\prompt-structure-005.md": "197237152e35ff5ccb694692bf79798fe79d58edcb0b429ca2042fb996de36d5",
+    "ai\\lib\\worker-briefing-v2.mjs": "3132fd93d4a7183595d165fa1d0d7f18044496e92f4f4207066f5be094859f57",
+    "backend\\app\\main.py": "7d1d366de884c4012ad8162a493af8a98316bc67a6dcf3960eafa1a29539d604",
+    "src\\webapp\\WorkerScreens.tsx": "ccd2bc04cc50146480caeea0e1955b5e2be7cbbaa907d6e7d3c2a0e5445630ec",
+    "src\\webapp\\OwnerScreens.tsx": "d9c5b98171171af4d0037c28ab4d442c6ac07b9bd8315fbd7791b7a1e73d297f"
+  },
+  "limits": "Text inputs; no STT, database writes, publish, real worker delivery, or native-speaker review. Actual translation and TTS provider calls. Browser rendering tested separately.",
+  "source_changed_during_run": false
+}

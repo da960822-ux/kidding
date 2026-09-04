@@ -1,0 +1,76 @@
+{
+  "case": 2,
+  "repeat": 2,
+  "transcript": "양파를 던지지 말고 상한 것은 절대 정상 양파랑 섞지 마.",
+  "raw": {
+    "interpretation": "AMBIGUOUS",
+    "summary_ko": "양파를 던지지 말고, 상한 양파는 정상 양파와 섞지 말라는 금지 지시입니다. 실행할 긍정 작업은 특정되지 않았습니다.",
+    "location": {
+      "raw_text": null,
+      "kind": "UNSPECIFIED",
+      "canonical_name": null
+    },
+    "task_family": "ONION",
+    "quantity": "UNSPECIFIED",
+    "deadline": null,
+    "safety": [],
+    "notes": "양파를 던지지 말 것. 상한 양파를 정상 양파와 섞지 말 것.",
+    "steps": [],
+    "ambiguities": [
+      {
+        "field": "task",
+        "message": "금지 사항만 있으며 수행할 긍정 작업이 명시되지 않았습니다. 양파에 대해 수행할 작업(수확, 다듬기, 선별, 운반 등)을 지정해 주세요.",
+        "blocking": true,
+        "kind": "TASK"
+      }
+    ],
+    "schema_version": "2",
+    "contract_version": "structure-v2",
+    "ontology_version": "ontology-v2"
+  },
+  "draft": {
+    "draft_id": "evaluation-2-2",
+    "draft_revision": 1,
+    "summary_ko": "양파를 던지지 말고, 상한 양파는 정상 양파와 섞지 말라는 금지 지시입니다. 실행할 긍정 작업은 특정되지 않았습니다.",
+    "interpretation": "AMBIGUOUS",
+    "state": {
+      "task_family": "ONION",
+      "location": {
+        "raw_text": null,
+        "kind": "UNSPECIFIED",
+        "canonical_name": null
+      },
+      "location_display": "장소 미지정",
+      "quantity": "UNSPECIFIED",
+      "deadline": null,
+      "safety": [],
+      "notes": "양파를 던지지 말 것. 상한 양파를 정상 양파와 섞지 말 것.",
+      "steps": [],
+      "risk_assessment": {
+        "level": "LOW",
+        "reasons": [],
+        "schema_version": "1",
+        "contract_version": "safety-policy-v1"
+      },
+      "schema_version": "2",
+      "contract_version": "structure-v2",
+      "ontology_version": "ontology-v2"
+    },
+    "ambiguities": [
+      {
+        "field": "task",
+        "message": "금지 사항만 있으며 수행할 긍정 작업이 명시되지 않았습니다. 양파에 대해 수행할 작업(수확, 다듬기, 선별, 운반 등)을 지정해 주세요.",
+        "blocking": true,
+        "kind": "TASK"
+      }
+    ],
+    "transcript": "양파를 던지지 말고 상한 것은 절대 정상 양파랑 섞지 마.",
+    "schema_version": "2",
+    "contract_version": "structure-v2",
+    "ontology_version": "ontology-v2"
+  },
+  "confirm_gates": {
+    "CONFIRM": "OVERRIDE_NOT_ALLOWED",
+    "PUBLISH_AS_IS": "OVERRIDE_NOT_ALLOWED"
+  }
+}

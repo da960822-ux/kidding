@@ -47,7 +47,7 @@ export function AppShell({ children, role, active, workerLocale, go, ownerSessio
     setMobileMenuOpen(false);
     go(role === 'owner' && screen === 'owner-current' && !currentWorkSessionId ? 'owner-home' : screen);
   };
-  const logout = async () => { if (!onLogout) return; setLoggingOut(true); setLogoutError(''); try { await onLogout(); } catch { setLogoutError('로그아웃하지 못했습니다. 다시 시도해주세요.'); setLoggingOut(false); } };
+  const logout = async () => { if (!onLogout) return; setLoggingOut(true); setLogoutError(''); try { await onLogout(); } catch { setLogoutError('로그아웃하지 못했습니다. 다시 시도해주세요.'); } finally { setLoggingOut(false); } };
 
   return (
     <div className="batmeori-webapp min-h-screen bg-[#F5F7F3] text-ink" data-build-revision={buildRevision}>

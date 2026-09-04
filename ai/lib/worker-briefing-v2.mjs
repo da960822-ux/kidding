@@ -23,9 +23,9 @@ function localized(value) {
   return value;
 }
 
-function guideFor(languageCode, candidate) {
+export function guideFor(languageCode, candidate) {
   return candidate && candidate.language_code === languageCode && candidate.verified === true && typeof candidate.translated_text === 'string'
-    && candidate.translated_text.trim() && Number.isInteger(candidate.source_page) && typeof candidate.source_url === 'string'
+    && candidate.translated_text.trim() && Number.isInteger(candidate.source_page) && candidate.source_page > 0 && typeof candidate.source_url === 'string'
     && /^https?:\/\//.test(candidate.source_url) && typeof candidate.license === 'string' && candidate.license.trim() ? candidate : null;
 }
 
@@ -81,7 +81,14 @@ export async function buildWorkerPackagesV2(work, languages, services) {
       ...safety.map((notice) => sourceDetail(null, 'SAFETY', notice.guide)),
       ...localizedSteps.map((step) => sourceDetail(step.sequence, 'ACTION', step.guide)),
     ];
-    const text = [...context.safety, ...steps.map((step) => `${step.title} ${step.description}`)].join('\n');
+    const text = [
+      context.location_display,
+      context.quantity && typeof context.quantity === 'object' ? `${context.quantity.value} ${context.quantity.unit}` : null,
+      context.deadline,
+      ...context.safety,
+      ...steps.map((step) => `${step.title} ${step.description}`),
+      context.notes,
+    ].filter((part) => typeof part === 'string' && part.trim()).join('\n');
     const textHash = hash(text);
     const speech = await services.synthesize({ languageCode, text }).catch(() => ({ status: 'FALLBACK', audio_url: null }));
     const ttsStatus = speech.status === 'READY' ? 'READY' : 'FALLBACK';
